@@ -1,0 +1,384 @@
+.home {
+    
+    width:100vw;
+    height:100vh;
+	display:flex;
+	flex-direction:column;
+	position: relative;
+}
+
+.title{
+	font-family: Webrockwell;
+	font-size: 30px;
+	color:#cdd4da;
+	cursor: default;
+	padding-left: 50px;
+	text-shadow: 3px 3px 2px black;
+}
+
+.fieldHeading{
+	font-family: Webrockwell;
+	font-size: 24px;
+	color:#a5a5a5;
+	cursor: default;
+	
+	text-shadow: 2px 2px 1px black;
+}
+.rowHeading{
+	
+	font-family: Webrockwell;
+	font-size: 23px;
+	color:#dddada;
+	cursor: default;
+	
+	text-shadow: 3px 3px 2px black;
+}
+
+.acceptButton{
+	flex: .1;
+	color: white;
+	cursor: pointer;
+	transition: background 0.3s;
+	padding: 3px 3px;
+	font-family: Verdana, Geneva, Tahoma, sans-serif;
+	font-size: large;
+	text-align: center;
+	background-color: green;
+}
+.acceptButton:hover{
+	color: white;
+	background-color: #33FF33
+}
+
+.titleButton{
+	flex: .1;
+	color: white;
+	cursor: pointer;
+	transition: background 0.3s;
+	padding: 3px 3px;
+	font-family: Verdana, Geneva, Tahoma, sans-serif;
+	font-size: large;
+	text-align: center;
+
+}
+.titleButton:hover{
+	color: white;
+	background-color: white
+}
+
+
+
+.closeButton{
+	flex: .1;
+	color: #666666;
+	cursor: pointer;
+	transition: background 0.3s;
+	padding: 3px 3px;
+	font-family: Verdana, Geneva, Tahoma, sans-serif;
+	font-size: large;
+	text-align: center;
+}
+.closeButton:hover{
+	color: white;
+	background-color: red;
+}
+
+.contextItem{
+	position: relative;
+	display: flex;
+	padding: 15px 15px;
+	text-decoration: none;
+	color: #a5a5a5;
+	transition: background 0.3s;
+	cursor: pointer;
+}
+
+.noResults{ 
+    flex:1;               
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 5px 0;
+    text-decoration: none;
+    color: #a3aab3;
+    cursor: default;
+}
+.darkMenu {
+	display: flex;
+	flex-direction: row;
+	padding: 15px 15px;
+	color: #777171;
+	transition: background 0.3s;
+	cursor: pointer;
+	
+	height: 25px;
+	text-decoration: none;
+	color: #777171;
+}
+
+.darkMenu:hover {
+	color: white;
+	background-color: rgba(80, 80, 80, .7);
+}
+
+ 
+.result{
+	display: flex;
+	flex-direction: row;
+	padding: 15px 15px;
+	color: #777171;
+	transition: background 0.3s;
+	cursor: pointer;
+	background-color: rgba(80,80,80,.1);
+	height:25px;
+	text-decoration: none;
+	color: #777171;
+}
+.result:hover {
+	color: white;
+	background-color: rgba(80, 80, 80, .7);
+}
+
+.CancelButton {
+	text-align: center;
+
+	width: 80px;
+	padding-left: 0px;
+	padding-top: 10px;
+	padding-bottom: 10px;
+	font-family: WebRockwell;
+	font-size: 18px;
+	font-weight: bolder;
+	color: #77717155;
+	cursor: pointer;
+}
+
+.CancelButton:hover {
+	color: white;
+	background-color: rgba(80, 80, 80, .7);
+}
+
+.OKButton {
+	text-align: center;
+	cursor: pointer;
+	width:50px;
+	padding-left:0px;
+	padding-top: 10px;
+	padding-bottom: 10px;
+	font-family: WebRockwell;
+	font-size: 18px;
+	font-weight: bolder;
+	color: #cdd4da;
+}
+.OKButton:hover {
+	color: white;
+	background-color: rgba(80, 80, 80, .7);
+}
+
+.OKDisabled {
+	
+	color: #777171;
+	text-align: center;
+	cursor: default;
+	width: 50px;
+	padding-left: 0px;
+	padding-top: 10px;
+	padding-bottom: 10px;
+	font-family: WebRockwell;
+	font-size: 18px;
+	font-weight: bolder;
+}
+
+.toolmenuButton {
+	padding-left: 5px;
+	font-family: WebRockwell;
+	font-size: 15px;
+	font-weight: bolder;
+	color: #cdd4da;
+	cursor: pointer;
+}
+.toolmenuButton:hover {
+	color: white;
+	background-color: rgba(80, 80, 80, .7);
+}
+.toolbarActive {
+	background-color:rgba(40, 40, 40, .7);
+	color:white;
+	display: flex;
+	flex-direction: row;
+	padding: 18px 10px;
+	
+	cursor: pointer;
+	height: 15px;
+	text-decoration: none;
+
+}
+.toolbar {
+	display: flex;
+	flex-direction: row;
+	padding: 18px 10px;
+	transition: background 0.3s;
+	cursor: pointer;
+	background-color: rgba(0,3,4,.95);
+	height: 15px;
+	text-decoration: none;
+	color: #777171;
+}
+.toolbar:hover {
+	color: #cdd4da;
+	background-color: rgba(40, 40, 40, .7);
+}
+.currentResult{
+	color: white;
+	background-color: rgba(80,80,80,.7);
+}
+.resultImg{
+
+	width: 25px;
+	height: 25px;
+	
+	overflow: hidden;
+	border-radius: 5px;
+}
+.resultTxt{
+	
+	padding-top:3px;  
+	padding-left:15px;
+	width:100%; 
+	text-align:left;
+	
+}
+
+
+.noResult{
+	color: #666666;
+
+	padding-bottom: 30px;
+	text-decoration: none;
+	align-items: center;
+	justify-content: center;
+	align-items: center;
+
+}
+
+.searchHeading {
+	font-family: WebRockwell;
+	font-size:18px;
+	position:relative;
+		color:#cdd4da;
+	cursor: default;
+	display: flex;
+	padding-left: 10px;
+	
+	
+}
+
+
+.searchInput{
+	width: 90%;
+	background-color:rgba(0, 0, 0, 1);
+	font-size: 22px;
+	font-family: WebPapyrus;
+	outline: 0;
+	border-width: 0 ;
+	
+	color:white;
+	text-align: left;
+	text-indent: 5px;
+
+	
+}
+/*border-color: #ffe51c;*/
+.userMenu {
+	display:inline-block;
+	width: 40 px;
+	height: 95 px;
+	
+}
+
+
+
+.loading{
+	background-image:url('/Images/AngularDice.webp'); 
+	background-position: center center; 
+	background-size:200px 200px;
+	
+	background-repeat: no-repeat;
+	height: 100vh;
+	width: 100vw;
+}
+
+.logo{
+	background-image:url('/Images/logo.png'); 
+	background-position: center center; 
+
+	background-size: 60px 60px;
+	background-repeat: no-repeat;
+	height: 100vh;
+	width: 100vw;
+}
+.loadingText
+{
+	position: fixed;
+	bottom: 20px;
+	left:50%;
+	font-family: WebPapyrus;
+	font-size: 25px;
+	color: #ffe51c;
+	transform: translate(-50%, -50%);
+ 	margin: 0 auto;
+}
+
+
+.menuName{
+    flex:1;       
+    position: relative;
+    display: flex;
+    justify-content: left;
+    align-items: center;
+    padding: 5px;
+    text-decoration: none;
+    color: #c7cfda;
+    cursor: pointer; 
+}
+.menuName:hover{
+   color:white;
+}
+
+.menuNameActive{
+    flex:1;       
+    position: relative;
+    display: flex;
+    justify-content: left;
+    align-items: center;
+    padding: 5px;
+    text-decoration: none;
+    color: #c7cfda;
+    cursor: pointer;
+    background-color: rgba(80,80,80,.7);
+}
+
+.check {
+
+	margin:3px;
+	margin-right: 5px;
+  width: 11px;
+  height: 11px;
+  border: 1px dotted #70787a;
+	
+  background-color:rgba(0, 0, 0, 0);
+  cursor:"pointer"
+}
+.checked {
+	 
+	margin:3px;
+	margin-right: 7px;
+	  width: 11px;
+  height: 11px;
+  background-image: radial-gradient( #FFFFFF 25%,  #101314 100%);
+  background-repeat: no-repeat;
+  background-position: center;
+ border: 1px dotted #70787a;
+   cursor:"pointer"
+}

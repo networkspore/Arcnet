@@ -1,0 +1,25 @@
+{
+  "name": "arcnet",
+  "version": "0.5.5",
+  "description": "Arcnet server",
+  "main": "app.js",
+  "dependencies": {
+    "crypto-js": "^4.1.1",
+    "express": "^4.17.2",
+    "express-http-proxy": "^1.6.3",
+    "http": "^0.0.1-security",
+    "mysql2": "^2.3.3",
+    "nodemailer": "^6.7.2",
+    "socket.io": "^4.4.1",
+    "util": "^0.12.4"
+  },
+  "devDependencies": {
+    "@mysql/xdevapi": "8.0.28"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "nodemon app.js"
+  },
+  "author": "",
+  "license": "ISC"
+}
