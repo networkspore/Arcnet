@@ -36,10 +36,9 @@ import  {CharacterSelection}  from './pages/components/CharacterSelection';
 import CampaignPage from './pages/CampaignPage';
 import CreateCampaignPage from './pages/CreateCampaignPage';
 import AdminPage from './pages/AdminPage';
-import LogoutPage from './pages/LogoutPage';
 import FinalizeCampaign from './pages/FinalizeCampaign';
 import { PlaceableViewer } from './pages/components/PlaceableViewer';
-import { AssetsPage } from './pages/AssetsPage';
+
 
 import HomeMenu from './pages/HomeMenu';
 import { ProfilePage } from './pages/ProfilePage';
@@ -158,7 +157,7 @@ const App = () => {
                         </>
                     }
 
-                    <Route path='/logout' element={<LogoutPage />} />
+  
 
                     <Route path='*' element={ <Navigate to={'/'} />} />
                 </Routes>   

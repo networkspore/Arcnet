@@ -6,7 +6,8 @@ import useZust from "../hooks/useZust";
 
 import styles from './css/welcome.module.css';
 import NewUserPage from './NewUserPage'
-
+import { io } from "socket.io-client";
+import { socketIOhttp, socketToken } from '../constants/httpVars';
 
 const WelcomePage = () => {
     
@@ -16,6 +17,7 @@ const WelcomePage = () => {
 
     const navigate = useNavigate();
 
+    const setSocket = useZust((state) => state.setSocket)
     const socket = useZust((state) => state.socket);
     const user = useZust((state) => state.user);
     const setUser = useZust((state) => state.setUser);
@@ -35,6 +37,24 @@ const WelcomePage = () => {
    const [refID, setRefID] = useState("");
 
     const [valid, setValid] = useState(false);
+
+    const [showpage, setShowpage] = useState(false)
+    
+
+    useEffect(() => {
+        setWelcomePage();
+
+        setCurrent(1);
+        return () => {
+            setSocket(null)
+        }
+    }, [])
+
+    useEffect(() => {
+        if (socket == null) {
+            navigate("/")
+        }
+    },[socket])
 
 
     function handleChange(e) {
@@ -59,62 +79,43 @@ const WelcomePage = () => {
         }
 
         if(name == "ref"){
-            if (value.length > 9) {
+            if (value.length > 7) {
                 socket.emit("checkRefCode", value, (callback)=>{
                     if(callback > 0)
                     {
                         setValid(prev => true);
                         setRefID(callback);
+                    }else{
+                        if (valid) setValid(prev => false);
                     }
                 });
             }else{
+               
                 if(valid)setValid(prev => false);
             }
         }
     }
 
-    function handleSubmit1(e) {
+    function handleSubmit(e) {
         e.preventDefault();
         
         if(valid)setCurrent(2)
+
+
     }
     
 
-    useEffect(()=>{
-        setWelcomePage();
-      
-        setCurrent(1);
-     
-    },[])
+ 
 
     const createUser = (newUser) =>{
-
+        newUser.userRefID = refID;
         socket.emit('createUser', newUser, (response) => {
-            if (!("LoggedIn" in response)) {
-                if ("msg" in response) {
-                    alert(response.msg);
-                } else {
-                    alert("Cannot confirm user.");
-                }
-
+            if (!response.create) {
+                alert(response.msg);
                 navigate("/welcome")
             } else {
-                if (response.LoggedIn == true) {
-            
-                    setRedirect({ loadPage: "/home", evt: "", msg: "Redirecting" });
-                    setUser(response)
-
-                } else {
-                    if ("msg" in response) {
-                        alert(response.msg);
-
-                    } else {
-                        alert("Cannot confirm user.");
-
-                    }
-                    navigate("/welcome")
-                }
-
+                alert("User created, Please log in.")
+                navigate('/')
             }
 
         });
@@ -125,22 +126,22 @@ const WelcomePage = () => {
         <>
         { current == 1 &&
         
-        <div style={{ width: 850, height: 920, position:"fixed",  left:"50%", top:"50%", transform:"translate(-50%,-50%)" }}>
+        <div style={{ width: 850, height: 700, position:"fixed",  left:"50%", top:"50%", transform:"translate(-50%,-50%)" }}>
 
        
-            <div style={{ width: 850, height: 920, boxShadow: "2px 2px 5px #101010", backgroundColor: "rgba(16,19,20,.3)", textAlign: "center", position: "absolute", zIndex: 2 }}>
+            <div style={{ width: 850, height: 700, boxShadow: "2px 2px 5px #101010", backgroundColor: "rgba(16,19,20,.3)", textAlign: "center", position: "absolute", zIndex: 2 }}>
 
        
                     <br /><br />
                
-                    <div className={styles.heading}>IN A LAND FAR AWAY...</div>
+                    <div className={styles.heading}>Welcome!</div>
 
-                    <div style={{ paddingTop: '50px' }} class={styles.p2}>Rumors spread of a light flickering in the shadows...</div>
+                   
 
-                    <div style={{paddingTop: "80px"}}>
+                    <div style={{paddingTop: "50px"}}>
                        
                         <img src="Images/down.png" />
-                        <form onSubmit={event => handleSubmit1(event)}>
+                        <form onSubmit={handleSubmit}>
 
                     <div style={{ paddingTop: "70px" }}>
 
@@ -149,15 +150,19 @@ const WelcomePage = () => {
 
 
                     </div>
-
-                            <div style={{paddingTop: "70px"}}>
+                    <div style={{ paddingTop: "5px", color:"#777171"}} >
+                        {valid ?  "Code valid." : "Enter a valid referral code."}
+                    </div>
+                            <div style={{paddingTop: "40px"}}>
 
 
                                 <input name="email" class={styles.blkLargeInput} placeholder="Enter email here" type="email" onChange={event => handleChange(event)} />
 
 
                             </div>
-
+                                <div style={{ paddingTop: "5px", color: "#777171" }} >
+                                    {newEmail == "" ? "Enter an unused email." : "Email valid."}
+                                </div>
                             <div class={styles.paddingTop90}>
                                 <input style={
                                     {
@@ -172,7 +177,7 @@ const WelcomePage = () => {
 
                     <div style={{ paddingTop:"100px"}} class={styles.disclaimer} >
                                 <br></br>
-                                This is a private server not intended for public use.
+                                &nbsp;
                             </div>
                         </form>
                     </div>

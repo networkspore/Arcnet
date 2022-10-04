@@ -74,7 +74,7 @@ const NewUserPage = (props = {}) => {
         setEnabled(false);
         var shapass = sha256(pass).toString();
 
-        callback({ userName: name, userPass: shapass, userEmail: newEmail, userRefID: refID })
+        callback({ userName: name, userPass: shapass, userEmail: newEmail })
         
 
         
@@ -94,17 +94,17 @@ return (
         <div style={{ paddingTop: '60px' }}>
             <form onSubmit={event => handleSubmit2(event)}>
                 <div>
-                    <input name="name" class={styles.blkInput} placeholder="Enter name here" autoFocus onChange={event => handleChange(event)} />
+                    <input name="name" class={styles.blkInput} placeholder="Enter user name" autoFocus onChange={event => handleChange(event)} />
                     <div style={{display:nameAvailable ? "none" : "block"}} className={styles.disclaimer}>Name not available</div>
                 </div>
                 <div style={{ paddingTop: '60px' }}>
 
-                    <input name="pass" class={styles.blkPassInput} placeholder="Enter password here" type="password" onChange={event => handleChange(event)} />
+                    <input name="pass" class={styles.blkPassInput} placeholder="Enter password" type="password" onChange={event => handleChange(event)} />
                         <div style={{ display: (pass.length < 8 && confirm.length > 1) ? "block" : "none"  }} className={styles.disclaimer}>Password must be at least 8 characters.</div>
                 </div>
 
                 <div style={{ paddingTop: '30px' }}>
-                    <input name="confirm" class={styles.blkPassInput} placeholder="Re-enter password here" type="password" onChange={event => handleChange(event)} />
+                    <input name="confirm" class={styles.blkPassInput} placeholder="Re-enter password" type="password" onChange={event => handleChange(event)} />
                         <div style={{ display: ((confirm.length > 7) && (confirm != pass)) ? "block" : "none"  }} className={styles.disclaimer}>Passwords must match</div>
                 </div>
 

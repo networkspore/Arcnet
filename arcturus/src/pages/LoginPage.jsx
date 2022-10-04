@@ -97,7 +97,14 @@ import { useRef } from "react";
 
 
     function handleCreate(event) {
-        navigate("/welcome")
+
+        if (!disable) {
+            setDisable(true);
+            setSocket(io(socketIOhttp, { auth: { token: socketToken, user: { nameEmail: 'anonymous' } }, transports: ['websocket'] }))
+            navigate("/welcome")
+        }
+        
+        
     }
 
     function handleSubmit(e) {
