@@ -58,11 +58,7 @@ const HomeMenu = ({ props}) => {
                     </NavLink>
                     */
     
-    function onHomeClick(e) {
-        if(user.userID > 0){
-            toNav("/home")
-        }
-    }
+   
 
     function onProfileClick(e){
         if(user.userID > 0){
@@ -78,7 +74,11 @@ const HomeMenu = ({ props}) => {
                 <div style={{display:"flex"}}>
                     
                     <div style={{paddingTop:"6px",display:"flex",cursor:"pointer", backgroundColor:"black"}} >
-                        <div onClick={onHomeClick}>
+                        <div onClick={(e) =>{
+                            if (user.userID > 0) {
+                                toNav("/search")
+                            }
+                        }}>
                         <img src={user.userID > 0 ? "Images/logo.png" : "Images/logout.png"} width={30} height={30} />
                         </div>
                         <div onClick={onProfileClick} style={{ 
@@ -101,10 +101,9 @@ const HomeMenu = ({ props}) => {
                 <div style={{ position: "fixed", top: 0, left: 0, height: pageSize.height, width: 85, backgroundColor: "rgba(20,23,25,.5)" }}>
         <div style={{display:"flex", flexDirection: "column", height: pageSize.height}}>
             <div style={{flex:1}}>
-                <nav style={{ width: 85, 
-                fontSize: "18px", fontFamily:"WebPapyrus"}}>
+                
                     
-                    <NavLink className={(navData) => navData.isActive ? styles.menuActive : styles.menu__item} about="Home" to={'/home'}>
+                    <NavLink className={(navData) => navData.isActive ? styles.menuActive : styles.menu__item} about="Search" to={'/search'}>
                             <img src="Images/logo.png" width={50} height={50} />
                     </NavLink>
                     {camps}
@@ -118,8 +117,7 @@ const HomeMenu = ({ props}) => {
                  
 
                   
-                   
-                </nav>
+               
             </div>
             <div style={{flex:0.1}}>
                 

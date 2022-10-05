@@ -15,19 +15,14 @@ import LoginPage from "./pages/LoginPage";
 import WelcomePage from "./pages/WelcomePage";
 
 
-
-
-
-
-
-import { OrbitControls, OrthographicCamera, Stars } from '@react-three/drei';
+import {  Stars } from '@react-three/drei';
 import  SolarSystem from './pages/components/SolarSystem';
 
 import { Transition } from './pages/components/Camera/Transition';
-import NewUserPage from './pages/NewUserPage';
+
 import useZust from './hooks/useZust';
 import Sizing from './dom/Sizing';
-import HomePage from './pages/HomePage';
+
 
 import EditorPage from './pages/EditorPage';
 import { MapSelector } from './pages/components/MapSelector';
@@ -42,6 +37,7 @@ import { PlaceableViewer } from './pages/components/PlaceableViewer';
 
 import HomeMenu from './pages/HomeMenu';
 import { ProfilePage } from './pages/ProfilePage';
+import { SearchPage } from './pages/SearchPage';
 
 
 
@@ -133,12 +129,11 @@ const App = () => {
                     {user.userID > 0 &&
                         <>
 
-                            <Route path='/' element={<HomePage />} >
+                        <Route path='/' element={<Navigate to={'/search'} />} />
 
-                            </Route>
-
+                        <Route path='/search' element={<SearchPage />} />
                             <Route path='/profile' element={<ProfilePage />} />
-                            <Route path='/editor' element={<EditorPage />} />
+                           
 
                             <Route path='/realm' element={<CampaignPage />}>
                                 <Route path="*" element={<CampaignPage />} />

@@ -7,6 +7,7 @@ import produce from 'immer';
 import SelectBox from './components/UI/SelectBox';
 import { AssetsPage } from './AssetsPage';
 import { ContactsPage } from './ContactsPage';
+import { ProfileInformationPage } from './ProfileInformationPage';
 
 
 
@@ -62,7 +63,19 @@ export const ProfilePage = () => {
                 </div>
                
                 <div style={{ width: "170px", paddingLeft:"15px" }}>
-                  
+                    <div className={styles.result} style={{ display: "flex", fontSize: "15px", fontFamily: "WebPapyrus" }}
+                        onClick={(e) => {
+                            setshowIndex(1)
+                        }}
+                    >
+
+                        <div>
+                            <img style={{ filter: "invert(100%)" }} src="Images/icons/id-card-outline.svg" width={20} height={20} />
+                        </div>
+                        <div style={{ paddingLeft: "10px" }} >
+                           Profile
+                        </div>
+                    </div>
 
                         <div className={styles.result} style={{ display: "flex", fontSize: "15px", fontFamily: "WebPapyrus" }}
                             onClick={(e)=>{
@@ -71,10 +84,10 @@ export const ProfilePage = () => {
                             >
                            
                            <div>
-                                <img style={{ filter: "invert(100%)" }} src="Images/icons/wallet-outline.svg" width={20} height={20} />
+                                <img style={{ filter: "invert(100%)" }} src="Images/icons/people-outline.svg" width={20} height={20} />
                             </div>
                             <div style={{ paddingLeft: "10px" }} >
-                                Assets
+                                Contacts
                             </div>
                         </div>
                      
@@ -88,7 +101,7 @@ export const ProfilePage = () => {
                             <img style={{ filter: "invert(100%)" }} src="Images/icons/wallet-outline.svg" width={20} height={20} />
                         </div>
                         <div style={{ paddingLeft: "10px" }} >
-                            Assets
+                           Assets
                         </div>
                     </div>
                     
@@ -97,25 +110,22 @@ export const ProfilePage = () => {
                
 
             </div>
-            <div style={{ position: "fixed",  width: 180, left: 95, bottom: "5px" }}>
-                <nav style={{
-                    width: "100%",
-                    fontSize: "18px", fontFamily: "WebPapyrus"
-                }}>
+            <div style={{ position: "fixed", width:60, left: 225, bottom: "0px", fontFamily:"Webpapyrus" }}>
+                
 
-                    <NavLink className={styles.result} about={"Log-out"} onClick={onLogoutClick}>
-                            <div style={{display:"flex"}}>
+                    <NavLink to={"/"} className={styles.menu__item} about={"Log-out"} onClick={onLogoutClick}>
+                            <div style={{height:"70px",display:"flex", justifyItems:"center", alignItems:"center"}}>
                                 <div>
-                                <img src="Images/logout.png" width={30} height={30} />
+                                <img src="Images/logout.png" width={35} height={35} />
                                 </div>
-                                <div style={{paddingLeft:"10px"}}>
-                                    Log-out
-                                </div>
+                               
                             </div>
                     </NavLink>
 
-                </nav>
             </div>
+            {showIndex == 1 && 
+                <ProfileInformationPage />
+            }
             {showIndex == 1 &&
                 <AssetsPage />
             }

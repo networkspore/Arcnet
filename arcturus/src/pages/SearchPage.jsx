@@ -7,18 +7,18 @@ import SearchResults from "./components/UI/SearchResults";
 import produce from "immer";
 
 import styles from './css/home.module.css';
-import HomeMenu from '../pages/HomeMenu'
 
 
 
-const HomePage = () => {
 
-    const setHomePage = useZust((state) => state.setHomePage)
+export const SearchPage = () => {
+
+    
 
   //  const setFillMainOverlay = useZust((state) => state.setFillMainOverlay);
     
    
-
+    const setPage = useZust((state) => state.setPage)
 
     
     const pageSize = useZust((state) => state.pageSize);
@@ -62,12 +62,9 @@ const HomePage = () => {
         }
     }
 
-
-    let setOnce = true;
-    useEffect(()=>{
-        setHomePage();
-        
-    },[])
+useEffect(()=>{
+    setPage(3)
+},[])
 
   
 const endSearch = () => {
@@ -124,9 +121,6 @@ const endSearch = () => {
 
 };
 
-  
-
-export default HomePage;
 
 /*   
 

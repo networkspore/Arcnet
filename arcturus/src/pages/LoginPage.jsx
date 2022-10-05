@@ -16,7 +16,7 @@ import { useRef } from "react";
 
     const setSocket = useZust((state) => state.setSocket)
     const setUser = useZust((state) => state.setUser)
-    const setContacts = useZust((state) => state.setcontacts)
+    const setContacts = useZust((state) => state.setContacts)
 
     const [data, setData] = useState({ loginRemember: false, loginName: "", loginPass: "" });
     const [cookie, setCookie] = useCookies(['login']);

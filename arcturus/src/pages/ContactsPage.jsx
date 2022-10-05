@@ -1,11 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import useZust from '../hooks/useZust';
 
-import { NavLink, useNavigate } from 'react-router-dom';
-import styles from './css/home.module.css';
-import produce from 'immer';
-import SelectBox from './components/UI/SelectBox';
-import { MessagePage } from './MessagePage';
+import { useNavigate } from 'react-router-dom';
+
+
 
 
 
@@ -50,9 +48,7 @@ export const ContactsPage = () => {
 
              </div>
            
-            {currentContact.length > 0 &&
-                <ContactsPage contacts={currentContact} />
-            }
+           
         </>
     )
 }

@@ -6099,7 +6099,7 @@ LOWER( " + name_email + ") OR LOWER(userEmail) = LOWER(" + name_email + ")) AND 
         mySession.sql(query).execute().then((results) => {
             if (!results.hasData()) {
 
-                console.log("login try failed for: " + user.userName)
+                console.log("login try failed for: " + name_email)
 
                 callback(false, null)
             } else {
