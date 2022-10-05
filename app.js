@@ -6042,7 +6042,7 @@ const getContacts = (user, callback) => {
         mySession = mysqlx.getSession(sqlCredentials)
     }
 
-    var query = "SELECT userContact.contactID, userContact.statusID, user.userName from arcturus.userContact, arcturus.user where userContact.contactID = user.userID and userContact.userID = " +user.userID;
+    var query = "SELECT userContact.contactID, userContact.statusID, user.userName, user.userHandle from arcturus.userContact, arcturus.user where userContact.contactID = user.userID and userContact.userID = " +user.userID;
 
     mySession.then((session) => {
     
@@ -6055,7 +6055,8 @@ const getContacts = (user, callback) => {
                     contacts.push(
                         {
                             userID: contactsArray[i][0],
-                            statusID: contactsArray[i][1]
+                            statusID: contactsArray[i][1],
+                            userHandle: contactsArray[i][2]
                         }
                     )
                 }

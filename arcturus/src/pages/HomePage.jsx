@@ -93,7 +93,13 @@ const endSearch = () => {
                               if(e.key == "Esc"){
                                 endSearch();
                               }  
-                            }} ref={searchInputRef} style={{ color: searchActive ? "white" : "#62717d"}} onChange={e => onSearch(e)} className={styles.searchInput} type="text" placeholder="Find friends and realms" />
+                            }} 
+                            ref={searchInputRef} 
+                            style={{ color: searchActive ? "white" : "#62717d"}} 
+                            onChange={e => onSearch(e)} 
+                            className={styles.searchInput} 
+                            type="text" 
+                            placeholder="Find contacts and realms" />
                     </div>
                 </div>
                 <div style={{ border: "2px solid #000000", height: "100%", padding: "2px", backgroundColor: "rgba(4, 4, 5, .5)",  }}>

@@ -16,6 +16,7 @@ import { useRef } from "react";
 
     const setSocket = useZust((state) => state.setSocket)
     const setUser = useZust((state) => state.setUser)
+    const setContacts = useZust((state) => state.setcontacts)
 
     const [data, setData] = useState({ loginRemember: false, loginName: "", loginPass: "" });
     const [cookie, setCookie] = useCookies(['login']);
@@ -119,13 +120,14 @@ import { useRef } from "react";
             setDisable(true);
             const sock = io(socketIOhttp, { auth: { token: socketToken, user: { nameEmail: name_email, password: pass } }, transports: ['websocket'] });
             
-            sock.on("loggedIn", (user) =>{
+            sock.on("loggedIn", (user, contacts) =>{
                 sock.off("loggedIn")
                 if(data.loginRemember){
                
                     setCookie("login", { useCookie: true, name: name_email, pass: pass })
                 }
                 setUser(user)
+                setContacts(contacts)
                 setSocket(sock);
                 setShowMenu(true);
                 return true;

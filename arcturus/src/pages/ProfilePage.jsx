@@ -6,6 +6,7 @@ import styles from './css/home.module.css';
 import produce from 'immer';
 import SelectBox from './components/UI/SelectBox';
 import { AssetsPage } from './AssetsPage';
+import { ContactsPage } from './ContactsPage';
 
 
 
@@ -13,17 +14,13 @@ import { AssetsPage } from './AssetsPage';
 export const ProfilePage = () => {
     const pageSize = useZust((state) => state.pageSize)
     const user = useZust((state) => state.user)
-    const [showAssets, setshowAssets] = useState(false)
+    const [showIndex, setshowIndex] = useState(0)
     const nav = useNavigate();
     const setUser = useZust((state) => state.setUser)
     const setShowMenu = useZust((state) => state.setShowMenu)
     const setSocket = useZust((state) => state.setSocket)
     const setAutoLogin = useZust((state) => state.setAutoLogin)
 
-    function onAssetsClick(e){
-       
-        setshowAssets(true)
-    }
 
     const onLogoutClick = (e) => {
         setAutoLogin(false);
@@ -68,7 +65,9 @@ export const ProfilePage = () => {
                   
 
                         <div className={styles.result} style={{ display: "flex", fontSize: "15px", fontFamily: "WebPapyrus" }}
-                            onClick={onAssetsClick}
+                            onClick={(e)=>{
+                                setshowIndex(1)
+                            }}
                             >
                            
                            <div>
@@ -79,6 +78,19 @@ export const ProfilePage = () => {
                             </div>
                         </div>
                      
+                    <div className={styles.result} style={{ display: "flex", fontSize: "15px", fontFamily: "WebPapyrus" }}
+                        onClick={(e) =>{
+                            setshowIndex(2)
+                        }}
+                    >
+
+                        <div>
+                            <img style={{ filter: "invert(100%)" }} src="Images/icons/wallet-outline.svg" width={20} height={20} />
+                        </div>
+                        <div style={{ paddingLeft: "10px" }} >
+                            Assets
+                        </div>
+                    </div>
                     
                   
                 </div>
@@ -104,8 +116,11 @@ export const ProfilePage = () => {
 
                 </nav>
             </div>
-            {showAssets &&
+            {showIndex == 1 &&
                 <AssetsPage />
+            }
+            {showIndex == 2 &&
+                <ContactsPage />
             }
        </>
         
