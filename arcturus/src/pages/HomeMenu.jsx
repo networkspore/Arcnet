@@ -129,7 +129,7 @@ const HomeMenu = ({ props}) => {
 
 
                 <NavLink className={(navData) => navData.isActive ? styles.menuActive : styles.menu__item} about={user.userName}
-                    to={'/profile'}>
+                    to={'/home'}>
                     <img src="Images/icons/person.svg" style={{ filter: "invert(100%)" }} width={45} height={50} />
                 </NavLink>
                 

@@ -45,7 +45,7 @@ export const MediaAssetsPage = () => {
        <>
 <div id='MediaAssetsPage' style={{ position: "fixed", backgroundColor: "rgba(0,3,4,.95)", width: pageSize.width - 285 - 150, height: pageSize.height, left: 285 + 150, top: "0px" }}>
     <div style={{
-        padding: "10px",
+        
         textAlign: "center",
         width: "100%",
         paddingTop: "20px",

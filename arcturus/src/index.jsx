@@ -36,8 +36,9 @@ import { PlaceableViewer } from './pages/components/PlaceableViewer';
 
 
 import HomeMenu from './pages/HomeMenu';
-import { ProfilePage } from './pages/ProfilePage';
+
 import { SearchPage } from './pages/SearchPage';
+import { HomePage } from './pages/HomePage';
 
 
 
@@ -132,7 +133,7 @@ const App = () => {
                         <Route path='/' element={<Navigate to={'/search'} />} />
 
                         <Route path='/search' element={<SearchPage />} />
-                            <Route path='/profile' element={<ProfilePage />} />
+                            <Route path='/home' element={<HomePage />} />
                            
 
                             <Route path='/realm' element={<CampaignPage />}>
