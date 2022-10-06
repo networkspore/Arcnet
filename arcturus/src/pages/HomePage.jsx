@@ -8,7 +8,7 @@ import SelectBox from './components/UI/SelectBox';
 import { AssetsPage } from './AssetsPage';
 import { ContactsPage } from './ContactsPage';
 import { ProfilePage } from './ProfilePage';
-import { ImageDiv } from './components/UI/ImageDIv';
+import { ImageDiv } from './components/UI/ImageDiv';
 
 
 

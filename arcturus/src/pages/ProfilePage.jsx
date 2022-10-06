@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 import useZust from "../hooks/useZust";
-import { ImageDiv } from "./components/UI/ImageDIv";
+import { ImageDiv } from "./components/UI/ImageDiv";
 
 export const ProfilePage = (props = {}) =>{
     
