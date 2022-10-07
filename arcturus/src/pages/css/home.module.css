@@ -122,6 +122,23 @@
 	background-color: rgba(80, 80, 80, .7);
 }
 
+.glow {
+	display:"flex"
+}
+
+.glow:hover {
+	box-shadow: 0px 0px 30px 30px #ffffff55;
+	background-color: #ffffff55;
+}
+
+.glowText {
+	display: "flex"
+}
+
+.glowText:hover {
+	box-shadow: 0px 0px 2px 2px #ffffff55;
+	background-color: #ffffff55;
+}
  
 .result{
 	display: flex;
@@ -215,6 +232,8 @@
 	color: #777171;
 }
 
+
+
 .menuToolTip:hover {
 	color: white;
 	background-color: rgba(80, 80, 80, .7);
@@ -256,7 +275,7 @@
 
 .CancelButton:hover {
 	color: white;
-	background-color: rgba(80, 80, 80, .7);
+	background-color: #FFFFFF20;
 }
 
 .OKButton {

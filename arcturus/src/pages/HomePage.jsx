@@ -47,19 +47,24 @@ export const HomePage = () => {
                         image: "Images/icons/person.svg",
                         width: 130,
                         height: 130,
-                        filter:"invert(100%)" 
-                    }}/>
-                    <div style={{
-                        paddingTop:"20px",
-                        fontFamily: "WebRockwell",
-                        fontSize: "15px",
-                        fontWeight: "bolder",
-                        color: "#cdd4da",
-                        textShadow: "2px 2px 2px #101314"
-                    }} >{user.userName}</div>
-                    <div style={{ width: "180px",  }}>
-                        <hr />
+                        filter: "invert(100%)"
+                    }} />
+                    <div style={{ width: 200, backgroundImage: "linear-gradient(to right, #000304DD, #77777733, #000304DD)" }}>
+                        <div style={{
+
+                            textAlign: "center",
+                            fontFamily: "WebRockwell",
+                            fontSize: "15px",
+                            fontWeight: "bolder",
+                            color: "#cdd4da",
+                            textShadow: "2px 2px 2px #101314",
+
+                        }} >{user.userName}</div>
+
                     </div>
+
+                    <div style={{ paddingTop: 3, height: 2, width: "100%", backgroundImage: "linear-gradient(to right, #000304DD, #77777755, #000304DD)", }}>&nbsp;</div>
+
                 </div>
                
                 <div style={{ width: "170px", paddingLeft:"15px" }}>
@@ -135,7 +140,7 @@ export const HomePage = () => {
 
             </div>
             {showIndex == 1 && 
-                <ProfilePage />
+                <ProfilePage cancel={()=>{setshowIndex(0)}} />
             }
             {showIndex == 2 &&
                 <AssetsPage />
