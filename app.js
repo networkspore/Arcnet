@@ -197,6 +197,13 @@ io.on('connection', (socket) =>{
                     
 /* //////////////SUCCESS///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 
+                    socket.on('createRefCode', (code, callback)=>{
+                        createRefCode(user, code, (created, result)=>{
+                            callback(created, result)
+                        })
+                    })
+
+
                     socket.on('getUserInformation', (userInformation) => {
                         console.log(user)
                         if (user != null) {
@@ -5969,6 +5976,69 @@ function addIdb(userID, type, callback)
         console.log("userID for idb is not a number")
         callback(false, null)
     }
+}
+
+function formatedNow(now = new Date()) {
+
+    const year = now.getUTCFullYear();
+    const month = now.getUTCMonth()
+    const day = now.getUTCDate();
+    const hours = now.getUTCHours();
+    const minutes = now.getUTCMinutes();
+    const seconds = now.getUTCSeconds();
+
+
+    const stringYear = year.toString();
+    const stringMonth = month < 10 ? "0" + month : String(month);
+    const stringDay = day < 10 ? "0" + day : String(day);
+    const stringHours = hours < 10 ? "0" + hours : String(hours);
+    const stringMinutes = minutes < 10 ? "0" + minutes : String(minutes);
+    const stringSeconds = seconds < 10 ? "0" + seconds : String(seconds);
+
+
+
+    return stringYear + "-" + stringMonth + "-" + stringDay + " " + stringHours + ":" + stringMinutes + ":" + stringSeconds;
+
+
+
+   
+}
+
+
+
+const createRefCode = (user,code, callback) => {
+    if (!util.types.isPromise(mySession)) {
+        mySession = mysqlx.getSession(sqlCredentials)
+    }
+
+    console.log("Inserting referal code.")
+
+    mySession.then((session) => {
+        var arcDB = session.getSchema('arcturus');
+        var ref = arcDB.getTable("ref");
+        const now = formatedNow();
+
+        session.startTransaction();
+        try {
+            //var res = 
+            ref.insert(['refCode', 'userID','refCreated']).values([code, user.userID, now]).execute();
+            //const refID = res.getAutoIncrementValue();
+
+            session.commit();
+
+            console.log("Created code: " + code + " at: " + now)
+
+            callback(true, { refCode: code, refCreated:now })
+        } catch (error) {
+            console.log(error)
+            session.rollback();
+            callback(false, null);
+        }
+        
+    }).catch((error)=>{
+        console.log(error)
+        callback(false, null);
+    })
 }
 
 function emailPassReset(user = {userName:"", userPass: ""},callback)

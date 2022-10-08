@@ -465,6 +465,16 @@
    color:white;
 }
 
+.hoverWhite {
+	color: #c7cfda;
+	cursor: pointer;
+	text-decoration: none;
+}
+
+.hoverWhite:hover {
+	color:white;
+}
+
 .menuNameActive{
     flex:1;       
     position: relative;

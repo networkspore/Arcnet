@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
-
-
-
+import React, { useState, useEffect, useRef } from "react";
+import sha256 from 'crypto-js/sha256';
+import MD5 from "crypto-js/md5";
+import produce from "immer";
 import useZust from "../hooks/useZust";
 import { ImageDiv } from "./components/UI/ImageDiv";
 
@@ -9,17 +9,54 @@ import styles from './css/home.module.css'
 
 export const CreateReferalCode = (props = {}) => {
 
+    const codeRef = useRef();
 
     const pageSize = useZust((state) => state.pageSize)
     const user = useZust((state) => state.user)
     const socket = useZust((state) => state.socket)
+
+    const [availableCodes, setAvailableCodes] = useState([])
+
+    const [codeAvailable, setCodeAvailable] = useState(true);
+
+    const addCode = (c) => {
+        setAvailableCodes(produce((state) => {
+            state.push(c);
+        }));
+    }
 
     function onCancelClick(e) {
         props.cancel();
     }
 
     function onOKclick(e) {
+        const code = codeRef.current.value;
+        codeRef.current.value = ""
+       
+        if(code != "" && codeAvailable)
+        {
+            socket.emit('createRefCode', code , (created, result)=>{
+                
+                if(created){
+                   
+                    const now = String(result.refCreated).split(" ")[0];
 
+                 
+                    addCode(
+                        <div style={{ display: "flex", width: "100%", marginLeft: "10px", height: "25px" }}>
+                            <div style={{ width: 90, color: "#777777" }}>{now}</div>
+                            <div style={{ width: (275) }}>{code}</div>
+                            <div style={{ width: 60, fontSize: 12 }} className={styles.hoverWhite}>
+                                <div>(copy)</div>
+                            </div>
+                        </div>
+                    )
+                }else{
+                    alert("Creation failed. Tray again later.")
+                }
+            }) 
+            
+        }
     }
 
     function onBackClick(e) {
@@ -27,6 +64,38 @@ export const CreateReferalCode = (props = {}) => {
         props.back()
     }
 
+    function onGenerateClick(e){
+       
+       
+        const code = MD5(formatedNow())
+        codeRef.current.value = code;
+    }
+
+    function formatedNow(now = new Date(), small = false) {
+        
+        const year = now.getUTCFullYear();
+        const month = now.getUTCMonth()
+        const day = now.getUTCDate();
+        const hours = now.getUTCHours();
+        const minutes = now.getUTCMinutes();
+        const seconds = now.getUTCSeconds();
+        const miliseconds = now.getUTCMilliseconds();
+
+        const stringYear = year.toString();
+        const stringMonth =  month < 10 ? "0" + month : String(month);
+        const stringDay = day < 10 ? "0" + day : String(day);
+        const stringHours = hours < 10 ? "0" + hours : String(hours);
+        const stringMinutes = minutes < 10 ? "0" + minutes : String(minutes);
+        const stringSeconds = seconds < 10 ? "0" + seconds : String(seconds);
+        const stringMiliseconds = miliseconds < 100 ? (miliseconds < 10 ? "00" + miliseconds : "0" + miliseconds) : String(miliseconds);
+
+
+        const stringNow = stringYear + "-" +  stringMonth + "-" + stringDay + " " + stringHours + ":" + stringMinutes ;
+
+
+        
+        return small ? stringNow : stringNow + ":" + stringSeconds + ":" + stringMiliseconds;
+    }
 
     
     return (
@@ -57,7 +126,7 @@ export const CreateReferalCode = (props = {}) => {
             <div style={{ paddingLeft: "15px", display: "flex", height: "430px" }}>
 
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", height: "150px", width: 200, padding: "10px" }}>
-                    <div style={{ cursor: "pointer" }} >
+                    <div style={{}} >
                         <ImageDiv netImage={{
                             image: "Images/icons/person.svg",
                             width: 130,
@@ -98,8 +167,9 @@ export const CreateReferalCode = (props = {}) => {
                         fontSize: "18px",
                     }}>
                         <div style={{ display: "flex", paddingTop: "50px", marginLeft:"10px" }} >
-                            <div style={{ paddingLeft:10, paddingRight:10 }} className={styles.CancelButton} > Generate </div>
-                            <div> <input 
+                            <div onClick={onGenerateClick} style={{ paddingLeft:10, paddingRight:10 }} className={styles.CancelButton} > Generate </div>
+                            <div> <input
+                                ref={codeRef}
                                 placeholder="Enter a code..." 
                                 autoFocus 
                                 type={"text"}
@@ -112,7 +182,7 @@ export const CreateReferalCode = (props = {}) => {
                                     backgroundColor: "black",
                                    
                                 }} /> </div>
-                            <div style={{ paddingLeft: 30, paddingRight: 30 }} className={styles.CancelButton} > OK </div>
+                            <div onClick={onOKclick} style={{ paddingLeft: 30, paddingRight: 30 }} className={styles.OKButton} > Create </div>
                         </div>
                      
                     </div>
@@ -120,15 +190,27 @@ export const CreateReferalCode = (props = {}) => {
                     <div style={{
                         backgroundColor:"#00000050",
                         width:"450px",
-                        height:200
+                        height:280,
+                        textAlign: "center",
+                        fontFamily: "WebRockwell",
+                        fontSize: "13px",
+                        color: "#cdd4da",
+                    
                     }}>
+                        <div style={{ display: "flex", width: "100%", marginLeft: "10px" }}>
+                                <div style={{ width: 90, color: "#777777", }}>Created</div>
+                            <div style={{ width: 275 }}>Referral Code</div>
+                            <div style={{ flex: 60 }}>&nbsp;</div>
+                        </div>
+                            <div style={{ paddingTop: 3, marginLeft: "10px", height: 2, width: "100%", backgroundImage: "linear-gradient(to right, #000304DD, #77777755, #000304DD)", }}>&nbsp;</div>
 
+                        {availableCodes}
                     </div>
                     </div>
                     <div style={{
                         justifyContent: "center",
                         width: "500px",
-                        paddingTop: "30px",
+                        
                         display: "flex",
                         alignItems: "center"
                     }}>
@@ -136,6 +218,7 @@ export const CreateReferalCode = (props = {}) => {
                         <div style={{paddingLeft:"10px", paddingRight:"10px"}} className={styles.OKButton} onClick={onBackClick} >Back</div>
 
                     </div>
+                    <div>&nbsp;</div>
                 </div>
 
             </div>
