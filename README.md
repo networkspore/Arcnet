@@ -17,3 +17,5 @@ The next thing you'll notice is that there's a nested project in the Arcturus di
 This project has a similar httpvars file, that contains connection information for the socket.io client, which is also missing.
 
 You'll also be missing the images directory.
+
+The backend database is currently being renovated, along with the gamecreation. I am migrating from having assets stored on the server to trying to store them on the client, and have them shared P2P rather than via http. 
