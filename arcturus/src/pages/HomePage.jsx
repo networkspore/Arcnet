@@ -9,6 +9,7 @@ import { AssetsPage } from './AssetsPage';
 import { ContactsPage } from './ContactsPage';
 import { ProfilePage } from './ProfilePage';
 import { ImageDiv } from './components/UI/ImageDiv';
+import { LocalAssetsPage } from './LocalAssetsPage';
 
 
 
@@ -89,10 +90,10 @@ export const HomePage = () => {
                     >
 
                         <div>
-                            <img style={{ filter: "invert(100%)" }} src="Images/icons/wallet-outline.svg" width={20} height={20} />
+                            <img style={{ filter: "invert(100%)" }} src="Images/icons/server-outline.svg" width={20} height={20} />
                         </div>
                         <div style={{ paddingLeft: "10px" }} >
-                            Assets
+                            Local Assets
                         </div>
                     </div>
 
@@ -132,7 +133,7 @@ export const HomePage = () => {
                     <NavLink to={"/"}  className={styles.menu__item} about={"Log-out"} onClick={onLogoutClick}>
                             <div style={{height:"70px",display:"flex", justifyItems:"center", alignItems:"center"}}>
                                 <div>
-                                <img src="Images/logout.png" width={30} height={30}  />
+                            <img style={{ filter: "invert(100%)" }} src="Images/icons/lock-open-outline.svg" width={30} height={30}  />
                                 </div>
                                
                             </div>
@@ -143,7 +144,7 @@ export const HomePage = () => {
                 <ProfilePage cancel={()=>{setshowIndex(0)}} />
             }
             {showIndex == 2 &&
-                <AssetsPage />
+                <LocalAssetsPage />
             }
             {showIndex == 3 &&
                 <ContactsPage />

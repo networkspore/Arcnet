@@ -5,7 +5,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import styles from './css/home.module.css';
 import produce from 'immer';
 import SelectBox from './components/UI/SelectBox';
-import { MediaAssetsPage } from './MediaAssetsPage';
+import { MediaAssetsPage } from './LocalAssetsPage';
 
 
 
