@@ -1,7 +1,6 @@
-import styles from './pages/css/home.module.css';
 import loadingStyles from './pages/css/loading.module.css';
 
-import React, { useEffect, useState, Suspense } from "react";
+import React, { Suspense } from "react";
 import {createRoot } from 'react-dom/client'
 import { BrowserRouter as Router, Navigate, Route, Routes } from 'react-router-dom';
 
@@ -24,7 +23,6 @@ import useZust from './hooks/useZust';
 import Sizing from './dom/Sizing';
 
 
-import EditorPage from './pages/EditorPage';
 import { MapSelector } from './pages/components/MapSelector';
 
 import  {CharacterSelection}  from './pages/components/CharacterSelection';
@@ -39,6 +37,7 @@ import HomeMenu from './pages/HomeMenu';
 
 import { SearchPage } from './pages/SearchPage';
 import { HomePage } from './pages/HomePage';
+
 
 
 
@@ -159,7 +158,7 @@ const App = () => {
                 </Routes>   
                 
                 <HomeMenu />
-                
+    
                         </div>
                     
                 

@@ -3,7 +3,9 @@ import React, { useEffect, useState } from "react";
 import styles from './css/ContentMenu.module.css';
 import { NavLink, useNavigate } from "react-router-dom";
 import { ErgoDappConnector } from "ergo-dapp-connector";
-import { transform } from "lodash";
+
+
+
 
 
 const HomeMenu = ({ props}) => {
@@ -136,9 +138,12 @@ const HomeMenu = ({ props}) => {
             </div>
         </div>
         </div>
+        
         }
+      
         </>
     )
+    
 }
 
 export default HomeMenu;

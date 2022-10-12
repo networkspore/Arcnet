@@ -4,12 +4,12 @@ import useZust from '../hooks/useZust';
 import { NavLink, useNavigate } from 'react-router-dom';
 import styles from './css/home.module.css';
 import produce from 'immer';
-import SelectBox from './components/UI/SelectBox';
-import { AssetsPage } from './AssetsPage';
+
 import { ContactsPage } from './ContactsPage';
 import { ProfilePage } from './ProfilePage';
 import { ImageDiv } from './components/UI/ImageDiv';
 import { LocalAssetsPage } from './LocalAssetsPage';
+
 
 
 
@@ -144,8 +144,9 @@ export const HomePage = () => {
                 <ProfilePage cancel={()=>{setshowIndex(0)}} />
             }
             {showIndex == 2 &&
-                <LocalAssetsPage />
+               <LocalAssetsPage />
             }
+            
             {showIndex == 3 &&
                 <ContactsPage />
             }

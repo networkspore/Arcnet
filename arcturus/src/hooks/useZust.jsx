@@ -9,6 +9,8 @@ import {Color, Texture } from 'three';
 //const getLocalStorage = (key) => JSON.parse(window.localStorage.getItem.key);
 //const setLocalStorage = (key, value) => window.localStorage.setItem(key,JSON.stringify(value));
 const useZust = create((set) => ({
+   showDirManager: false,
+   setShowDirManager: (value = false) => set({showDirManager: value}),
    contacts: [],
    setContacts: (value=[]) => set({contacts: value}),
    autoLogin: true,
@@ -65,8 +67,8 @@ const useZust = create((set) => ({
    torilActive: false,
    setTorilActive: (active = true) => set({torilActive: active}),
 
-   user: { LoggedIn: false, userID: '', userName: '', userEmail: '', userSuper: 0 },
-   setUser: (u = { LoggedIn: false, userID: '', userName: '', userEmail: '', userSuper: 0 }) => set({user: u}),
+   user: { LoggedIn: false, userID: '', userName: '', userEmail: '', userSuper: 0, userDirectories: [] },
+   setUser: (u = { LoggedIn: false, userID: '', userName: '', userEmail: '', userSuper: 0, userDirectories:[] }) => set({user: u}),
    
    socket: null,
    setSocket: (sock = null) => set({socket: sock}),

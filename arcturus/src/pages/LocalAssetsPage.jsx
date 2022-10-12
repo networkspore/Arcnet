@@ -1,18 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import useZust from '../hooks/useZust';
-
-import { NavLink, useNavigate } from 'react-router-dom';
 import styles from './css/home.module.css';
-import produce from 'immer';
-import SelectBox from './components/UI/SelectBox';
+
 import { AddImagePage } from './AddImagePage';
-import { ImageDiv } from './components/UI/ImageDiv';
 
 
 
 
 
-export const MediaAssetsPage = () => {
+
+export const LocalAssetsPage = () => {
     const pageSize = useZust((state) => state.pageSize)
     const user = useZust((state) => state.user)
 
@@ -39,7 +36,27 @@ export const MediaAssetsPage = () => {
     function addImageObject(imgObj) {
 
     }
+
+    async function pickAssetDirectory() {
+        const dirHandle = await window.showDirectoryPicker({mode:"readwrite"});
+        var handleValues = "";
+      //  for await (const entry of dirHandle.values()) {
+        var obj = Object.getOwnPropertyNames(dirHandle)
+        obj.forEach(element => {
+        handleValues += element + " : "    
+        });    
+      //  }
+        alert(dirHandle)
+    }
+
+    useEffect(()=>{
+        if (user.userDirectories.length == 0)
+        {
+            pickAssetDirectory();
+        }
+    },[])
     
+
 
     return (
         
@@ -86,7 +103,7 @@ export const MediaAssetsPage = () => {
                             Add
                         </div>
                     </div>
-                    <div className={styles.toolbar} style={{ display: "flex", }}>
+                    <div onClick={(e)=>{pickAssetDirectory()}} className={styles.toolbar} style={{ display: "flex", }}>
                         <div style={{}}>
                             <img src='Images/icons/enter-outline.svg' width={20} height={20} style={{ filter: "invert(100%)" }} />
                         </div>

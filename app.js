@@ -265,22 +265,23 @@ io.on('connection', (socket) =>{
                     });
 
                     socket.on('disconnect', () => {
-                        getUser(id, (userID, userName) => {
-                            if (userID > 0) {
-                                cleanRooms(userID, (roomCount) => {
-                                    console.log("cleaned " + roomCount + " rooms, disconnecting user...");
-                                });
-                                updateUserStatus(userID, "Offline", "", (isRooms, rooms) => {
-                                    if (isRooms) {
-                                        for (let i = 0; i < rooms.length; i++) {
-                                            console.log("sending userStatus message to: " + rooms[i][0] + " user: " + userID + " is: Offline");
-                                            io.to(rooms[i][0]).emit("userStatus", userID, userName, "Offline");
+                        const userName = user.userName;
+                        const userID = user.userID;
+                        if (userID > 0) {
+                            cleanRooms(userID, (roomCount) => {
+                                console.log("cleaned " + roomCount + " rooms, disconnecting user...");
+                            });
+                            updateUserStatus(userID, "Offline", "", (isRooms, rooms) => {
+                                if (isRooms) {
+                                    for (let i = 0; i < rooms.length; i++) {
+                                        console.log("sending userStatus message to: " + rooms[i][0] + " user: " + userID + " is: Offline");
+                                        io.to(rooms[i][0]).emit("userStatus", userID, userName, "Offline");
 
-                                        }
                                     }
-                                });
-                            }
-                        })
+                                }
+                            });
+                        }
+                        
                     });
 
                     socket.on("sendCampMsg", (room = "", userName = "", userID = 0, type = 0, msg = "", sent) => {
@@ -6160,13 +6161,15 @@ const checkUser = (user, callback) => {
     var query = "SELECT DISTINCT userName, userEmail, userID, userHandle, imageID FROM arcturus.user WHERE ( LOWER(userName) = \
 LOWER( " + name_email + ") OR LOWER(userEmail) = LOWER(" + name_email + ")) AND userPassword = " + pass;
 
+  
+
     if (!util.types.isPromise(mySession)) {
         mySession = mysqlx.getSession(sqlCredentials)
     }
 
-    mySession.then((mySession) => {
+    mySession.then((session) => {
 
-        mySession.sql(query).execute().then((results) => {
+        session.sql(query).execute().then((results) => {
             if (!results.hasData()) {
 
                 console.log("login try failed for: " + name_email)
@@ -6175,15 +6178,41 @@ LOWER( " + name_email + ") OR LOWER(userEmail) = LOWER(" + name_email + ")) AND 
             } else {
                 const userArr = results.fetchOne()
 
-                const loginUser = {
-                    userName: userArr[0],
-                    userEmail: userArr[1],
-                    userID: userArr[2],
-                    userHandle: userArr[3],
-                    
-                }
+                const userID = userArr[2];
 
-                callback(true, loginUser);
+                var idbQuery = "SELECT directory.directoryID, directoryName, directoryLocation from arcturus.directory, arcturus.userDirectory \
+WHERE userDirectory.userID = " + userID + " AND userDirectory.directoryID = directory.directoryID" 
+
+                session.sql(idbQuery).execute().then((directorysRes)=>{
+                    let directories = [];
+                    if(directorysRes.hasData()){
+                        const dirArray = directorysRes.fetchAll();
+                        for(let i = 0 ; i < dirArray.length ; i++){
+                            directories.push(
+                                {
+                                    directoryID: dirArray[i][0],
+                                    directoryName: dirArray[i][1],
+                                    directoryLocation: dirArray[i][2],
+                           
+                                }
+                            )
+                        }
+
+                    }
+                    
+                    const loginUser = {
+                        userName: userArr[0],
+                        userEmail: userArr[1],
+                        userID: userID,
+                        userHandle: userArr[3],
+                        userDirectories: directories,
+                    }
+
+
+
+                    callback(true, loginUser);
+                })
+                
             }
         })
     }).catch((reason) => {
