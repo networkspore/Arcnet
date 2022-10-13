@@ -6158,7 +6158,7 @@ const checkUser = (user, callback) => {
     var name_email = (mysql.escape(user.nameEmail));
     var pass = (mysql.escape(user.password));
 
-    var query = "SELECT DISTINCT userName, userEmail, userID, userHandle, imageID FROM arcturus.user WHERE ( LOWER(userName) = \
+    var query = "SELECT DISTINCT userID, userName, userEmail, userHandle, imageID FROM arcturus.user WHERE ( LOWER(userName) = \
 LOWER( " + name_email + ") OR LOWER(userEmail) = LOWER(" + name_email + ")) AND userPassword = " + pass;
 
   
@@ -6178,40 +6178,19 @@ LOWER( " + name_email + ") OR LOWER(userEmail) = LOWER(" + name_email + ")) AND 
             } else {
                 const userArr = results.fetchOne()
 
-                const userID = userArr[2];
-
-                var idbQuery = "SELECT directory.directoryID, directoryName, directoryLocation from arcturus.directory, arcturus.userDirectory \
-WHERE userDirectory.userID = " + userID + " AND userDirectory.directoryID = directory.directoryID" 
-
-                session.sql(idbQuery).execute().then((directorysRes)=>{
-                    let directories = [];
-                    if(directorysRes.hasData()){
-                        const dirArray = directorysRes.fetchAll();
-                        for(let i = 0 ; i < dirArray.length ; i++){
-                            directories.push(
-                                {
-                                    directoryID: dirArray[i][0],
-                                    directoryName: dirArray[i][1],
-                                    directoryLocation: dirArray[i][2],
-                           
-                                }
-                            )
-                        }
-
-                    }
+                const userID = userArr[0];
                     
                     const loginUser = {
-                        userName: userArr[0],
-                        userEmail: userArr[1],
                         userID: userID,
+                        userName: userArr[1],
+                        userEmail: userArr[2],
                         userHandle: userArr[3],
-                        userDirectories: directories,
                     }
 
 
 
                     callback(true, loginUser);
-                })
+             //   })
                 
             }
         })

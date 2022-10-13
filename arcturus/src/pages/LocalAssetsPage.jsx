@@ -5,7 +5,8 @@ import styles from './css/home.module.css';
 import { AddImagePage } from './AddImagePage';
 
 
-
+import { get, set } from 'idb-keyval';
+import produce from 'immer';
 
 
 
@@ -13,8 +14,12 @@ export const LocalAssetsPage = () => {
     const pageSize = useZust((state) => state.pageSize)
     const user = useZust((state) => state.user)
 
+    const localDirectory = useZust((state) => state.localDirectory)
+    const setLocalDirectory = (value) => useZust.setState(produce((state) => {
+        state.localDirectory = value;
+    }));
     const [showIndex, setShowIndex] = useState(); 
-
+    const [keys, setKeys] = useState([])
 
     function onAddImage(e) {
        setShowIndex(2)
@@ -37,25 +42,51 @@ export const LocalAssetsPage = () => {
 
     }
 
+    useEffect(()=>{
+        console.log(localDirectory)
+    },[localDirectory])
+
+
     async function pickAssetDirectory() {
-        const dirHandle = await window.showDirectoryPicker({mode:"readwrite"});
-        var handleValues = "";
-      //  for await (const entry of dirHandle.values()) {
-        var obj = Object.getOwnPropertyNames(dirHandle)
-        obj.forEach(element => {
-        handleValues += element + " : "    
-        });    
-      //  }
-        alert(dirHandle)
+        const dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
+        
+        await handleFirst(dirHandle)
     }
 
-    useEffect(()=>{
-        if (user.userDirectories.length == 0)
-        {
-            pickAssetDirectory();
+   
+
+ 
+
+    async function handleFirst (dirHandle) {
+        
+        const name = await dirHandle.name;
+        console.log(name)
+        setLocalDirectory(name)
+        set("Local DIrectory", dirHandle)
+        
+        await handleDirectoryEntry(dirHandle)
+    }
+
+
+    async function handleDirectoryEntry (dirHandle) {
+        
+        for await (const entry of dirHandle.values()) {
+            if (entry.kind === "file") {
+                const file = await entry.getFile();
+                set(file.name, file)
+                setKeys(produce((state)=>{
+                    state.push(file.name)
+                }))
+               // out[file.name] = file;
+            }
+            if (entry.kind === "directory") {
+                //const newOut = out[entry.name] = {};
+                await handleDirectoryEntry(entry);
+            }
         }
-    },[])
-    
+        
+    }
+
 
 
     return (
@@ -83,7 +114,7 @@ export const LocalAssetsPage = () => {
                 backgroundImage: "linear-gradient(black, #030507AA)"
 
             }}>
-                Local Assets
+                Local Assets: {localDirectory}
             </div>
                 <div style={{ paddingLeft: "20px", display: "flex" }}>
 
@@ -135,9 +166,12 @@ export const LocalAssetsPage = () => {
                 flexDirection: "column", 
                 justifyContent: "center", 
                 width: "500px", 
-                backgroundColor: "#33333322" }}
+                backgroundColor: "#33333322",
+                overflowY:"scroll",
+                
+                 }}
                 >
-                    
+                    {keys}
                     
                 </div>
 
