@@ -15,7 +15,8 @@ export const CreateReferalCode = (props = {}) => {
     const user = useZust((state) => state.user)
     const socket = useZust((state) => state.socket)
 
-    const [availableCodes, setAvailableCodes] = useState([])
+    const [availableCodes, setAvailableCodes] = useState([]);
+    const [codeList, setCodeList] = useState([]);
 
     const [codeAvailable, setCodeAvailable] = useState(true);
 
@@ -38,19 +39,8 @@ export const CreateReferalCode = (props = {}) => {
             socket.emit('createRefCode', code , (created, result)=>{
                 
                 if(created){
-                   
-                    const now = String(result.refCreated).split(" ")[0];
-
-                 
-                    addCode(
-                        <div style={{ display: "flex", width: "100%", marginLeft: "10px", height: "25px" }}>
-                            <div style={{ width: 90, color: "#777777" }}>{now}</div>
-                            <div style={{ width: (275) }}>{code}</div>
-                            <div style={{ width: 60, fontSize: 12 }} className={styles.hoverWhite}>
-                                <div>(copy)</div>
-                            </div>
-                        </div>
-                    )
+                    addCode(result)
+                  
                 }else{
                     alert("Creation failed. Tray again later.")
                 }
@@ -58,6 +48,32 @@ export const CreateReferalCode = (props = {}) => {
             
         }
     }
+
+    useEffect(()=>{
+        if(availableCodes.length > 0)
+        {
+            let tmpCodes = [];
+
+            availableCodes.forEach(result => {
+                const created = String(result.refCreated).split(" ")[0];
+                const code = result.refCode;
+
+
+                tmpCodes.push(
+                    <div style={{ display: "flex", width: "100%", marginLeft: "10px", height: "25px" }}>
+                        <div style={{ width: 90, color: "#777777" }}>{created}</div>
+                        <div style={{ width: (275) }}>{code}</div>
+                        <div style={{ width: 60, fontSize: 12 }} className={styles.hoverWhite}>
+                            <div>(copy)</div>
+                        </div>
+                    </div>
+                )
+            });
+
+            setCodeList(tmpCodes);
+            
+        }
+    },[availableCodes])
 
     function onBackClick(e) {
     
@@ -97,6 +113,16 @@ export const CreateReferalCode = (props = {}) => {
         return small ? stringNow : stringNow + ":" + stringSeconds + ":" + stringMiliseconds;
     }
 
+
+    useEffect(()=>{
+        socket.emit("getUserReferalCodes", (result) =>{
+            if(result.success)
+            {
+                
+                  setAvailableCodes(result.result)
+            }
+        })
+    },[])
     
     return (
         <div id='CreateReferalCode' style={{
@@ -204,7 +230,7 @@ export const CreateReferalCode = (props = {}) => {
                         </div>
                             <div style={{ paddingTop: 3, marginLeft: "10px", height: 2, width: "100%", backgroundImage: "linear-gradient(to right, #000304DD, #77777755, #000304DD)", }}>&nbsp;</div>
 
-                        {availableCodes}
+                        {codeList}
                     </div>
                     </div>
                     <div style={{

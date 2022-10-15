@@ -6,6 +6,7 @@ const fs = require('fs');
 const cryptojs = require('crypto-js');
 const util = require('util');
 const { homeURL, localURL, wwwURL, server, dbURL, dbPort, sqlCred, emailUser, emailPassword, authToken } = require('./httpVars');
+const { time } = require('console');
 
 
 const adminAddress = "noreply.ArcturusDnD@gmail.com";
@@ -203,6 +204,11 @@ io.on('connection', (socket) =>{
                         })
                     })
 
+                    socket.on("getUserReferalCodes", (callback)=>{
+                        getUserReferalCodes(user, (result)=>{
+                            callback(result)
+                        })
+                    })
 
                     socket.on('getUserInformation', (userInformation) => {
                         console.log(user)
@@ -6152,6 +6158,66 @@ const getUserInformation = (loginUser, callback) => {
         })
 
     } else { callback(false, null) }
+}
+
+function formatedTime(mySqlTime) {
+  
+
+    if(mySqlTime == null)
+    {
+        return "0000-00-00 00:00:00";
+    }else{
+       /* const str = String(mySqlTime);
+
+        const dateTime = str.split("T");
+        const date = dateTime[0];
+        const time = dateTime[1].slice(0,7)
+
+        return date + " " + time */
+        
+
+        return formatedNow(new Date(mySqlTime))
+    }
+
+    
+}
+
+const getUserReferalCodes = (user, callback) => {
+    const userID = user.userID;
+
+    var query = "select refID, refCode, refCreated FROM arcturus.ref WHERE ref.userID = " + userID;
+
+    if (!util.types.isPromise(mySession)) {
+        mySession = mysqlx.getSession(sqlCredentials)
+    }
+
+    mySession.then((session) => {
+        session.sql(query).execute().then((results) => {
+            if(results.hasData())
+            {
+                const codesArr = results.fetchAll();
+                let result = [];
+
+                for(let i = 0; i < codesArr.length ; i++)
+                {
+                    result.push(
+                        {
+                            refID: codesArr[i][0],
+                            refCode: codesArr[i][1],
+                            refCreated: formatedTime(codesArr[i][2])
+                        }
+                    )
+                }
+
+                callback({success: true, result: result})
+            }else{
+                callback({sucess: false, rejected:false, error:null})
+            }
+        })
+    }).catch((error)=>{
+        console.log(error);
+        callback({sucess: false, rejected:true, error:error})
+    })
 }
 
 const checkUser = (user, callback) => {
