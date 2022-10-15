@@ -8,6 +8,7 @@ import produce from "immer";
 import { io } from "socket.io-client";
 import { socketIOhttp, socketToken } from '../constants/httpVars';
 import { useRef } from "react";
+import { get } from "idb-keyval";
 
  const LoginPage = (props = {}) =>  {
 
@@ -113,7 +114,12 @@ import { useRef } from "react";
         let pass = sha256(data.loginPass).toString();
         login(data.loginName, pass);
     }
-
+    const setLocalDirectory = (value) => useZust.setState(produce((state)=>{
+        state.localDirectory = value;
+    }))
+    const setFiles = (value) => useZust.setState(produce((state)=>{
+        state.files = value;
+    }))
     function login(name_email = "", pass ="")
     {
         if(!disable){
@@ -130,6 +136,25 @@ import { useRef } from "react";
                 setContacts(contacts)
                 setSocket(sock);
                 setShowMenu(true);
+
+                var dir = get("localDirectory" + user.userID)
+
+                dir.then((value) => {
+
+                    const name = value.name;
+
+                    setLocalDirectory(name)
+                    const idbFiles = get(name);
+                    
+                    idbFiles.then((res) => {
+                        setFiles(res);
+                    }).catch((error => {
+                        console.log(error)
+                    }))
+
+
+                })
+                
                 return true;
             })
             sock.on("failedLogin", () =>{

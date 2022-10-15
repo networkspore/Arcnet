@@ -143,12 +143,12 @@
 .result{
 	display: flex;
 	flex-direction: row;
-	padding: 15px 15px;
+	padding: 8px 10px;
 	color: #777171;
 	transition: background 0.3s;
 	cursor: pointer;
-	background-color: rgba(80,80,80,.1);
-	height:25px;
+	
+	height:18px;
 	text-decoration: none;
 	color: #777171;
 }
@@ -326,8 +326,8 @@
 	color:white;
 	display: flex;
 	flex-direction: row;
-	padding: 18px 10px;
-	
+	padding: 7px 7px;
+	border-radius: 10px;
 	cursor: pointer;
 	height: 15px;
 	text-decoration: none;
@@ -336,10 +336,10 @@
 .toolbar {
 	display: flex;
 	flex-direction: row;
-	padding: 18px 10px;
+	padding: 7px 7px;
 	transition: background 0.3s;
 	cursor: pointer;
-	background-color: rgba(0,3,4,.95);
+
 	height: 15px;
 	text-decoration: none;
 	color: #777171;

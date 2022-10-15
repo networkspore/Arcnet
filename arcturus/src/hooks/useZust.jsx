@@ -10,7 +10,10 @@ import {Color, Texture } from 'three';
 //const setLocalStorage = (key, value) => window.localStorage.setItem(key,JSON.stringify(value));
 const useZust = create((set) => ({
    localDirectory: "",
-   setLocalDirectory: (value = "") => set({currentDirectory: value}),
+   setLocalDirectory: (value = "") => set({localDirectory: value}),
+   localHandle:null,
+   files: [],
+   setFiles: (value = false) => set({files:value}),
    showDirManager: false,
    setShowDirManager: (value = false) => set({showDirManager: value}),
    contacts: [],
