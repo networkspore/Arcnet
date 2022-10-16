@@ -138,6 +138,14 @@ io.on("connect_error", (err) => {
     console.log(`connect_error due to ${err.message}`);
 });
 
+const status = {
+    valid:1,
+    invalid:2,
+    confirming:3,
+    Offline:4, 
+    Online: 5,
+}
+
 io.on('connection', (socket) =>{
     const id = socket.id;
     let user = null;
@@ -192,11 +200,34 @@ io.on('connection', (socket) =>{
                 {
                     user = loginUser;
                     console.log(user)
-                    getContacts(user, (contacts)=>{
-                        io.to(id).emit("loggedIn", loginUser, contacts)
+                    updateUserStatus(user.userID, status.Online, id, (isRooms, rooms)=>{
+                        if (isRooms) {
+                            for (let i = 0; i < rooms.length; i++) {
+                                
+                                console.log("sending userStatus message to: " + rooms[i][0] + " user: " + user.userID + " is: Online");
+                                
+                                io.to(rooms[i][0]).emit("userStatus", user.userID, user.userName, "Online");
+
+                            }
+                        }
+                        getContacts(user, (contacts)=>{
+                            io.to(id).emit("loggedIn", loginUser, contacts)
+                        })
                     })
                     
+                    
 /* //////////////SUCCESS///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+
+                    socket.on("requestContact", (contactID, msg, callback)=>{
+                        const userID = user.userID;
+                        requestContact(userID, contactID, msg, (result)=>{
+                            const contactSocketID = result.socketID
+                            if(contactSocketID != ""){
+                                io.to(contactSocketID).emit("requestContact", userID, msg)
+                            } 
+                            callback(result)
+                        })
+                    })
 
                     socket.on('createRefCode', (code, callback)=>{
                         createRefCode(user, code, (created, result)=>{
@@ -277,7 +308,7 @@ io.on('connection', (socket) =>{
                             cleanRooms(userID, (roomCount) => {
                                 console.log("cleaned " + roomCount + " rooms, disconnecting user...");
                             });
-                            updateUserStatus(userID, "Offline", "", (isRooms, rooms) => {
+                            updateUserStatus(userID, status.Offline, "", (isRooms, rooms) => {
                                 if (isRooms) {
                                     for (let i = 0; i < rooms.length; i++) {
                                         console.log("sending userStatus message to: " + rooms[i][0] + " user: " + userID + " is: Offline");
@@ -5347,12 +5378,11 @@ SELECT status.statusID FROM arcturus.status WHERE status.statusName = 'Offline')
     })
 }
 
-const updateUserStatus = (userID = -1, status = "Offline", socketID = "", callback) => {
-    let query = "UPDATE arcturus.userRoom, arcturus.user, arcturus.status \
-SET user.userSocket = " + mysql.escape( socketID )+", user.statusID = status.statusID \
-WHERE status.statusName = " + mysql.escape(status) + " AND user.userID = " + userID;
+const updateUserStatus = (userID = -1, statusID = 5, socketID = "", callback) => {
+    let query = "UPDATE arcturus.user SET user.userSocket = " + mysql.escape( socketID )+ "\
+, user.statusID = " + statusID + " WHERE userID =" + userID; 
 
-   
+   console.log(query)
 
 
     if (!util.types.isPromise(mySession)) {
@@ -5364,18 +5394,24 @@ WHERE status.statusName = " + mysql.escape(status) + " AND user.userID = " + use
 
         mySession.sql(query).execute().then((updated) => {
             const affected = updated.getAffectedItemsCount();
+            console.log("updated status affected: " + affected)
             if (affected > 0) {
                query = "select userRoom.roomID, status.statusName from arcturus.userRoom, arcturus.status WHERE userRoom.userID = \
  " + userID + " AND status.statusID = userRoom.statusID";
                 mySession.sql(query).execute().then((found) => {
                     const inRooms = found.hasData()
-                    if(inRooms){
-                        const rooms = found.fetchAll();
-                        console.log("in " +rooms.length)
-                       callback(inRooms,rooms); 
-                    }else{
-                        callback(inRooms,[]);
-                    }
+                    const rooms = inRooms ? found.fetchAll() : [];
+                    
+                    const contactQuery = "\
+SELECT distinct userID, userSocket \
+FROM arcturus.user, arcturus.status, arcturus.contact \
+WHERE \
+statusName = 'Online' AND \
+status.statusID = user.statusID AND \
+contact.userID = user.userID AND \
+contact.contactID = " + userID;
+
+                    callback(inRooms, rooms);
                 })
             }else{
                 callback(false,0);
@@ -5638,12 +5674,77 @@ const checkReferral = (code ="", callback) => {
     })
 }
 
+const requestContact = (userID, contactID, msg, callback) => {
+    if (!util.types.isPromise(mySession)) {
+        mySession = mysqlx.getSession(sqlCredentials)
+    }
+    mySession.then((session) => {
+    
+        const checkContactQuery = "SELECT userID FROM arcturus.userContact WHERE userID = " + userID + " AND contactID = " + contactID;
+        
+      
+        try {
+            session.sql(checkContactQuery).execute().then((res)=>{
+                const found = res.hasData();
+                if(found){
+                    console.log(results + " : " + " contact already requested.")
+                    callback({requested:false, msg:"Already requested."})
+                }else{
+                    console.log("creating contact...")
+                    session.startTransaction();
+                    var arcDB = session.getSchema('arcturus');
+                    var userContactTable = arcDB.getTable("userContact");
+
+                    userContactTable.insert(
+                        ['userID', 'contactID', 'statusID', 'userContactMsg']
+                    ).values(
+                        [userID, contactID, 3, msg]
+                    ).execute().then((value) => {
+                       if(value.getAffectedItemsCount() > 0){
+                            session.commit();
+
+                            const notifyQuery = "\
+SELECT userSocket FROM arcturus.user WHERE userID = " + contactID + " AND user.statusID = " + status.Online;
+                            
+                            session.sql(notifyQuery).execute().then((onlineRes)=>{
+                                let contactSocket = "";
+                                if(onlineRes.hasData())
+                                {
+                                    contactSocket = onlineRes.fetchOne()[0];
+                                    console.log("Contact request: " + userID + ":" +contactID+ "@" + contactSocket + ":" + msg)
+                                   
+                                }
+                                
+                                
+
+                                callback({ requested: true, msg: "Contact requested.", socketID: contactSocket })
+
+                            })
+                              
+                          
+                            
+                        }else{
+                            callback({requested:false, msg:"Please try agin.", error:null})
+                        }
+                    })
+                }
+            })
+            
+        } catch (error) {
+            console.log(error)
+            session.rollback();
+            callback({ requested: false, msg:"rolled back", error: error });
+        }
+    })
+}
+
 const findPeople = (text = "", userID = 0, callback) => {
     text = text.toLocaleLowerCase();
     text = "%" + text + "%";
     const name_email = mysql.escape(text);
-    var query = "SELECT userName, userEmail, userID FROM arcturus.user WHERE (userName LIKE ";
-    query += name_email + " OR userEmail LIKE " + name_email + ") AND userID <> " + userID + " LIMIT 50" ;
+    var query = "SELECT userName, userEmail, user.userID FROM arcturus.user WHERE (userName LIKE ";
+    query += name_email + " OR userEmail LIKE " + name_email + ") AND user.userID <> " + userID + " AND user.userID NOT IN (\
+ SELECT contactID from arcturus.userContact where userID = " + userID + " ) LIMIT 50" ;
     
 
     if (!util.types.isPromise(mySession)) {
@@ -5917,8 +6018,7 @@ function createUser(user, callback) {
   
     console.log(user)
 
-    let userID = -1;
-
+    
     console.log("inserting..")
 
     if (!util.types.isPromise(mySession)) {
@@ -5929,7 +6029,7 @@ function createUser(user, callback) {
 
         var arcDB = session.getSchema('arcturus');
         var userTable = arcDB.getTable("user");
-        var userStatusTable = arcDB.getTable("userStatus");
+        
 
         session.startTransaction();
         try {
@@ -6257,6 +6357,8 @@ LOWER( " + name_email + ") OR LOWER(userEmail) = LOWER(" + name_email + ")) AND 
 
                 callback(false, null)
             } else {
+
+
                 const userArr = results.fetchOne()
 
                 const userID = userArr[0];
@@ -6268,9 +6370,10 @@ LOWER( " + name_email + ") OR LOWER(userEmail) = LOWER(" + name_email + ")) AND 
                         userHandle: userArr[3],
                     }
 
-
+                   
 
                     callback(true, loginUser);
+
              //   })
                 
             }

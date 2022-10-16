@@ -14,6 +14,7 @@ import { LocalAssetsPage } from './LocalAssetsPage';
 
 
 
+
 export const HomePage = () => {
     const pageSize = useZust((state) => state.pageSize)
     const user = useZust((state) => state.user)
@@ -21,16 +22,22 @@ export const HomePage = () => {
     const nav = useNavigate();
     const setUser = useZust((state) => state.setUser)
     const setShowMenu = useZust((state) => state.setShowMenu)
+    const socket = useZust((state) => state.socket)
     const setSocket = useZust((state) => state.setSocket)
     const setAutoLogin = useZust((state) => state.setAutoLogin)
 
+    const disconnectSocket = () => useZust.setState((state)=>{
+        state.socket.disconnect();
+        state.socket = null;
+    })
 
 
     const onLogoutClick = (e) => {
         setAutoLogin(false);
         setUser();
         setShowMenu(false);
-        setSocket(null);
+        disconnectSocket();
+    
     }
 
     return (

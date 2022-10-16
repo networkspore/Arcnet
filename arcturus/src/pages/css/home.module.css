@@ -154,7 +154,7 @@
 }
 .result:hover {
 	color: white;
-	background-color: rgba(80, 80, 80, .7);
+	background-color: rgba(80, 80, 80, .4);
 }
 
 .menu__item {
