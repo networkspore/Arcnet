@@ -64,16 +64,21 @@ export const CreateReferalCode = (props = {}) => {
                         <div style={{ width: 90, color: "#777777" }}>{created}</div>
                         <div style={{ width: (275) }}>{code}</div>
                         <div style={{ width: 60, fontSize: 12 }} className={styles.hoverWhite}>
-                            <div>(copy)</div>
+                            <div onClick={(e)=>{copyToClipboard(code)}} >(copy)</div>
                         </div>
                     </div>
                 )
             });
-
+          
             setCodeList(tmpCodes);
             
         }
     },[availableCodes])
+
+    function copyToClipboard(value){
+        alert("Copied: " + value)
+        navigator.clipboard.writeText(value);
+    }
 
     function onBackClick(e) {
     

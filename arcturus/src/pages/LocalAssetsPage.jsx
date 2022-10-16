@@ -253,6 +253,7 @@ export const LocalAssetsPage = () => {
                     display: "flex", 
                     height:"50px",
                     backgroundColor:"#66666650",
+                    
                      alignItems: "center",
                     
                     }}>
@@ -275,9 +276,8 @@ export const LocalAssetsPage = () => {
                             display:"flex", 
                             alignItems:"center", 
                             justifyContent:"center",
-                            backgroundColor:"#00000050",
                             borderRadius:"30px",
-                     
+                            backgroundImage: "linear-gradient(to right, #00000050,#11111150,#00000050)",
                             marginLeft:"10px", 
                            
                           

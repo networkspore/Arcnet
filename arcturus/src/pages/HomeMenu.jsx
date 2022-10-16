@@ -101,7 +101,7 @@ const HomeMenu = ({ props}) => {
             
         {(user.userID > 0 && showMenu) &&
                 <div style={{ position: "fixed", top: 0, left: 0, height: pageSize.height, width: 85, backgroundColor: "rgba(20,23,25,.5)" }}>
-        <div style={{display:"flex", flexDirection: "column", height: pageSize.height}}>
+                    <div style={{ display: "flex", flexDirection: "column", height: pageSize.height, fontFamily: "WebPapyrus" }}>
             <div style={{flex:1}}>
                 
                     

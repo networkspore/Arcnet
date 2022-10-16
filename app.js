@@ -5660,8 +5660,23 @@ const findPeople = (text = "", userID = 0, callback) => {
             }else{
                 
                 const people = results.fetchAll();
-                console.log(people);
-                callback(people)
+                console.log(people)
+                let tmpArray = [];
+
+                for(let i = 0; i < people.length ; i ++)
+                {
+                    const person = {
+                        userName: people[i][0],
+                        userEmail: people[i][1],
+                        userID: people[i][2],
+                    }
+                    console.log(person)
+                    tmpArray.push(
+                        person
+                    )
+                }
+
+                callback(tmpArray)
             }
         })
 
@@ -6185,7 +6200,7 @@ function formatedTime(mySqlTime) {
 const getUserReferalCodes = (user, callback) => {
     const userID = user.userID;
 
-    var query = "select refID, refCode, refCreated FROM arcturus.ref WHERE ref.userID = " + userID;
+    var query = "select DISTINCT ref.refID, refCode, refCreated FROM arcturus.ref, arcturus.user WHERE ref.userID = " + userID + " AND ref.refID NOT IN (select refID from arcturus.user)" ;
 
     if (!util.types.isPromise(mySession)) {
         mySession = mysqlx.getSession(sqlCredentials)
