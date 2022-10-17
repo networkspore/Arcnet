@@ -18,6 +18,9 @@ import { get } from "idb-keyval";
     const setSocket = useZust((state) => state.setSocket)
     const setUser = useZust((state) => state.setUser)
     const setContacts = useZust((state) => state.setContacts)
+    const setContactRequests = (value) => useZust.setState(produce((state)=>{
+        state.contactRequests = value;
+    }))
 
     const [data, setData] = useState({ loginRemember: false, loginName: "", loginPass: "" });
     const [cookie, setCookie] = useCookies(['login']);
@@ -126,7 +129,7 @@ import { get } from "idb-keyval";
             setDisable(true);
             const sock = io(socketIOhttp, { auth: { token: socketToken, user: { nameEmail: name_email, password: pass } }, transports: ['websocket'] });
             
-            sock.on("loggedIn", (user, contacts) =>{
+            sock.on("loggedIn", (user, contacts, requests) =>{
                 sock.off("loggedIn")
                 if(data.loginRemember){
                
@@ -134,6 +137,7 @@ import { get } from "idb-keyval";
                 }
                 setUser(user)
                 setContacts(contacts)
+                setContactRequests(requests)
                 setSocket(sock);
                 setShowMenu(true);
 

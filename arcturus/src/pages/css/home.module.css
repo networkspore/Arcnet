@@ -143,12 +143,15 @@
 .result{
 	display: flex;
 	flex-direction: row;
-	padding: 8px 10px;
+	padding-left: 10px;
+	padding-top:5px;
+	padding-bottom: 5px;
 	color: #777171;
 	transition: background 0.3s;
 	cursor: pointer;
+	justify-items: center;
+	justify-content:left;
 	
-	height:18px;
 	text-decoration: none;
 	color: #777171;
 }

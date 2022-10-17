@@ -18,6 +18,7 @@ const useZust = create((set) => ({
    setShowDirManager: (value = false) => set({showDirManager: value}),
    contacts: [],
    setContacts: (value=[]) => set({contacts: value}),
+   contactRequests:[],
    autoLogin: true,
    setAutoLogin:(value = true) => set({autoLogin: value}),
    showMenu: false,

@@ -200,6 +200,11 @@ io.on('connection', (socket) =>{
                 {
                     user = loginUser;
                     console.log(user)
+                    getContacts(user, (contacts) => {
+                        getContactRequests(user, (requests => {
+                            io.to(id).emit("loggedIn", loginUser, contacts, requests)
+                        }))
+                    })
                     updateUserStatus(user.userID, status.Online, id, (isRooms, rooms)=>{
                         if (isRooms) {
                             for (let i = 0; i < rooms.length; i++) {
@@ -210,9 +215,7 @@ io.on('connection', (socket) =>{
 
                             }
                         }
-                        getContacts(user, (contacts)=>{
-                            io.to(id).emit("loggedIn", loginUser, contacts)
-                        })
+                     
                     })
                     
                     
@@ -6229,17 +6232,62 @@ function email(emailAddress, subject, emailHtml, callback)
 
 } 
 
+const getContactRequests = (user, callback) => {
+    if (!util.types.isPromise(mySession)) {
+        mySession = mysqlx.getSession(sqlCredentials)
+    }
+    console.log("Getting contact requests")
+    var query = "SELECT DISTINCT userContact.userID, userContact.statusID, user.userName, user.userHandle, userContact.userContactMsg, status.statusName \
+FROM arcturus.userContact, arcturus.user, arcturus.status \
+WHERE userContact.userID = user.userID AND userContact.contactID = " + user.userID + " AND userContact.statusID = " + status.confirming + " AND userContact.statusID = status.statusID";
+
+    mySession.then((session) => {
+
+        session.sql(query).execute().then((results) => {
+            const found = results.hasData();
+        
+            if (found) {
+                var contactsArray = results.fetchAll();
+                var contacts = new Array();
+                for (var i = 0; i < contactsArray.length; i++) {
+                    contacts.push(
+                        {
+                            userID: contactsArray[i][0],
+                            statusID: { statusID: contactsArray[i][1], statusName: contactsArray[i][5] },
+                            userName: contactsArray[i][2],
+                            userHandle: contactsArray[i][3],
+                            userContactMsg: contactsArray[i][4],
+                        }
+                    )
+                }
+                console.log("Requests: " + contacts)
+                callback(contacts)
+            }
+            else {
+                console.log("No contact requests found")
+                callback([])
+            }
+        })
+    })
+}
+
 const getContacts = (user, callback) => {
     if (!util.types.isPromise(mySession)) {
         mySession = mysqlx.getSession(sqlCredentials)
     }
 
-    var query = "SELECT userContact.contactID, userContact.statusID, user.userName, user.userHandle from arcturus.userContact, arcturus.user where userContact.contactID = user.userID and userContact.userID = " +user.userID;
+    var query = "SELECT DISTINCT userContact.contactID, userContact.statusID, user.userName, user.userHandle, status.statusName \
+FROM arcturus.userContact, arcturus.user, arcturus.status \
+WHERE userContact.userID = " +user.userID + " AND user.userID = userContact.contactID AND userContact.statusID = status.statusID"
+
+    console.log("getting contacts")
 
     mySession.then((session) => {
     
         session.sql(query).execute().then((results)=>{
-            if(results.hasData()){
+            const found = results.hasData();
+         
+            if(found){
                 var contactsArray = results.fetchAll();
                 var contacts = new Array();
                 for(var i = 0 ; i < contactsArray.length ; i++)
@@ -6247,17 +6295,22 @@ const getContacts = (user, callback) => {
                     contacts.push(
                         {
                             userID: contactsArray[i][0],
-                            statusID: contactsArray[i][1],
-                            userHandle: contactsArray[i][2]
+                            status: {statusID: contactsArray[i][1], statusName:contactsArray[i][4]},
+                            userName: contactsArray[i][2],
+                            userHandle: contactsArray[i][3]
                         }
                     )
                 }
+                console.log("Contacts: ")
+                console.log(contacts)
                 callback(contacts)
             }
             else{
                 callback([])
             }
         })
+    }).catch((error)=>{
+        console.log(error);
     })
 }
 

@@ -41,6 +41,16 @@ export const SearchPage = () => {
 
     const [requestContact, setRequestContact] = useState(null)
 
+    const contacts = useZust((state) => state.contacts)
+
+    const setContacts = (c) => useZust.setState(produce((state)=>{
+        state.contacts = c;
+    }))
+
+    const addContact = (c) => useZust.setState(produce((state) => {
+            state.contacts.push(c);
+        }))
+
     const messageRef = useRef();
 
     const onSearch = (e = new Event("search")) => {
@@ -74,10 +84,7 @@ export const SearchPage = () => {
         }
     }
 
-    const addContact = (c) => {
-        console.log(c)
-    }
-
+    
     const removePerson = (userID) => {
         setPeopleFound(produce((state)=>{
             
@@ -120,6 +127,36 @@ useEffect(()=>{
     setPage(3)
 },[])
 
+const [contactsList, setContactsList] = useState([])
+const [requestedList, setRequestedList] = useState([])
+
+const onContact = (contact) => {
+    console.log(contact)
+} 
+
+useEffect(()=>{
+    if(contacts.length > 0)
+    {
+        let tmpList = [];
+        let confirmList = [];
+        contacts.forEach(contact => {
+            const name = contact.userName;
+            const status = contact.status;
+         
+                tmpList.push(
+                    <div onClick={(e) => {onContact(contact)}} style={{ display: "flex", justifyContent:"left", alignItems:"center", fontFamily: "WebPapyrus" }} className={styles.result}>
+
+                        <div style={{  textShadow:"2px 2px 2px black"}}>{name}</div>
+                       { status.statusName == "confirming" && <div style={{paddingLeft:"10px", fontSize:"12px"}}>{"("} &nbsp; {" requested..."} &nbsp; {")"}</div>}
+                    </div>
+                )
+          
+        });
+   
+        setContactsList(tmpList)
+    }
+},[contacts])
+
 useEffect(()=>{
     if(searchActive && peopleFound.length > 0){
        let tmpArray = [];
@@ -133,7 +170,7 @@ useEffect(()=>{
                     setRequestContact(peopleFound[i])
                 }} style={{ display: "flex", fontFamily:"WebPapyrus" }} className={styles.result}>
                     
-                    <div style={{ flex: 1, color: "white" }}>{name}</div>
+                    <div style={{ flex: 1}}>{name}</div>
             
                 </div>
             )
@@ -166,37 +203,53 @@ const endSearch = () => {
                 <div style={{ display:"flex"}}>
                   
                 <div>
-                        <div style={{
-                            marginBottom: '2px',
-                            marginLeft: "10px",
-                            height: "1px",
-                            width: "100%",
-                            backgroundImage: "linear-gradient(to right, #000304DD, #77777755, #000304DD)",
-                        }}>&nbsp;</div>
-                    <div style={{ display: "block", backgroundColor: "rgba(6, 6, 5, .5)" , width: 300, height: pageSize.height}}>
+                       
+                        <div style={{ display: "block", backgroundColor: "rgba(10,13,14,.6)", width: 300, height: pageSize.height}}>
                         <div style={{ 
-                        border: "2px solid #000000", 
-                        borderTopWidth: "5px",
-                                backgroundImage: "linear-gradient(to right, #04040550 , #66666630,#04040550)",  
-                        width:"100%" , 
-                        height:"40px", 
-                        paddingTop: "10px", 
-                        paddingBottom:"10px",
-                        paddingLeft:"3px"
-
+                              
+                            display:"flex",
+                            border: "2px solid #000000", 
+                            borderTopWidth: "5px",
+                            width:"100%" , 
+                            paddingTop:35,
+                                backgroundImage: "linear-gradient(to bottom, #00030411, #77777722, #00030433)",
+                            paddingBottom:30,
+                            marginLeft:"10px",
+                            paddingLeft:"10px"
+                            
                         }}>
-                            <div style={{display:"flex", paddingTop:"4px"}}>
+                               
+
+                                <div style={{
+
+                                    height: "40px",
+                                    width: "1px",
+                                    backgroundImage: "linear-gradient(to bottom, #000304DD, #77777755, #000304DD)",
+                                }}></div>
+                               
+                                <div style={{
+                                    width: "100%",
+                                    display: "flex",
+                                   paddingLeft:"20px",
+                                   paddingTop:10,
+                                   paddingBottom:10,
+                                   
+                                    height:18,
+                                    backgroundColor:"black"
+
+                                }}> 
                                     <input onKeyDown={(e)=>{
                                     if(e.key == "Esc"){
                                         endSearch();
                                     }  
                                     }} 
+                                    
                                     ref={searchInputRef} 
-                                    style={{ color: searchActive ? "white" : "#62717d"}} 
+                                    style={{ backgroundColor:"#00000000",  color: searchActive ? "white" : "#82919d", textShadow: "2px 2px 2px"}} 
                                     onChange={e => onSearch(e)} 
                                     className={styles.searchInput} 
                                     type="text" 
-                                    placeholder="Find peers and realms" />
+                                    placeholder="Find peers and realms..." />
                             </div>
                         </div>
                             <div style={{
@@ -204,14 +257,102 @@ const endSearch = () => {
                                 marginLeft: "10px",
                                 height: "1px",
                                 width: "100%",
-                                backgroundImage: "linear-gradient(to right, #000304DD, #77777755, #000304DD)",
+                              
                             }}>&nbsp;</div>
                         <div style={{ 
                             border: "2px solid #000000", 
                             height: "100%", 
-                            padding: "2px", 
+                          
                             backgroundColor: "#03040550",  
                             }}>
+                                {!searchActive && contactsList.length > 0 &&
+                                < div style={{
+                                  
+                                    width:"100%",
+                                    
+                                }}>
+                                    
+                                    
+                                    <div style={{
+                                        fontWeight: "bolder",
+                                        textAlign: "center",
+                                        width: "100%",
+                                        fontSize: "16px",
+                                        fontFamily: "WebPapyrus",
+                                        color: "#888888",
+                                        textShadow: "3px 3px 4px black",
+                                        paddingTop: "10px",
+                                        paddingBottom: "6px",
+                                       
+                                    }}>
+                                        Contacts
+                                    </div>
+                                        <div style={{
+                                            marginBottom: '2px',
+                                            marginLeft: "10px",
+                                            height: "1px",
+                                            width: "100%",
+                                            backgroundImage: "linear-gradient(to right, #000304DD, #77777755, #000304DD)",
+                                        }}>&nbsp;</div>
+                                    <div style={{}}>
+                                        <div style={{
+                                            
+                                            marginBottom: '2px',
+
+                                            height: "1px",
+                                            width: "100%",
+                                            backgroundColor:  "#000304DD",
+
+                                        }}></div>
+                                        <div style={{margin:"15px"}}>
+                                        {contactsList}
+                                        </div>
+                                    </div>
+                                </div>
+                                }
+                                {searchActive &&
+                                    <>
+                                   
+
+                                    <div style={{
+                                        fontWeight: "bolder",
+                                        textAlign: "center",
+                                        width: "100%",
+                                        fontSize: "16px",
+                                        fontFamily: "WebPapyrus",
+                                        color: "#888888",
+                                        textShadow: "3px 3px 4px black",
+                                        paddingTop: "10px",
+                                        paddingBottom: "6px",
+
+                                    }}>
+                                        Peers
+                                    </div>
+                                    <div style={{ marginLeft: "15px" }}>
+                                        <div style={{
+                                            marginBottom: '2px',
+                                            marginLeft: "10px",
+                                            height: "1px",
+                                            width: "100%",
+                                            backgroundImage: "linear-gradient(to right, #000304DD, #77777755, #000304DD)",
+                                        }}></div>
+                                        <div style={{
+                                            display: "flex",
+                                            flexDirection: "column",
+                                            height: pageSize.height / 3,
+                                            flex: 1,
+
+                                            overflowY: "scroll",
+                                            color: "#cdd4da",
+                                            padding: "10px"
+                                        }}
+                                        >
+
+                                            {foundList}
+                                        </div>
+                                    </div>
+                                    </>
+                                }
                                 
                         </div>
                     </div>
@@ -219,72 +360,15 @@ const endSearch = () => {
         
             </div>
         </div>
-            {searchActive &&
-            <div style={{ 
-                position: "fixed", 
-                backgroundColor: "rgba(10,13,14,.6)", 
-                width: 300, 
-                left: 385, 
-                top: "0px",
-                height: pageSize.height,
-            }}>
-                <div style={{
-                    marginBottom: '2px',
-                    marginLeft: "10px",
-                    height: "1px",
-                    width: "100%",
-                    backgroundImage: "linear-gradient(to right, #000304DD, #77777755, #000304DD)",
-                    fontFamily:"Webrockwell",
-                    color:"white"
-                }}>&nbsp;</div>
-              
-                <div style={{
-                    paddingTop:"20px",
-                    paddingBottom:"6px",
-                    fontWeight:"bolder",
-                    textAlign:"center",
-                    width:"100%",
-                    fontSize:"20px",
-                    fontFamily:"WebPapyrus",
-                        color: "#777777",
-                        textShadow:"2px 2px 2px black",
-                        backgroundImage:"linear-gradient(to right, #00000010, #77777720, #00000010)"
-                }}>
-                    Peers
-                </div>
-                <div style={{marginLeft:"15px"}}>
-                        <div style={{
-                            marginBottom: '2px',
-                            marginLeft: "10px",
-                            height: "1px",
-                            width: "100%",
-                            backgroundImage: "linear-gradient(to right, #000304DD, #77777755, #000304DD)",
-                        }}></div>
-                <div style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    height: pageSize.height /3,
-                    flex: 1,
-                    
-                    overflowY: "scroll",
-                    color: "#cdd4da",
-                    padding:"10px"
-                }}
-                >
-                         
-                    {foundList}
-                </div>
-                    </div>
-            </div>
-            }
+         
             { requestContact != null &&
                 
                 < div style={{
                         position: "fixed",
                         backgroundColor: "rgba(20,23,25,.7)",
                         width: 300,
-                        left: 685,
-                        top: "75px",
+                        left: 385,
+                        top: "160px",
                         height: 210,
                 }}>
                     <div style={{
