@@ -7,6 +7,7 @@ import SearchResults from "./components/UI/SearchResults";
 import produce from "immer";
 
 import styles from './css/home.module.css';
+import { ImageDiv } from "./components/UI/ImageDiv";
 
 
 
@@ -27,12 +28,19 @@ export const SearchPage = () => {
     const scrollLeft = useZust((state) => state.scrollLeft);
     const scrollTop = useZust((state) => state.scrollTop);
   
-   
-    const [searchActive, setSearchActive] = useState(false);
     const [peopleFound, setPeopleFound] = useState([]);
     const [campaignsFound, setCampaignsFound] = useState([])
 
     const [foundList, setFoundList] = useState([])
+
+
+    const [contactsList, setContactsList] = useState([])
+    const [requestedList, setRequestedList] = useState([])
+    const [confirmingList, setConfirmingList] = useState([])
+
+    const [showListIndex, setShowListIndex] = useState(1)
+
+
 
     const socket = useZust((state) => state.socket);
     const user = useZust((state) => state.user)
@@ -40,6 +48,9 @@ export const SearchPage = () => {
     const searchInputRef = useRef();
 
     const [requestContact, setRequestContact] = useState(null)
+    const [acknowledgeContact, setAcknowledgeContact] = useState(null)
+
+    const contactRequests = useZust((state) => state.contactRequests)
 
     const contacts = useZust((state) => state.contacts)
 
@@ -59,13 +70,13 @@ export const SearchPage = () => {
         if(value == "")
         {
             setPeopleFound([])
-            setSearchActive(false);
+            setShowListIndex(1)
         }else{
             if(value.length > 2){
-                setSearchActive(true);
+                setShowListIndex(2)
             }else{
                 setPeopleFound([])
-                setSearchActive(false);
+                setShowListIndex(1)
             }
         }
         
@@ -127,12 +138,15 @@ useEffect(()=>{
     setPage(3)
 },[])
 
-const [contactsList, setContactsList] = useState([])
-const [requestedList, setRequestedList] = useState([])
+
 
 const onContact = (contact) => {
     console.log(contact)
 } 
+
+const onConfirmingContact = (contact) => {
+    console.log(contact)
+}
 
 useEffect(()=>{
     if(contacts.length > 0)
@@ -142,23 +156,78 @@ useEffect(()=>{
         contacts.forEach(contact => {
             const name = contact.userName;
             const status = contact.status;
-         
+            
+            if (status.statusName != "confirming")
+            {
                 tmpList.push(
-                    <div onClick={(e) => {onContact(contact)}} style={{ display: "flex", justifyContent:"left", alignItems:"center", fontFamily: "WebPapyrus" }} className={styles.result}>
+                    <div onClick={(e) => { onContact(contact) }} style={{ fontSize: "13px", display: "flex", justifyContent:"left", alignItems:"center", fontFamily: "WebPapyrus" }} className={styles.result}>
 
                         <div style={{  textShadow:"2px 2px 2px black"}}>{name}</div>
-                       { status.statusName == "confirming" && <div style={{paddingLeft:"10px", fontSize:"12px"}}>{"("} &nbsp; {" requested..."} &nbsp; {")"}</div>}
+                        <div style={{ flex:1 }} />
+                        
                     </div>
                 )
-          
+            }else{
+                confirmList.push(
+                    <div onClick={(e) => { onConfirmingContact(contact) }} style={{ fontSize:"13px", display: "flex", justifyContent: "left", alignItems: "center", fontFamily: "WebPapyrus" }} className={styles.result}>
+
+                        <div style={{ textShadow: "2px 2px 2px black" }}>{name}</div>
+                    </div>
+                )
+            }
         });
-   
+        setConfirmingList(confirmList)
         setContactsList(tmpList)
     }
 },[contacts])
 
+const onRequestAcknowledge = (contact) =>{
+    if(acknowledgeContact == contact){
+        setAcknowledgeContact(null)
+    }else{
+         setAcknowledgeContact(contact)
+    }
+}
+
+const onAcknowledgeContact = (response) => {
+    const contactID = acknowledgeContact.userID;
+
+    socket.emit("acknowledgeContact", response, contactID, (result)=>{
+        if(result.success){
+            console.log(result)
+        }else{
+            console.log(result)
+            alert("Unable to acknowledge contact. Try again later.")
+        }
+        
+    })
+    setAcknowledgeContact(null)
+} 
+
+    useEffect(() => {
+        if (contactRequests.length > 0) {
+            let tmpList = [];
+
+            contactRequests.forEach(contact => {
+                const name = contact.userName;
+           
+
+                tmpList.push(
+                    <div onClick={(e) => { onRequestAcknowledge(contact) }} style={{ fontSize: "13px", display: "flex", justifyContent: "left", alignItems: "center", fontFamily: "WebPapyrus" }} className={styles.result}>
+
+                        <div style={{ textShadow: "2px 2px 2px black" }}>{name}</div>
+             
+                    </div>
+                )
+
+            });
+
+            setRequestedList(tmpList)
+        }
+    }, [contactRequests])
+
 useEffect(()=>{
-    if(searchActive && peopleFound.length > 0){
+    if (showListIndex == 2 && peopleFound.length > 0){
        let tmpArray = [];
 
        for(let i = 0; i < peopleFound.length ; i++){
@@ -168,7 +237,7 @@ useEffect(()=>{
             tmpArray.push(
                 <div onClick={(e)=>{
                     setRequestContact(peopleFound[i])
-                }} style={{ display: "flex", fontFamily:"WebPapyrus" }} className={styles.result}>
+                }} style={{ fontSize: "13px", display: "flex", fontFamily:"WebPapyrus" }} className={styles.result}>
                     
                     <div style={{ flex: 1}}>{name}</div>
             
@@ -190,7 +259,7 @@ useEffect(()=>{
   
 const endSearch = () => {
     searchInputRef.current.value = "";
-    setSearchActive(false);
+    setShowListIndex(1);
 }
 
 
@@ -199,101 +268,145 @@ const endSearch = () => {
     return (
         <>
 
-        <div style={{ width: 85, height: pageSize.height, backgroundColor: "rgba(4,4,5,.5)", position: "fixed", padding: 0,  left:85, top: 0 }}>
-                <div style={{ display:"flex"}}>
-                  
-                <div>
-                       
-                        <div style={{ display: "block", backgroundColor: "rgba(10,13,14,.6)", width: 300, height: pageSize.height}}>
-                        <div style={{ 
-                              
-                            display:"flex",
-                            border: "2px solid #000000", 
-                            borderTopWidth: "5px",
-                            width:"100%" , 
-                            paddingTop:35,
-                                backgroundImage: "linear-gradient(to bottom, #00030411, #77777722, #00030433)",
-                            paddingBottom:30,
-                            marginLeft:"10px",
-                            paddingLeft:"10px"
+            <div style={{
+                width: 300, height: pageSize.height, backgroundImage:"linear-gradient(to bottom, #00000088,#10131488)", position: "fixed", padding: 0,  left:95, top: 0 }}>
+                <div style={{
+               
+                    textAlign: "center",
+
+                }}></div>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center",  padding: "10px" }}>
+                    <ImageDiv netImage={{
+                        image: "Images/logo.png",
+                        width: 130,
+                        height: 130,
+                    }} />
+                    <div style={{ width: 200, backgroundImage: "linear-gradient(to right, #000304DD, #77777733, #000304DD)" }}>
+                        <div style={{
+
+                            textAlign: "center",
+                            fontFamily: "WebRockwell",
+                            fontSize: "15px",
+                            fontWeight: "bolder",
+                            color: "#cdd4da",
+                            textShadow: "2px 2px 2px #101314",
                             
-                        }}>
-                               
+                        }} >Arcturus Network</div>
 
-                                <div style={{
+                    </div>
 
-                                    height: "40px",
-                                    width: "1px",
-                                    backgroundImage: "linear-gradient(to bottom, #000304DD, #77777755, #000304DD)",
-                                }}></div>
-                               
-                                <div style={{
-                                    width: "100%",
-                                    display: "flex",
-                                   paddingLeft:"20px",
-                                   paddingTop:10,
-                                   paddingBottom:10,
-                                   
-                                    height:18,
-                                    backgroundColor:"black"
+                    <div style={{ height: 2, width: "100%", backgroundImage: "linear-gradient(to right, #000304DD, #77777755, #000304DD)", }}>&nbsp;</div>
+                    <div>&nbsp;</div>
+                    <div style={{
 
-                                }}> 
-                                    <input onKeyDown={(e)=>{
-                                    if(e.key == "Esc"){
-                                        endSearch();
-                                    }  
-                                    }} 
+                        display: "flex",
+                        width: 300,
+                        justifyContent: "center",
+                        backgroundImage: "linear-gradient(to right, #00030430, #77777720, #00030430)",
+                        paddingBottom:3,
+                        paddingTop: 3,
+
+                    }}>
+                        <input onKeyDown={(e) => {
+                            if (e.key == "Esc") {
+                                endSearch();
+                            }
+                        }}
+
+                            ref={searchInputRef}
+                            style={{
+                                fontSize:"14px",
+                                backgroundColor: "#000000", width: 200, textAlign: "center",
+                                color: showListIndex == 2 ? "white" : "#cdd4da", textShadow: "1px 1px 1px"
+                            }}
+                            onChange={e => onSearch(e)}
+                            className={styles.searchInput}
+                            type="text"
+                            placeholder="Search..." />
+                    </div>
+                   
+                </div>
+                <div style={{ display:"flex", justifyContent:"center"}}>
+                  
+                <div style={{width:280}}>
+                        <div style={{
+                            fontWeight: "bolder",
+                        textAlign: "center",
+                        width: "100%",
+                        fontSize: "16px",
+                        fontFamily: "WebPapyrus",
+                        color: "#888888",
+                        textShadow: "3px 3px 4px black",
+                        paddingTop: "10px",
+                        paddingBottom: "6px",
+                                     }}>
                                     
-                                    ref={searchInputRef} 
-                                    style={{ backgroundColor:"#00000000",  color: searchActive ? "white" : "#82919d", textShadow: "2px 2px 2px"}} 
-                                    onChange={e => onSearch(e)} 
-                                    className={styles.searchInput} 
-                                    type="text" 
-                                    placeholder="Find peers and realms..." />
-                            </div>
-                        </div>
-                            <div style={{
-                                marginBottom: '2px',
-                                marginLeft: "10px",
-                                height: "1px",
-                                width: "100%",
+                                    &nbsp;</div>
+                        
+                        <div style={{}}>
+                  
+                               
+
                               
-                            }}>&nbsp;</div>
-                        <div style={{ 
-                            border: "2px solid #000000", 
+                               
+                               
+                           
+                        
+                         <div style={{display:"flex"}}>
+                            <div style={{width:5, height:pageSize.height-90}}>&nbsp;</div>
+                            <div style={{ 
+                            
                             height: "100%", 
-                          
-                            backgroundColor: "#03040550",  
+                                    flex: 1
+                            
                             }}>
-                                {!searchActive && contactsList.length > 0 &&
+                                {showListIndex == 1 && contactsList.length > 0 &&
                                 < div style={{
                                   
-                                    width:"100%",
+                                    
                                     
                                 }}>
                                     
                                     
-                                    <div style={{
-                                        fontWeight: "bolder",
-                                        textAlign: "center",
+                                    <div 
+                                        onClick={()=>{
+                                            if (showListIndex == 1) {
+                                                setShowListIndex(0)
+                                            } else {
+                                                endSearch()
+                                                setShowListIndex(1);
+                                            }
+                                        }}
+                                    style={{
+                                        
+                                      
+                                        fontWeight:"bold",
                                         width: "100%",
-                                        fontSize: "16px",
+                                        fontSize: "14px",
                                         fontFamily: "WebPapyrus",
                                         color: "#888888",
                                         textShadow: "3px 3px 4px black",
                                         paddingTop: "10px",
                                         paddingBottom: "6px",
-                                       
+                                     
                                     }}>
-                                        Contacts
+                                                <div> &nbsp; Contacts</div>
+
+                                            {showListIndex != 1 &&
+                                                <>
+                                                    <div style={{ flex: 1 }} />
+                                                    <div style={{  }}> {requestedList.length} </div>
+                                                </>
+                                            }
                                     </div>
-                                        <div style={{
-                                            marginBottom: '2px',
-                                            marginLeft: "10px",
-                                            height: "1px",
-                                            width: "100%",
-                                            backgroundImage: "linear-gradient(to right, #000304DD, #77777755, #000304DD)",
-                                        }}>&nbsp;</div>
+                                            <div style={{
+                                                marginBottom: '2px',
+
+                                                height: "1px",
+                                                width: "100%",
+                                                backgroundImage: "linear-gradient(to right,  #77777730,#77777755, #000304DD, #000304DD)",
+                                            }}>&nbsp;</div>
+
                                     <div style={{}}>
                                         <div style={{
                                             
@@ -310,32 +423,36 @@ const endSearch = () => {
                                     </div>
                                 </div>
                                 }
-                                {searchActive &&
+                                {showListIndex == 2 &&
                                     <>
                                    
 
-                                    <div style={{
-                                        fontWeight: "bolder",
-                                        textAlign: "center",
-                                        width: "100%",
-                                        fontSize: "16px",
-                                        fontFamily: "WebPapyrus",
-                                        color: "#888888",
-                                        textShadow: "3px 3px 4px black",
-                                        paddingTop: "10px",
-                                        paddingBottom: "6px",
+                                        <div
+                                            style={{
+                                                fontWeight: "bold",
+                                              
+                                                width: "100%",
+                                                fontSize: "14px",
+                                                fontFamily: "WebPapyrus",
+                                                color: "#888888",
+                                                textShadow: "3px 3px 4px black",
+                                                paddingTop: "10px",
+                                                paddingBottom: "6px",
+                                                display: "flex"
+                                        }}>
+                                            &nbsp; &nbsp; Search Results</div>
 
-                                    }}>
-                                        Peers
-                                    </div>
-                                    <div style={{ marginLeft: "15px" }}>
+                                     
+                                        
                                         <div style={{
                                             marginBottom: '2px',
-                                            marginLeft: "10px",
+
                                             height: "1px",
                                             width: "100%",
-                                            backgroundImage: "linear-gradient(to right, #000304DD, #77777755, #000304DD)",
-                                        }}></div>
+                                            backgroundImage: "linear-gradient(to right,  #77777730,#77777755, #000304DD, #000304DD)",
+                                        }}>&nbsp;</div>
+
+
                                         <div style={{
                                             display: "flex",
                                             flexDirection: "column",
@@ -350,11 +467,150 @@ const endSearch = () => {
 
                                             {foundList}
                                         </div>
-                                    </div>
+                                    
                                     </>
                                 }
-                                
+                                {requestedList.length > 0 &&
+                                    < div style={{
+                                      
+                                        width: "100%",
+
+                                    }}>
+
+
+                                        <div 
+                                            onClick={(e) => {
+                                                if (showListIndex == 3) {
+                                                    setShowListIndex(1)
+                                                } else {
+                                                    endSearch()
+                                                    setShowListIndex(3);
+                                                }
+
+                                            }}
+                                            className={styles.glowText} 
+                                        style={{
+                                           
+                                            fontWeight:"bold",
+                                            width: "100%",
+                                            fontSize: "14px",
+                                            fontFamily: "WebPapyrus",
+                                            color: "#888888",
+                                            textShadow: "3px 3px 4px black",
+                                            paddingTop: "10px",
+                                            paddingBottom: "6px",
+                                            display:"flex"
+                                        }}>
+                                                <div>&nbsp; Requests</div>
+
+                                            {showListIndex != 3 &&
+                                                <>
+                                                    <div style={{ flex: 1 }} />
+                                                    <div style={{ }}> {requestedList.length} </div>
+                                                </>
+                                            }
+                                        </div>
+                                        {showListIndex == 3 &&
+                                            <>
+                                                <div style={{
+                                                    marginBottom: '2px',
+
+                                                    height: "1px",
+                                                    width: "100%",
+                                                    backgroundImage: "linear-gradient(to right,  #77777730,#77777755, #000304DD, #000304DD)",
+                                                }}>&nbsp;</div>
+
+                                        <div style={{}}>
+                                            <div style={{
+
+                                                marginBottom: '2px',
+
+                                                height: "1px",
+                                                width: "100%",
+                                              
+
+                                            }}></div>
+                                            <div style={{ margin: "15px" }}>
+                                                {requestedList}
+                                            </div>
+                                        </div>
+                                        </>
+                                        }
+                                    </div>
+                                }
+                                {confirmingList.length > 0 &&
+                                    < div style={{
+
+                                        width: "100%",
+
+                                    }}>
+
+
+                                        <div onClick={(e)=>{
+                                            if(showListIndex == 4)
+                                            {
+                                                setShowListIndex(1)
+                                            }else{
+                                                endSearch()
+                                                setShowListIndex(4);
+                                            }
+                                        }}
+                                        className={styles.glowText} 
+                                        style={{
+                                           
+                                        
+                                            width: "100%",
+                                            fontSize: "14px",
+                                            fontFamily: "WebPapyrus",
+                                            fontWeight:"bold",
+                                            textShadow: "3px 3px 4px black",
+                                            paddingTop: "10px",
+                                            paddingBottom: "6px",
+                                          
+                                            display:"flex"
+                                        }}>
+                                                <div>&nbsp; Pending &nbsp;</div>
+                                           
+                                            {showListIndex != 4 && 
+                                            <>
+                                                <div style={{flex:1}} />
+                                                <div style={{}}> {confirmingList.length} </div>
+                                            </>
+                                            } 
+                                        </div>
+                                        {showListIndex == 4 &&
+                                        <>
+                                                <div style={{
+                                                    marginBottom: '2px',
+
+                                                    height: "1px",
+                                                    width: "100%",
+                                                    backgroundImage: "linear-gradient(to right,  #77777730,#77777755, #000304DD, #000304DD)",
+                                                }}>&nbsp;</div>
+                                       
+                                       
+                                        <div style={{}}>
+                                            <div style={{
+
+                                                marginBottom: '2px',
+
+                                                height: "1px",
+                                                width: "100%",
+                                                backgroundColor: "#000304DD",
+
+                                            }}></div>
+                                            <div style={{ margin: "15px" }}>
+                                                {confirmingList}
+                                            </div>
+                                        </div>
+                                        </>
+                                        }
+                                    </div>
+                                }
+
                         </div>
+                                <div style={{width:5}}></div>
+                            </div>
                     </div>
                 </div>  
         
@@ -382,10 +638,10 @@ const endSearch = () => {
                     }}>&nbsp;</div>
                   
                     <div style={{
-                        fontWeight: "bolder",
-                        textAlign: "center",
+                        
+                       
                         width: "100%",
-                        fontSize: "16px",
+                        fontSize: "14px",
                         fontFamily: "WebPapyrus",
                         color: "#777777",
                         textShadow: "3px 3px 4px black",
@@ -491,6 +747,148 @@ const endSearch = () => {
                             </div>
                             </div>
                     </div>
+                </div>
+            }
+            {acknowledgeContact != null &&
+        
+                < div style={{
+                    position: "fixed",
+                    backgroundImage: "linear-gradient(to bottom, #00000088,#10131488)",
+                    width: 300,
+                    left: 395,
+                    top: 300,
+                    height: 220,
+                }}>
+                    <div style={{
+
+
+                        height: "1px",
+                        width: "100%",
+                        backgroundImage: "linear-gradient(to right, #000304DD, #77777755, #000304DD)",
+                        fontFamily: "Webrockwell",
+                        color: "white"
+                    }}>&nbsp;</div>
+
+                    <div style={{
+                        fontWeight:"bolder",
+                        textAlign: "center",
+                        width: "100%",
+                        fontSize: "14px",
+                        fontFamily: "WebPapyrus",
+                        color: "#777777",
+                        textShadow: "3px 3px 4px black",
+                        paddingTop: "10px",
+                        paddingBottom: "6px",
+                        backgroundImage: "linear-gradient(to right, #00000010, #77777720, #00000010)"
+                    }}>
+                        Contact &nbsp; &nbsp; Request
+                    </div>
+                    <div style={{}}>
+                        <div style={{
+                            marginBottom: '2px',
+                            textAlign: "center",
+                            height: "1px",
+                            width: "100%",
+                            backgroundImage: "linear-gradient(to right, #0003010, #77777755, #00030410)",
+
+                        }}></div>
+                        <div style={{
+                            fontFamily: "WebPapyrus",
+                            color: "#cdd4da",
+                            textAlign: "center",
+                            width: "100%",
+                            paddingTop: "15px",
+                            textShadow: "3px 3px 4px black"
+
+                        }}>
+                            {acknowledgeContact.userName}
+                        </div>
+                        <div style={{
+                            marginTop: "10px",
+                            marginLeft: "10px",
+                            marginRight: "10px",
+                            display: "flex",
+                            flex: 1,
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flexDirection:"column"
+
+                        }}>
+                            <div style={{
+                                marginBottom: '2px',
+
+                                height: "1px",
+                                width: "100%",
+                                backgroundImage: "linear-gradient(to right, #00030410, #77777755, #00030410)",
+
+                            }}></div>
+                            <div style={{ fontFamily: "Webrockwell", fontSize: "13px", color:"#cdd4da", textAlign: "left", width: "80%", height:40,padding:5, backgroundColor:"#33333340", overflowY:"scroll" }}>
+                                {acknowledgeContact.userContactMsg}
+                           </div>
+                        <div style={{
+                            marginBottom: '2px',
+
+                            height: "1px",
+                            width: "100%",
+                            backgroundImage: "linear-gradient(to right, #0003050, #77777755, #00030450)",
+
+                        }}></div>
+                        <div style={{
+
+                           
+                            display: "flex",
+                        }}>
+                            <div style={{ display: "flex" }}>
+                                <div style={{
+                                    justifyContent: "center",
+
+
+                                    display: "flex",
+                                    alignItems: "center"
+                                }}>
+
+                                    <div style={{
+                                        paddingLeft: "10px",
+                                        paddingRight: "10px",
+                                        fontFamily: "WebPapyrus"
+                                    }}
+                                        className={styles.CancelButton}
+                                            onClick={(e) => { onAcknowledgeContact(false) }} >
+                                        Decline
+                                    </div>
+
+                                </div>
+                                <div style={{
+
+                                    marginLeft: "10px", marginRight: "10px",
+                                    height: "80px",
+                                    width: "1px",
+                                    backgroundImage: "linear-gradient(to bottom, #000304DD, #77777755, #000304DD)",
+                                }}></div>
+                                <div style={{
+                                    justifyContent: "center",
+
+
+                                    display: "flex",
+                                    alignItems: "center"
+                                }}>
+
+                                    <div style={{
+                                        paddingLeft: "10px",
+                                        paddingRight: "10px",
+                                        fontFamily: "WebPapyrus",
+                                        width: "80px"
+                                    }}
+                                        className={styles.OKButton}
+                                        onClick={(e) => { onAcknowledgeContact(true) }} >
+                                        Accept
+                                    </div>
+
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 </div>
             }
         </>

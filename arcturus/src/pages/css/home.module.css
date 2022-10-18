@@ -132,12 +132,12 @@
 }
 
 .glowText {
-	display: "flex"
+	color: #888888;
+	cursor: pointer;
 }
 
 .glowText:hover {
-	box-shadow: 0px 0px 2px 2px #ffffff55;
-	background-color: #ffffff55;
+	color:white;
 }
  
 .result{

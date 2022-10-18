@@ -144,6 +144,8 @@ const status = {
     confirming:3,
     Offline:4, 
     Online: 5,
+    rejected:6,
+    accepted:7
 }
 
 io.on('connection', (socket) =>{
@@ -229,6 +231,35 @@ io.on('connection', (socket) =>{
                                 io.to(contactSocketID).emit("requestContact", userID, msg)
                             } 
                             callback(result)
+                        })
+                    })
+
+                    socket.on("acknowledgeContact", (response, contactID, callback) =>{
+                        const userID = user.userID;
+                        const socketID = id;
+                        
+                        acknowledgeContact(userID, response, contactID, (result)=>{
+                            const success = result.success;
+                     
+                            if (success){
+                                const contactSocket = result.contactSocket;
+                                const contactOnline = (result.contactStatusID == status.Online);
+
+                                if(contactOnline && contactSocket != ""){
+                                   
+                                    if(response){
+                                        io.to(contactSocket).emit("acknowledgeContact", { accepted: response, socket: socketID, userID: userID })
+                                        callback({success: true, socket: contactSocket, online: contactOnline})
+                                    }else{
+                                        io.to(contactSocket).emit("acknowledgeContact", { accepted: response, userID: userID })
+                                        callback({ success: true })
+                                    }
+                                }else{
+                                    callback({success: true, contactOnline: false, socket:"" })
+                                }
+                            }else{
+                                callback(result)
+                            }
                         })
                     })
 
@@ -5674,6 +5705,77 @@ const checkReferral = (code ="", callback) => {
     }).catch((reason) => {
         console.log(reason);
         callback(-1);
+    })
+}
+
+const acknowledgeContact = (userID, acknowledgement, contactID, callback) =>{
+    if (!util.types.isPromise(mySession)) {
+        mySession = mysqlx.getSession(sqlCredentials)
+    }
+    mySession.then((session) => {
+        
+        session.startTransaction();
+        var arcDB = session.getSchema('arcturus');
+        var userContactTable = arcDB.getTable("userContact");
+        var userTable =arcDB.getTable("user");
+
+        try {
+            
+            userContactTable.update().set(
+                'statusID', acknowledgement ? status.accepted : status.rejected
+                ).where(
+                "userID = :userID AND contactID = :contactID"
+            ).bind("userID", contactID).bind("contactID", userID).execute().then((response)=>{
+                console.log(response)
+                const affected = response.getAffectedItemsCount();
+                if(affected > 0){
+                    userTable.select(['userID', 'statusID', 'userSocket']).where('userID = :userID').bind('userID',contactID).execute().then((contactInfo)=>{
+                        const infoArr = contactInfo.fetchOne();
+                        const contactStatusID = infoArr[1];
+                        const contactSocket = infoArr[2];
+
+                        if (acknowledgement) {
+                            userContactTable.insert(
+                                ['userID', 'contactID', 'statusID']
+                            ).values(
+                                [userID, contactID, status.accepted]
+                            ).execute().then((res) => {
+                                console.log(res)
+                                const insertAffected = res.getAffectedItemsCount();
+
+                                if (insertAffected) {
+                                    callback({success:true, request: acknowledgement, contactStatusID: contactStatusID, contactSocket:contactSocket})
+                                    session.commit();
+                                }else{
+                                    callback({success:false, error:null})
+                                    session.rollback()
+                                }
+                                
+                            })
+                        } else {
+                            callback({ success: true, request: acknowledgement, contactStatusID: contactStatusID, contactSocket: contactSocket })
+                            session.commit();
+                        }
+
+                       
+                    })
+                    
+                   
+                }else{
+                    callback({success:false, error:null})
+                    session.rollback()        
+                }
+            })
+       
+        } catch (error) {
+           
+            session.rollback()
+            console.log(error)
+            callback({ success:false, error:error })
+        }
+       
+        
+       
     })
 }
 

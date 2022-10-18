@@ -144,18 +144,18 @@ import { get } from "idb-keyval";
                 var dir = get("localDirectory" + user.userID)
 
                 dir.then((value) => {
+                    if(value != undefined){
+                        const name = value.name;
 
-                    const name = value.name;
-
-                    setLocalDirectory(name)
-                    const idbFiles = get(name);
-                    
-                    idbFiles.then((res) => {
-                        setFiles(res);
-                    }).catch((error => {
-                        console.log(error)
-                    }))
-
+                        setLocalDirectory(name)
+                        const idbFiles = get(name);
+                        
+                        idbFiles.then((res) => {
+                            setFiles(res);
+                        }).catch((error => {
+                            console.log(error)
+                        }))
+                    }
 
                 })
                 

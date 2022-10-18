@@ -72,7 +72,7 @@ const HomeMenu = ({ props}) => {
         <>
             <div style={{ 
                 position: "fixed", top: 0, right: 0, height: 30, 
-                backgroundImage: "linear-gradient(black, rgba(0,3,4,.95))" }}>
+                backgroundImage: "linear-gradient(to bottom, #00000088,#10131488)" }}>
                 <div style={{display:"flex"}}>
                     
                     <div style={{paddingTop:"6px",display:"flex",cursor:"pointer", backgroundColor:"black"}} >
@@ -100,12 +100,12 @@ const HomeMenu = ({ props}) => {
 
             
         {(user.userID > 0 && showMenu) &&
-                <div style={{ position: "fixed", top: 0, left: 0, height: pageSize.height, width: 85, backgroundColor: "rgba(20,23,25,.5)" }}>
+                <div style={{ position: "fixed", top: 0, left: 0, height: pageSize.height, width: 85, backgroundImage: "linear-gradient(to bottom, #00000088,#20232588)" }}>
                     <div style={{ display: "flex", flexDirection: "column", height: pageSize.height, fontFamily: "WebPapyrus" }}>
             <div style={{flex:1}}>
                 
                     
-                    <NavLink className={(navData) => navData.isActive ? styles.menuActive : styles.menu__item} about="Search" to={'/search'}>
+                    <NavLink className={(navData) => navData.isActive ? styles.menuActive : styles.menu__item} about="Arcturus Network" to={'/search'}>
                             <img src="Images/logo.png" width={50} height={50} />
                     </NavLink>
                     {camps}

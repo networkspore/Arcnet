@@ -44,7 +44,7 @@ export const HomePage = () => {
         
        <>
             
-            <div style={{ position: "fixed", backgroundColor: "rgba(10,13,14,.6)", width: 200, height: pageSize.height, left: 85, top: "0px" }}>
+            <div style={{ position: "fixed", backgroundColor: "rgba(10,13,14,.6)", width: 200, height: pageSize.height, left: 95, top: "0px" }}>
                 <div style={{
                     padding: "10px",
                     textAlign: "center",
@@ -130,7 +130,7 @@ export const HomePage = () => {
                 backgroundImage: "linear-gradient(to right, #10131422, #80808011)",
                 position: "fixed", 
                 width:50, 
-                left: 285 - 50, 
+                left: 295 - 50, 
                 bottom: "0px", 
                 fontFamily:"Webpapyrus",
                 borderTopLeftRadius: 20,
