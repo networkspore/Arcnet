@@ -37,6 +37,7 @@ import HomeMenu from './pages/HomeMenu';
 
 import { SearchPage } from './pages/SearchPage';
 import { HomePage } from './pages/HomePage';
+import { LandingPage } from './LandingPage';
 
 
 
@@ -66,7 +67,7 @@ const App = () => {
 
     const page = useZust((state) => state.page);
     const pageSize = useZust((state) => state.pageSize);
-
+    const connected = useZust((state) => state.socketConnected)
  
     return (
         
@@ -119,42 +120,16 @@ const App = () => {
 
                     {user.userID < 1 &&
                         <>
-                            <Route path='/' element={<LoginPage /> } />
+                     
                             <Route path='/welcome' element={<WelcomePage />} />
 
 
                         </>
                     }
-
-                    {user.userID > 0 &&
-                        <>
-
-                        <Route path='/' element={<Navigate to={'/search'} />} />
-
-                        <Route path='/search' element={<SearchPage />} />
-                            <Route path='/home' element={<HomePage />} />
-                           
-
-                            <Route path='/realm' element={<CampaignPage />}>
-                                <Route path="*" element={<CampaignPage />} />
-                            </Route>
-
-
-                            <Route path='/createRealm' element={<CreateCampaignPage />} />
-                            <Route path='/finalizeRealm' element={<FinalizeCampaign />} />
-
-
-                            {user.Admin == 1 &&
-                                <>
-                                    <Route path='/admin' element={<AdminPage />} />
-                                </>
-                            }
-                        </>
-                    }
-
+               
   
 
-                    <Route path='*' element={ <Navigate to={'/'} />} />
+                    <Route path='*' element={ <LandingPage />} />
                 </Routes>   
                 
                 <HomeMenu />

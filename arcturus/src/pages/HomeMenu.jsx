@@ -1,9 +1,12 @@
 import useZust from "../hooks/useZust";
 import React, { useEffect, useState } from "react";
 import styles from './css/ContentMenu.module.css';
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { ErgoDappConnector } from "ergo-dapp-connector";
-
+import produce from "immer";
+import LoginPage from "./LoginPage";
+import { SearchPage } from "./SearchPage";
+import { HomePage } from "./HomePage";
 
 
 
@@ -12,7 +15,7 @@ const HomeMenu = ({ props}) => {
    
     const goToEditor = useZust((state) => state.torilActive);
     const setTorilActive =useZust((state) => state.setTorilActive);
-    const showMenu = useZust((state => state.showMenu))
+    const [showMenu, setShowMenu] = useState(false) 
  
     const navigate = useNavigate();
     const pageSize = useZust((state) => state.pageSize);
@@ -26,8 +29,63 @@ const HomeMenu = ({ props}) => {
     const currentCampaign = useZust((state) => state.currentCampaign)
 
 
+   
+
+    const [showIndex, setShowIndex] = useState(false);
+
+    
+    const [connected, setConnected] = useState(false)
+
+    const location = useLocation()
 
 
+
+    useEffect(()=>{
+        if(user.userID > 0)
+        {
+            setConnected(true)
+           
+            socket.on("disconnect", (res)=>{
+                setConnected(false)
+       
+            })
+        }
+    },[user])
+
+    useEffect(() => {
+        const currentLocation = location.pathname;
+        if (currentLocation == '/login') {
+            setShowIndex(1)
+        }
+
+        if (currentLocation == '/') {
+
+            if(connected){
+                if (!showMenu) setShowMenu(true)
+                setShowIndex(2)
+            }else{
+                setShowIndex(1)
+                setShowMenu(false)
+            }
+
+        }else{
+            if(currentLocation == '/search')
+            {
+                if(connected){
+                    if (!showMenu) setShowMenu(true)
+                     setShowIndex(2)
+                }else{
+                    setShowIndex(1)
+                  // navigate("/")
+                }
+               
+            }
+            if(currentLocation == '/home'){
+                setShowIndex(3)
+                if(!showMenu) setShowMenu(true)
+            }
+        }
+    }, [location,connected])
 
     useEffect(() => {
        
@@ -63,8 +121,10 @@ const HomeMenu = ({ props}) => {
    
 
     function onProfileClick(e){
-        if(user.userID > 0){
-            toNav("/profile")
+        if(connected){
+            toNav("/home")
+        }else{
+            toNav("/")
         }
     }
 
@@ -77,11 +137,9 @@ const HomeMenu = ({ props}) => {
                     
                     <div style={{paddingTop:"6px",display:"flex",cursor:"pointer", backgroundColor:"black"}} >
                         <div onClick={(e) =>{
-                            if (user.userID > 0) {
-                                toNav("/search")
-                            }
+                            toNav("/")
                         }}>
-                        <img src={user.userID > 0 ? "Images/logo.png" : "Images/logout.png"} width={30} height={30} />
+                        <img src={connected ? "Images/logo.png" : "Images/logout.png"} width={30} height={30} />
                         </div>
                         <div onClick={onProfileClick} style={{ 
                             fontFamily: "WebPapyrus", 
@@ -90,7 +148,7 @@ const HomeMenu = ({ props}) => {
                             paddingTop:"5px",
                             paddingLeft:"10px",
                             paddingRight:"10px"
-                        }}> {user.userID > 0 ? user.userName : "Offline"}</div>
+                        }}> {connected ? user.userName : <div style={{display:"flex"}}><div>Log</div><div style={{width:"6px"}}>&nbsp;</div><div>In</div> </div> }</div>
                     </div>
                     <div>
                     <ErgoDappConnector color="black" />
@@ -98,49 +156,63 @@ const HomeMenu = ({ props}) => {
                 </div>
             </div>
 
-            
-        {(user.userID > 0 && showMenu) &&
+            {(connected && showMenu) &&
                 <div style={{ position: "fixed", top: 0, left: 0, height: pageSize.height, width: 85, backgroundImage: "linear-gradient(to bottom, #00000088,#20232588)" }}>
                     <div style={{ display: "flex", flexDirection: "column", height: pageSize.height, fontFamily: "WebPapyrus" }}>
-            <div style={{flex:1}}>
-                
-                    
-                    <NavLink className={(navData) => navData.isActive ? styles.menuActive : styles.menu__item} about="Arcturus Network" to={'/search'}>
-                            <img src="Images/logo.png" width={50} height={50} />
-                    </NavLink>
-                    {camps}
-               
-                    {/*
+                        <div style={{ flex: 1 }}>
+
+                            {connected &&
+                                <>
+                                    <NavLink className={location.pathname == "/search" ? styles.menuActive : styles.menu__item} about="Arcturus Network" to={'/search'}>
+                                        <img src="Images/logo.png" width={50} height={50} />
+                                    </NavLink>
+                               
+                                </>
+                            }
+
+                            {/*
                     <NavLink className={(navData) => navData.isActive ? styles.menuActive : styles.menu__item} about="Map"
                         to={'/editor'}>
                         <img src="Images/map.png" width={50} height={45} />
                     </NavLink>*/
-                    }
-                 
-
-                  
-               
-            </div>
-            <div style={{flex:0.1}}>
-                
-                <NavLink className={(navData) => navData.isActive ? styles.menuActive : styles.menu__item} about="Create Realm"
-                    to={'/createRealm'}>
-                    <img src="Images/add.png" width={50} height={45} />
-                </NavLink>
-                
+                            }
 
 
-                <NavLink className={(navData) => navData.isActive ? styles.menuActive : styles.menu__item} about={user.userName}
-                    to={'/home'}>
-                    <img src="Images/icons/person.svg" style={{ filter: "invert(100%)" }} width={45} height={50} />
-                </NavLink>
-                
-            </div>
-        </div>
-        </div>
-        
+
+
+                        </div>
+                        <div style={{ flex: 0.1 }}>
+
+                            <NavLink className={location.pathname == "/createRealm" ? styles.menuActive : styles.menu__item} about="Create Realm"
+                                to={'/createRealm'}>
+                                <img src="Images/add.png" width={50} height={45} />
+                            </NavLink>
+
+
+
+                            <NavLink className={location.pathname == "/home" ? styles.menuActive : styles.menu__item} about={user.userName}
+                                to={'/home'}>
+                                <img src="Images/icons/person.svg" style={{ filter: "invert(100%)" }} width={45} height={50} />
+                            </NavLink>
+
+                        </div>
+                    </div>
+                </div>
+
+            }
+       
+        {showIndex == 1 &&
+            <LoginPage />
         }
-      
+        {
+            showIndex == 2 &&
+            <SearchPage />
+        }
+        {
+            showIndex == 3 &&
+           <HomePage />
+        }
+            
         </>
     )
     

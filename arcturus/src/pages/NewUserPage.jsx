@@ -83,7 +83,7 @@ const NewUserPage = (props = {}) => {
 return (
     <div style={{ width: 850, height: 920,  position: "fixed", left: "50%", top: "50%", transform: "translate(-50%,-50%)" }}>
 
-        <div style={{ width: 850, height: 920,  boxShadow: "2px 2px 5px #101010", backgroundColor: "rgba(16,19,20,.3)",  textAlign: "center", position: "absolute", zIndex: 2 }}>
+        <div style={{ width: 850, height: 920, boxShadow: "2px 2px 5px #101010", backgroundImage: "linear-gradient(top to bottom, #33333345,#10131450)" ,  textAlign: "center", position: "absolute", zIndex: 2 }}>
     
             <br /><br />
             <div className={styles.heading}> FROM THE SHADOWS... </div>

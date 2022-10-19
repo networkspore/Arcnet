@@ -25,7 +25,8 @@ import { get } from "idb-keyval";
     const [data, setData] = useState({ loginRemember: false, loginName: "", loginPass: "" });
     const [cookie, setCookie] = useCookies(['login']);
    
-
+     const setSocketConnected = useZust((state) => state.setSocketConnected)
+     
     const navigate = useNavigate(); 
     
     const [disable, setDisable] = useState(false)
@@ -50,7 +51,7 @@ import { get } from "idb-keyval";
         }));
 
     }
-
+    
     const handleChange = e => {
         const { name, value } = e.target;
         setData(prevState => ({
@@ -130,7 +131,7 @@ import { get } from "idb-keyval";
             const sock = io(socketIOhttp, { auth: { token: socketToken, user: { nameEmail: name_email, password: pass } }, transports: ['websocket'] });
             
             sock.on("loggedIn", (user, contacts, requests) =>{
-                sock.off("loggedIn")
+              
                 if(data.loginRemember){
                
                     setCookie("login", { useCookie: true, name: name_email, pass: pass })
@@ -139,7 +140,8 @@ import { get } from "idb-keyval";
                 setContacts(contacts)
                 setContactRequests(requests)
                 setSocket(sock);
-                setShowMenu(true);
+         
+                
 
                 var dir = get("localDirectory" + user.userID)
 
@@ -158,7 +160,7 @@ import { get } from "idb-keyval";
                     }
 
                 })
-                
+                navigate("/search")
                 return true;
             })
             sock.on("failedLogin", () =>{
@@ -175,7 +177,7 @@ return (
         display: "block",
 
         left: "25%",
-        width: 650, height: 400, 
+        width: 600, height: 400, 
         top: "50%",
         position: "fixed",
         transform:"translate(-50%,-50%)",
@@ -185,37 +187,84 @@ return (
 
        
 
-    <div style={{ padding:"30px", boxShadow: "2px 2px 5px #101010", backgroundColor: "rgba(16,19,20,.3)", textShadow: "2px 2px 2px black",  textAlign:"center", position:"absolute", zIndex:2}}>
-        <div style={{ cursor: "default", paddingTop: 30, paddingBottom: 20, fontWeight: "bold", fontSize: "50px", fontFamily: "WebRockwell", color:"#cdd4da" }}>
+        <div style={{ padding: "30px", width: "100%", 
+            boxShadow: "0 0 10px #ffffff20, 0 0 20px #ffffff10, inset 0 0 30px #77777740", 
+            backgroundImage: "linear-gradient(to bottom,  #00030490,#13161780)", 
+            textShadow: "2px 2px 2px black",  
+            textAlign:"center", 
+            position:"absolute", 
+            zIndex:2
+        }}>
+            <div style={{ textShadow: "0 0 10px #ffffff40, 0 0 20px #ffffff60", cursor: "default", paddingTop: 30, paddingBottom: 20, fontWeight: "bold", fontSize: "50px", fontFamily: "WebPapyrus", color:"#cdd4da" }}>
                 Log In
             </div>
             <form onSubmit={event => handleSubmit(event)}>
-                <div className={styles.paddingTopTen}>
-                    <input ref={txtName} name="loginName" className={styles.loginTxt} placeholder="Name or Email" type="text" onChange={handleChange} />
+                <div style={{paddingTop:"15px"}}>
+                    <div style={{
+
+                        display: "flex",
+                        
+                        justifyContent: "center",
+                        backgroundImage: "linear-gradient(to right, #00030430, #77777720, #00030430)",
+                        paddingBottom: 5,
+                        paddingTop: 5,
+                        paddingLeft:20,
+                        paddingRight:20
+                    }}>
+                        <input onKeyUp={(e) => {
+                            if (e.code == "Enter") {
+                                handleSubmit(e)
+                            }
+                        }}  style={{ outline: 0, border:0, width:"80%",textAlign:"center", color:"white", fontSize: "25px", backgroundColor: "black", fontFamily:"WebPapyrus" }} ref={txtName} name="loginName"  placeholder="Name or Email" type="text" onChange={handleChange} />
+                    </div>
                 </div>
 
-                <div style={{ paddingTop:20 }}>
-                    <input ref={txtPass} name="loginPass" className={styles.loginTxt} placeholder="Password" type="password" onChange={handleChange} />
+                <div style={{ paddingTop:30 }}>
+                    <div style={{
+
+                        display: "flex",
+
+                        justifyContent: "center",
+                        backgroundImage: "linear-gradient(to right, #00030430, #77777720, #00030430)",
+                        paddingBottom: 5,
+                        paddingTop: 5,
+                        paddingLeft: 20,
+                        paddingRight: 20
+                    }}>
+                        <input onKeyUp={(e) => { if(e.code == "Enter"){
+                            handleSubmit(e)
+                        } }} ref={txtPass} style={{outline:0, border: 0, color: "white", width: "80%", textAlign: "center", fontSize: "25px", backgroundColor: "black", fontFamily: "WebPapyrus" }} name="loginPass" placeholder="Password" type="password" onChange={handleChange} />
+                    </div>
                 </div>
                 <div name="loginRemember" className={styles.checkPos} >
                     <div className={data.loginRemember ? styles.checked : styles.check} name="loginRemember" onClick={onLoginRemember} />
                     <div onClick={onLoginRemember} style={
                         {
-                        cursor: "pointer", color: (data.loginRemember) ? "#D6BD00" : "#776a05"
+                        cursor: "pointer", color: (data.loginRemember) ? "#white" : "#777777"
                         }} className={styles.keep}>Keep me signed in.</div>
                 </div>
-                <div className={styles.submitPos}>
-                    <input className={
-                            (data.loginName.length > 2 && data.loginPass.length > 7) ? styles.loginEnable : styles.loginDisable
-                        }
-                        type="submit" value="Log In"
-                        disabled={
-                            (data.loginName.length > 2 && data.loginPass.length > 7) || (disable) ? false : true
-                        } />
+                <div style={{ width:"100%", display:"flex", justifyContent:"right"}}>
+                    <div onClick={handleSubmit} style={{
+                        textAlign: "center",
+                        cursor: (data.loginName.length > 2 && data.loginPass.length > 7) || (disable) ? "pointer" : "default",
+                        fontFamily: "WebPapyrus",
+                        fontSize: "25px",
+                        fontWeight: "bolder",
+                        width: 100,
+                        color: (data.loginName.length > 2 && data.loginPass.length > 7) || (disable) ? "white" : "#777777",
+                        
+                        paddingTop: "10px",
+                        paddingBottom: "10px",
+                    }}
+                        className={(data.loginName.length > 2 && data.loginPass.length > 7) || (disable) ? styles.OKButton : ""}
+
+                    > Enter </div>
+                    <div style={{width:20}}></div>
+               
                 </div>
 
                 <div className={styles.paddingTop20}>
-                    <a onClick={handleCreate} className={styles.createLink}>Create Account</a>
+                    <a onClick={handleCreate} style={{fontFamily:"Webrockwell", fontSize:14}} className={styles.glowText}>Create Account</a>
                 </div>
 
             </form>

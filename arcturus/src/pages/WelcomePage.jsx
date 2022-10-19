@@ -12,8 +12,8 @@ import { socketIOhttp, socketToken } from '../constants/httpVars';
 const WelcomePage = () => {
     
  
-    const defaultColor = "#79680d";
-    const enableColor = "#ffe51c";
+    const defaultColor = "#77777750";
+    const enableColor = "#FFFFFF";
 
     const navigate = useNavigate();
 
@@ -126,62 +126,116 @@ const WelcomePage = () => {
         <>
         { current == 1 &&
         
-        <div style={{ width: 850, height: 700, position:"fixed",  left:"50%", top:"50%", transform:"translate(-50%,-50%)" }}>
+            <div style={{ width: 850,
+                    backgroundImage: "linear-gradient(to bottom, #10131450,#00030450,#10131450)", 
+                position: "fixed", 
+                display:"flex",
+                left: "50%", top: "50%", transform: "translate(-50%,-50%)", 
+                    boxShadow: "0 0 10px #ffffff20, 0 0 20px #ffffff10, inset 0 0 30px #77777740", 
+                alignItems: "center",justifyContent: "center", flexDirection: "column"
+            }}>
+                <div  style={{
+                    fontSize:"50px",
+                    textAlign: "center",
+                    fontFamily: "Webrockwell",
+                        textShadow:"0 0 10px #ffffff40, 0 0 20px #ffffff60",
+                    fontWeight: "bolder",
+                    color: "#cdd4da",
+                  
+                    marginTop:"70px"
+                }} >  Welcome</div>
 
-       
-            <div style={{ width: 850, height: 700, boxShadow: "2px 2px 5px #101010", backgroundColor: "rgba(16,19,20,.3)", textAlign: "center", position: "absolute", zIndex: 2 }}>
-
-       
-                    <br /><br />
-               
-                    <div className={styles.heading}>Welcome!</div>
-
+                  
                    
 
-                    <div style={{paddingTop: "50px"}}>
-                       
-                        <img src="Images/down.png" />
-                        <form onSubmit={handleSubmit}>
+              
 
-                    <div style={{ paddingTop: "70px" }}>
+                    <div style={{ paddingTop: "50px" }}>
+                                        <div style={{
 
+                                            display: "flex",
+                                           
+                                            justifyContent: "center",
+                                            backgroundImage: "linear-gradient(to right, #00030430, #77777720, #00030430)",
+                                            paddingBottom: 5,
+                                            paddingTop: 5,
+                                            paddingLeft:20,
+                                            paddingRight:20
+                                        }}>
 
-                        <input name="ref"  class={styles.blkInput} placeholder="Referral code" type="input" autoFocus onChange={event => handleChange(event)} />
-
+                        <input name="ref" style={{fontSize:"20px", backgroundColor:"black", }}   class={styles.blkInput} placeholder="Referral code..." type="input" autoFocus onChange={event => handleChange(event)} />
+                                        </div>
 
                     </div>
-                    <div style={{ paddingTop: "5px", color:"#777171"}} >
+
+                    <div style={{ paddingTop: "5px", color: "#77717180", fontSize: "10px", fontFamily:"Webrockwell" ,paddingBottom:"50px"}} >
                         {valid ?  "Code valid." : "Enter a valid referral code."}
                     </div>
-                            <div style={{paddingTop: "40px"}}>
+                            <div style={{}}>
+                                <div style={{
+                                    alignItems: "center", justifyContent: "center",
+                                    display: "flex",
 
 
-                                <input name="email" class={styles.blkLargeInput} placeholder="Enter email here" type="email" onChange={event => handleChange(event)} />
+                                    backgroundImage: "linear-gradient(to right, #00030430, #77777720, #00030430)",
+                                    paddingBottom: 5,
+                                    paddingTop: 5,
+                                    paddingLeft: 20,
+                                    paddingRight: 20
+                                }}>
 
+                                <input placeholder="email@somewhere.com" style={{fontSize:"30px",backgroundColor:"black"}} name="email" class={styles.blkLargeInput} type="email" onChange={event => handleChange(event)} />
 
+                                       </div>
                             </div>
-                                <div style={{ paddingTop: "5px", color: "#777171" }} >
+                                <div style={{ paddingTop: "5px", color: "#77717180", fontFamily:"Webrockwell", fontSize:"10px", paddingBottom:"40px" }} >
                                     {newEmail == "" ? "Enter an unused email." : "Email valid."}
                                 </div>
-                            <div class={styles.paddingTop90}>
-                                <input style={
-                                    {
-                                        color: ((newEmail.length > 4)&&(valid)) ? enableColor : defaultColor
-                                    }}
-                                    class={styles.blkSubmit} type="submit" value="CONFIRM"
-                                    disabled={
-                                        (newEmail.length > 4) && (valid) ? false : true
-                                    }
-                                />
+                    <div style={{ display: "flex", paddingTop: "20px", marginBottom:30, alignItems: "center", justifyContent: "center", }} >
+                      
+                            <div style={{
+                            textAlign: "center",
+                            cursor: "pointer",
+                            fontFamily: "WebPapyrus",
+                            fontSize: "18px",
+                            fontWeight: "bolder",
+                            width: 100,
+                            color: "#77777740",
+                            paddingLeft: "0px",
+                            paddingTop: "10px",
+                            paddingBottom: "10px",
+
+                            }}
+                                className={styles.OKButton}
+                                onClick={(e) => { navigate("/")}} >
+                                Cancel
                             </div>
 
-                    <div style={{ paddingTop:"100px"}} class={styles.disclaimer} >
-                                <br></br>
-                                &nbsp;
+                     
+                        <div style={{
+
+                            marginLeft: "10px", marginRight: "10px",
+                            height: "80px",
+                            width: "1px",
+                            backgroundImage: "linear-gradient(to bottom, #000304DD, #77777755, #000304DD)",
+                        }}></div>
+                                <div onClick={handleSubmit}  style={{
+                                        textAlign: "center",
+                                        cursor: ((newEmail.length > 4) && (valid)) ? "pointer" : "default", 
+                                        fontFamily: "WebPapyrus",
+                                        fontSize: "18px",
+                                        fontWeight: "bolder",
+                                        width:100,
+                                        color: ((newEmail.length > 4)&&(valid)) ? enableColor : defaultColor, 
+                                        paddingLeft: "0px",
+                                        paddingTop: "10px",
+                                        paddingBottom: "10px",
+                                    }}
+                                    class={((newEmail.length > 4)&&(valid)) ? styles.OKButton: ""} 
+                                  
+                                > Confirm </div>
                             </div>
-                        </form>
-                    </div>
-            </div>
+
         </div>
         }
         {current ==2 &&

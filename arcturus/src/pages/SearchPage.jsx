@@ -620,36 +620,28 @@ const endSearch = () => {
             { requestContact != null &&
                 
                 < div style={{
-                        position: "fixed",
-                        backgroundColor: "rgba(20,23,25,.7)",
-                        width: 300,
-                        left: 385,
-                        top: "160px",
-                        height: 210,
+                    position: "fixed",
+                    backgroundImage: "linear-gradient(to bottom, #00000088,#10131488)",
+                    width: 300,
+                    left: 395,
+                    top: 300,
+                    height: 220,
+                    boxShadow: "inset 0px 0px 1px #7F7F7F",
                 }}>
+                
                     <div style={{
-                       
-                     
-                        height: "1px",
+                        fontWeight: "bolder",
+                        textAlign: "center",
                         width: "100%",
-                        backgroundImage: "linear-gradient(to right, #000304DD, #77777755, #000304DD)",
-                        fontFamily: "Webrockwell",
-                        color: "white"
-                    }}>&nbsp;</div>
-                  
-                    <div style={{
-                        
-                       
-                        width: "100%",
-                        fontSize: "14px",
-                        fontFamily: "WebPapyrus",
-                        color: "#777777",
+                        fontSize: "20px",
+                        fontFamily: "Papyrus",
+                        color: "#cdd4da",
                         textShadow: "3px 3px 4px black",
-                        paddingTop:"10px",
-                        paddingBottom:"6px",
-                           backgroundImage: "linear-gradient(to right, #00000010, #77777720, #00000010)"
+                        paddingTop: "15px",
+                        paddingBottom: "10px",
+                        
                     }}>
-                       Request &nbsp; &nbsp; Contact
+                       Request &nbsp; Contact
                     </div>
                     <div style={{   }}>
                         <div style={{
@@ -682,7 +674,7 @@ const endSearch = () => {
                            
                             
                             }}>
-                            <textarea  placeholder="Write a brief message..." style={{resize:"none", fontSize:"12px",  width:"80%",border:0, backgroundColor:"#00000060", color:"white", fontFamily:"Webrockwell"}} ref={messageRef}  />
+                            <textarea  placeholder="Write a message..." style={{resize:"none", fontSize:"13px",outline:0,  width:"80%",border:0, backgroundColor:"#00000060", color:"white", fontFamily:"Webrockwell"}} ref={messageRef}  />
                         </div>
                         <div style={{
                             marginBottom: '2px',

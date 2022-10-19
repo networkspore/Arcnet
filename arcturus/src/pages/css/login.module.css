@@ -131,7 +131,14 @@
 .createLink:hover{
 	color: #ffe51c;
 }
+.glowText {
+	color: #888888;
+	cursor: pointer;
+}
 
+.glowText:hover {
+	color: white;
+}
 .checkPos
 {
 	text-align: left;
@@ -158,7 +165,7 @@
 	margin-right: 5px;
 	  width: 11px;
   height: 11px;
-  background-image: radial-gradient( #ffe51c 25%,  #101314 100%);
+  background-image: radial-gradient( white 25%,  #101314 100%);
   background-repeat: no-repeat;
   background-position: center;
 
