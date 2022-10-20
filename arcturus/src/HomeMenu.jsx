@@ -189,7 +189,7 @@ const HomeMenu = ({ props}) => {
 
                             <NavLink className={location.pathname == "/createRealm" ? styles.menuActive : styles.menu__item} about="Create Realm"
                                 to={'/createRealm'}>
-                                <img src="Images/realm.svg" width={50} height={45} style={{filter:"invert(100%)"}}/>
+                                <img src="Images/realm.png" width={60} height={60} />
                             </NavLink>
 
 

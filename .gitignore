@@ -12,7 +12,7 @@ node_modules
 dist
 dist-ssr
 *.local
-arcturus/Images/
+
 
 back2
 arcturus/objects/
