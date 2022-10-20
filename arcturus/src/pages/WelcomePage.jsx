@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 
 import useZust from "../hooks/useZust";
 
-import styles from './css/welcome.module.css';
+import styles from './css/home.module.css';
 import NewUserPage from './NewUserPage'
 import { io } from "socket.io-client";
 import { socketIOhttp, socketToken } from '../constants/httpVars';
@@ -132,46 +132,60 @@ const WelcomePage = () => {
                 display:"flex",
                 left: "50%", top: "50%", transform: "translate(-50%,-50%)", 
                     boxShadow: "0 0 10px #ffffff10, 0 0 20px #ffffff10, inset 0 0 30px #77777710", 
-                alignItems: "center",justifyContent: "center", flexDirection: "column"
+                alignItems: "center",justifyContent: "center", flexDirection: "column",
+                paddingTop: "60px",
             }}>
+                    <div style={{ height: 2, width: "100%", backgroundImage: "linear-gradient(to right, #000304DD, #77777755, #000304DD)", paddingBottom:5, marginBottom:5}}>&nbsp;</div>
                 <div  style={{
+                    
                     fontSize:"50px",
                     textAlign: "center",
-                    fontFamily: "Webrockwell",
+                    fontFamily: "Webpapyrus",
                         textShadow:"0 0 10px #ffffff40, 0 0 20px #ffffff60",
                     fontWeight: "bolder",
                     color: "#cdd4da",
                   
-                    marginTop:"70px"
-                }} >  Welcome</div>
-
+               
+                }} > Create Account</div>
+                
+                    <div style={{ height: 2, width: "100%", backgroundImage: "linear-gradient(to right, #000304DD, #77777755, #000304DD)", paddingTop:5}}>&nbsp;</div>
                   
                    
 
               
 
-                    <div style={{ paddingTop: "50px" }}>
-                                        <div style={{
+                    <div style={{paddingTop:80}}>
+                        <div style={{
 
-                                            display: "flex",
-                                           
-                                            justifyContent: "center",
-                                            backgroundImage: "linear-gradient(to right, #00030430, #77777720, #00030430)",
-                                            paddingBottom: 5,
-                                            paddingTop: 5,
-                                            paddingLeft:20,
-                                            paddingRight:20
-                                        }}>
+                            display: "flex",
+                            
+                            justifyContent: "center",
+                            backgroundImage: "linear-gradient(to right, #00030430, #77777720, #00030430)",
+                            paddingBottom: 5,
+                            paddingTop:5,
+                            paddingLeft:20,
+                            paddingRight:20
+                        }}>
 
-                        <input name="ref" style={{fontSize:"20px", backgroundColor:"black", }}   class={styles.blkInput} placeholder="Referral code..." type="input" autoFocus onChange={event => handleChange(event)} />
+                            <input onKeyUp={(e) => {
+                                if (e.code == "Enter") {
+                                    handleSubmit(e)
+                                }
+                            }} name="ref" style={{
+                                outline: 0,
+                                border: 0,
+                                color: "white",
+                                width: 600, textAlign: "center", fontSize: "30px", backgroundColor: "black", fontFamily: "WebPapyrus"
+
+                            }}   placeholder="Referral code..." type="input" autoFocus onChange={event => handleChange(event)} />
                                         </div>
 
                     </div>
 
-                    <div style={{ paddingTop: "5px", color: "#77717180", fontSize: "10px", fontFamily:"Webrockwell" ,paddingBottom:"50px"}} >
+                    <div style={{ paddingTop: "5px", color: "#77717180", fontSize: "12px", fontFamily:"Webrockwell" ,paddingBottom:"50px"}} >
                         {valid ?  "Code valid." : "Enter a valid referral code."}
                     </div>
-                            <div style={{}}>
+                            <div style={{paddingTop:"30px"}}>
                                 <div style={{
                                     alignItems: "center", justifyContent: "center",
                                     display: "flex",
@@ -184,11 +198,21 @@ const WelcomePage = () => {
                                     paddingRight: 20
                                 }}>
 
-                                <input placeholder="email@somewhere.com" style={{fontSize:"30px",backgroundColor:"black"}} name="email" class={styles.blkLargeInput} type="email" onChange={event => handleChange(event)} />
+                            <input onKeyUp={(e) => {
+                                if (e.code == "Enter") {
+                                    handleSubmit(e)
+                                }
+                            }} placeholder="email@somewhere.com" style={{
+                                outline: 0,
+                                border: 0,
+                                color: "white",
+                                width: 600, textAlign: "center", fontSize: "30px", backgroundColor: "black", fontFamily: "WebPapyrus"
+                                        
+                                        }} name="email"  type="email" onChange={event => handleChange(event)} />
 
                                        </div>
                             </div>
-                                <div style={{ paddingTop: "5px", color: "#77717180", fontFamily:"Webrockwell", fontSize:"10px", paddingBottom:"40px" }} >
+                                <div style={{ paddingTop: "5px", color: "#77717180", fontFamily:"Webrockwell", fontSize:"12px", paddingBottom:"40px" }} >
                                     {newEmail == "" ? "Enter an unused email." : "Email valid."}
                                 </div>
                     <div style={{ display: "flex", paddingTop: "20px", marginBottom:30, alignItems: "center", justifyContent: "center", }} >
@@ -200,13 +224,13 @@ const WelcomePage = () => {
                             fontSize: "18px",
                             fontWeight: "bolder",
                             width: 100,
-                            color: "#77777740",
+                          
                             paddingLeft: "0px",
                             paddingTop: "10px",
                             paddingBottom: "10px",
 
                             }}
-                                className={styles.OKButton}
+                                className={styles.CancelButton}
                                 onClick={(e) => { navigate("/")}} >
                                 Cancel
                             </div>

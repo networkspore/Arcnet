@@ -101,6 +101,14 @@ import { get } from "idb-keyval";
     }
     ,[]);
 
+    function onLostPassword(event){
+        if (!disable) {
+            setDisable(true);
+            setSocket(io(socketIOhttp, { auth: { token: socketToken, user: { nameEmail: 'anonymous' } }, transports: ['websocket'] }))
+            navigate("/recoverpassword")
+        }
+    }
+
 
     function handleCreate(event) {
 
@@ -174,27 +182,25 @@ import { get } from "idb-keyval";
 
 return (
     <div style={{
-        display: "block",
-
+        display: "flex",
         left: "25%",
-        width: 600, height: 400, 
+        height: 400, 
         top: "50%",
         position: "fixed",
         transform:"translate(-50%,-50%)",
+        width: 500,
         
+        boxShadow: "0 0 10px #ffffff10, 0 0 20px #ffffff10, inset 0 0 30px #77777710",
+        backgroundImage: "linear-gradient(to bottom,  #00030490,#13161780)",
+        textShadow: "2px 2px 2px black",
+        flexDirection:"column",
+        alignItems:"center",
+        paddingLeft:60,
+        paddingRight:60,
+        paddingBottom: 30,
     }}
     >
-
        
-
-        <div style={{ padding: "30px", width: "100%", 
-            boxShadow: "0 0 10px #ffffff10, 0 0 20px #ffffff10, inset 0 0 30px #77777710", 
-            backgroundImage: "linear-gradient(to bottom,  #00030490,#13161780)", 
-            textShadow: "2px 2px 2px black",  
-            textAlign:"center", 
-            position:"absolute", 
-            zIndex:2
-        }}>
             <div style={{ textShadow: "0 0 10px #ffffff40, 0 0 20px #ffffff60", cursor: "default", paddingTop: 30, paddingBottom: 20, fontWeight: "bold", fontSize: "50px", fontFamily: "WebPapyrus", color:"#cdd4da" }}>
                 Log In
             </div>
@@ -215,7 +221,10 @@ return (
                             if (e.code == "Enter") {
                                 handleSubmit(e)
                             }
-                        }}  style={{ outline: 0, border:0, width:"80%",textAlign:"center", color:"white", fontSize: "25px", backgroundColor: "black", fontFamily:"WebPapyrus" }} ref={txtName} name="loginName"  placeholder="Name or Email" type="text" onChange={handleChange} />
+                        }}  style={{ 
+                            outline:0,
+                            border:0, 
+                            width: 400, textAlign: "center", color:"white", fontSize: "25px", backgroundColor: "black", fontFamily:"WebPapyrus" }} ref={txtName} name="loginName"  placeholder="Name or Email" type="text" onChange={handleChange} />
                     </div>
                 </div>
 
@@ -233,14 +242,29 @@ return (
                     }}>
                         <input onKeyUp={(e) => { if(e.code == "Enter"){
                             handleSubmit(e)
-                        } }} ref={txtPass} style={{outline:0, border: 0, color: "white", width: "80%", textAlign: "center", fontSize: "25px", backgroundColor: "black", fontFamily: "WebPapyrus" }} name="loginPass" placeholder="Password" type="password" onChange={handleChange} />
+                        } }} ref={txtPass} style={{
+                            outline:0, 
+                            border: 0, 
+                            color: "white", 
+                            width: 500, textAlign: "center", fontSize: "25px", backgroundColor: "black", fontFamily: "WebPapyrus" }} name="loginPass" placeholder="Password" type="password" onChange={handleChange} />
                     </div>
                 </div>
-                <div name="loginRemember" className={styles.checkPos} >
+            <div style={{ width: "93%", display: "flex", alignItems: "center", justifyContent: "right", transform:"translate(0px,4px)" }}>
+                    <div onClick={onLostPassword} style={{ 
+                        fontFamily: "WebPapyrus", 
+                        fontSize: 15,
+                    }} className={styles.glowText}>
+                        Lost password
+                    </div>
+                  
+                </div>
+                <div style={{paddingLeft:20}} name="loginRemember" className={styles.checkPos} >
                     <div className={data.loginRemember ? styles.checked : styles.check} name="loginRemember" onClick={onLoginRemember} />
                     <div onClick={onLoginRemember} style={
                         {
-                        cursor: "pointer", color: (data.loginRemember) ? "#white" : "#777777"
+                        cursor: "pointer", 
+                        color: (data.loginRemember) ? "#ffffffDD" : "#777777",
+                        textShadow: (data.loginRemember) ? "1px 1px 2px #000000" : "",
                         }} className={styles.keep}>Keep me signed in.</div>
                 </div>
                 <div style={{ width:"100%", display:"flex", justifyContent:"right"}}>
@@ -263,12 +287,12 @@ return (
                
                 </div>
 
-                <div className={styles.paddingTop20}>
-                    <a onClick={handleCreate} style={{fontFamily:"Webrockwell", fontSize:14}} className={styles.glowText}>Create Account</a>
-                </div>
-
+               
             </form>
+        <div style={{ paddingTop: 20 }}>
+            <a onClick={handleCreate} style={{ fontFamily: "WebPapyrus", fontSize: 15 }} className={styles.glowText}>Create Account</a>
         </div>
+
         </div>
        
     )

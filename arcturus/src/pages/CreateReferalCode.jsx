@@ -130,17 +130,17 @@ export const CreateReferalCode = (props = {}) => {
     },[])
     
     return (
-        <div id='CreateReferalCode' style={{
+        <div style={{
             position: "fixed",
             backgroundColor: "rgba(0,3,4,.95)",
             width: 800,
             height: 500,
             left: (pageSize.width / 2) - 400,
-            top: (pageSize.height / 2) - 250
-
+            top: (pageSize.height / 2) - 250,
+            boxShadow: "0 0 10px #ffffff10, 0 0 20px #ffffff10, inset 0 0 30px #77777710",
         }}>
             <div style={{
-                marginBottom: "5px",
+                paddingBottom: 10,
                 textAlign: "center",
                 width: "100%",
                 paddingTop: "20px",
@@ -149,7 +149,8 @@ export const CreateReferalCode = (props = {}) => {
                 fontWeight: "bolder",
                 color: "#cdd4da",
                 textShadow: "2px 2px 2px #101314",
-                backgroundImage: "linear-gradient(black, #030507AA)"
+                backgroundImage: "linear-gradient(#131514, #000304EE )",
+
 
             }}>
                 Referal Codes

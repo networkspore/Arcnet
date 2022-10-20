@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 
 import useZust from "../hooks/useZust";
 
-import styles from './css/welcome.module.css';
+import styles from './css/home.module.css';
 import sha256 from "crypto-js/sha256";
 
 
@@ -13,8 +13,8 @@ import sha256 from "crypto-js/sha256";
 const NewUserPage = (props = {}) => {
   
 
-    const defaultColor = "#79680d";
-    const enableColor = "#ffe51c";
+    const defaultColor = "#77777750";
+    const enableColor = "#FFFFFF";
     
     const newEmail = props.newEmail;
     const refID = props.refCode;
@@ -61,15 +61,9 @@ const NewUserPage = (props = {}) => {
 
     }
 
-    useEffect(() => {
-        if(newEmail.length < 6){
-            navigate("/welcome");
-        } 
 
-       
-    }, [])
 
-    function handleSubmit2(e) {
+    function handleSubmit(e) {
         e.preventDefault();
         setEnabled(false);
         var shapass = sha256(pass).toString();
@@ -81,53 +75,168 @@ const NewUserPage = (props = {}) => {
     }
 
 return (
-    <div style={{ width: 850, height: 920,  position: "fixed", left: "50%", top: "50%", transform: "translate(-50%,-50%)" }}>
+    <div style={{
+        width: 850,
+        backgroundImage: "linear-gradient(to bottom, #10131450,#00030450,#10131450)",
+        position: "fixed",
+        display: "flex",
+        left: "50%", top: "50%", transform: "translate(-50%,-50%)",
+        boxShadow: "0 0 10px #ffffff10, 0 0 20px #ffffff10, inset 0 0 30px #77777710",
+        alignItems: "center", justifyContent: "center", flexDirection: "column",
+        paddingTop: "50px",
+    }}>
+        <div style={{ height: 2, width: "100%", backgroundImage: "linear-gradient(to right, #000304DD, #77777755, #000304DD)", paddingBottom: 5, marginBottom: 5 }}>&nbsp;</div>
+        <div style={{
 
-        <div style={{ width: 850, height: 920, boxShadow: "2px 2px 5px #101010", backgroundImage: "linear-gradient(top to bottom, #33333345,#10131450)" ,  textAlign: "center", position: "absolute", zIndex: 2 }}>
-    
-            <br /><br />
-            <div className={styles.heading}> FROM THE SHADOWS... </div>
-            <div style={{ position: "initial", textAlign: "center"}}>
+            fontSize: "50px",
+            textAlign: "center",
+            fontFamily: "Webpapyrus",
+            textShadow: "0 0 10px #ffffff40, 0 0 20px #ffffff60",
+            fontWeight: "bolder",
+            color: "#cdd4da",
+
+
+        }} > Welcome</div>
+        <div style={{ height: 2, width: "100%", backgroundImage: "linear-gradient(to right, #000304DD, #77777755, #000304DD)", paddingBottom: 5, marginBottom: 5 }}>&nbsp;</div>
+  
               
-        <div style={{ paddingTop: '40px' }} class={styles.p3}>How will you be known?</div>
-        <div style={{ paddingTop: '60px' }}><img src="Images/down.png" /></div>
+  
         <div style={{ paddingTop: '60px' }}>
-            <form onSubmit={event => handleSubmit2(event)}>
-                <div>
-                    <input name="name" class={styles.blkInput} placeholder="Enter user name" autoFocus onChange={event => handleChange(event)} />
+            <div style={{
+                
+                fontSize: "20px",
+                textAlign: "center",
+                fontFamily: "Webpapyrus",
+           
+                fontWeight: "bold",
+                color: "#99999a",
+               
+
+            }} >Account Information</div>
+            <div style={{ height: 5, width: "100%", backgroundImage: "linear-gradient(to right, #000304DD, #77777755, #000304DD)", }}>&nbsp;</div>
+           
+            <div>
+            <div style={{height:50}}></div>
+            <div style={{   
+
+                display: "flex",
+
+                justifyContent: "center",
+                backgroundImage: "linear-gradient(to right, #00030430, #77777720, #00030430)",
+                paddingBottom: 5,
+                paddingTop: 5,
+                paddingLeft: 20,
+                paddingRight: 20
+            }}>
+
+                    <input name="name" placeholder="User name" autoFocus onChange={event => handleChange(event)} 
+                        style={{
+                            outline: 0,
+                            border: 0,
+                            color: "white",
+                            width: 600, textAlign: "center", fontSize: "20px", backgroundColor: "black", fontFamily: "WebPapyrus"
+
+                        }}
+                    />
                     <div style={{display:nameAvailable ? "none" : "block"}} className={styles.disclaimer}>Name not available</div>
                 </div>
-                <div style={{ paddingTop: '60px' }}>
+                <div style={{height:60}}></div>
+            <div style={{
 
-                    <input name="pass" class={styles.blkPassInput} placeholder="Enter password" type="password" onChange={event => handleChange(event)} />
+                display: "flex",
+
+                justifyContent: "center",
+                backgroundImage: "linear-gradient(to right, #00030430, #77777720, #00030430)",
+                paddingBottom: 5,
+                paddingTop: 5,
+                paddingLeft: 20,
+                paddingRight: 20
+            }}>
+
+                <input style={{
+                    outline: 0,
+                    border: 0,
+                    color: "white",
+                    width: 400, textAlign: "center", fontSize: "15px", backgroundColor: "black", fontFamily: "WebPapyrus"
+
+                }} name="pass" placeholder="Password" type="password" onChange={event => handleChange(event)} />
                         <div style={{ display: (pass.length < 8 && confirm.length > 1) ? "block" : "none"  }} className={styles.disclaimer}>Password must be at least 8 characters.</div>
                 </div>
+            <div style={{height:30}}></div>
+            <div style={{
 
-                <div style={{ paddingTop: '30px' }}>
-                    <input name="confirm" class={styles.blkPassInput} placeholder="Re-enter password" type="password" onChange={event => handleChange(event)} />
+                display: "flex",
+
+                justifyContent: "center",
+                backgroundImage: "linear-gradient(to right, #00030430, #77777720, #00030430)",
+                paddingBottom: 5,
+                paddingTop: 5,
+                paddingLeft: 20,
+                paddingRight: 20
+            }}>
+                <input name="confirm" style={{
+                    outline: 0,
+                    border: 0,
+                    color: "white",
+                    width: 400, textAlign: "center", fontSize: "15px", backgroundColor: "black", fontFamily: "WebPapyrus"
+
+                }} placeholder="Re-enter password" type="password" onChange={event => handleChange(event)} />
                         <div style={{ display: ((confirm.length > 7) && (confirm != pass)) ? "block" : "none"  }} className={styles.disclaimer}>Passwords must match</div>
                 </div>
+            </div>
 
-                <div style={{ paddingTop: '70px' }}>
-                    <input style={
-                        {
-                            color: (name.length > 2 && pass.length > 7 && confirm == pass && refID > 0) ? enableColor : defaultColor
-                        }}
-                        class={styles.blkSubmit} type="submit" value="CONFIRM"
-                        disabled={
-                            (enabled && name.length > 2 && pass.length > 7 && confirm == pass && refID > 0) ? false : true
-                        } />
-                    <div class={styles.disclaimer} style={{ paddingTop: '60px' }}>
-                       This is a private server.
-                    </div>
+            <div style={{ display: "flex", paddingTop: "20px", marginBottom: 30, alignItems: "center", justifyContent: "center", }} >
+
+                <div style={{
+                    textAlign: "center",
+                    cursor: "pointer",
+                    fontFamily: "WebPapyrus",
+                    fontSize: "18px",
+                    fontWeight: "bolder",
+                    width: 100,
+
+                    paddingLeft: "0px",
+                    paddingTop: "10px",
+                    paddingBottom: "10px",
+
+                }}
+                    className={styles.CancelButton}
+                    onClick={(e) => { navigate("/") }} >
+                    Cancel
                 </div>
-            </form>
+
+
+                <div style={{
+
+                    marginLeft: "10px", marginRight: "10px",
+                    height: "80px",
+                    width: "1px",
+                    backgroundImage: "linear-gradient(to bottom, #000304DD, #77777755, #000304DD)",
+                }}></div>
+                <div onClick={handleSubmit} style={{
+                    textAlign: "center",
+                    cursor: (name.length > 2 && pass.length > 7 && confirm == pass && refID > 0) ? "pointer" : "default",
+                    fontFamily: "WebPapyrus",
+                    fontSize: "18px",
+                    fontWeight: "bolder",
+                    width: 100,
+                    color: (name.length > 2 && pass.length > 7 && confirm == pass && refID > 0) ? enableColor : defaultColor,
+                    paddingLeft: "0px",
+                    paddingTop: "10px",
+                    paddingBottom: "10px",
+                }}
+                    class={(name.length > 2 && pass.length > 7 && confirm == pass && refID > 0) ? styles.OKButton : ""}
+
+                > Confirm </div>
+            </div>
+
+          
+  
 
         </div>
 
     </div>
-    </div>
-    </div>
+ 
 )
 }
 

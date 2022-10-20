@@ -44,7 +44,7 @@ export const HomePage = () => {
         
        <>
             
-            <div style={{ position: "fixed", backgroundColor: "rgba(10,13,14,.6)", width: 200, height: pageSize.height, left: 95, top: "0px" }}>
+            <div style={{ position: "fixed", boxShadow: "0 0 10px #ffffff10, 0 0 20px #ffffff10, inset 0 0 30px #77777710", backgroundColor: "rgba(10,13,14,.6)", width: 200, height: pageSize.height, left: 95, top: "0px" }}>
                 <div style={{
                     padding: "10px",
                     textAlign: "center",
@@ -127,17 +127,17 @@ export const HomePage = () => {
             </div>
        
             <div style={{ 
-                backgroundImage: "linear-gradient(to right, #10131422, #80808011)",
+                backgroundImage: "linear-gradient(to right,#00000010 5%, #10131470 10%, #80808000 100%)",
                 position: "fixed", 
-                width:50, 
-                left: 295 - 50, 
+                width:60, 
+                left: 235, 
                 bottom: "0px", 
                 fontFamily:"Webpapyrus",
-                borderTopLeftRadius: 20,
+                display: "flex", justifyContent:"center"
                  }}>
                 
 
-                    <NavLink to={"/"}  className={styles.menu__item} about={"Log-out"} onClick={onLogoutClick}>
+                    <NavLink style={{width:"100%"}} to={"/"}  className={styles.menu__item} about={"Log-out"} onClick={onLogoutClick}>
                             <div style={{height:"70px",display:"flex", justifyItems:"center", alignItems:"center"}}>
                                 <div>
                             <img style={{ filter: "invert(100%)" }} src="Images/icons/lock-open-outline.svg" width={30} height={30}  />

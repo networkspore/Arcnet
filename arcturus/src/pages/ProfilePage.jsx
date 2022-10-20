@@ -44,11 +44,11 @@ export const ProfilePage = (props = {}) =>{
                     width: 800, 
                     height: 500, 
                     left: (pageSize.width/2) - 400, 
-                    top: (pageSize.height/2) - 250
-                    
+                    top: (pageSize.height/2) - 250,
+                        boxShadow: "0 0 10px #ffffff10, 0 0 20px #ffffff10, inset 0 0 30px #77777710",
                     }}>
                     <div style={{
-                        marginBottom: "5px",
+                            paddingBottom: 10,
                         textAlign: "center",
                         width: "100%",
                         paddingTop: "20px",
@@ -57,12 +57,13 @@ export const ProfilePage = (props = {}) =>{
                         fontWeight: "bolder",
                         color: "#cdd4da",
                         textShadow: "2px 2px 2px #101314",
-                        backgroundImage: "linear-gradient(black, #030507AA)"
-
+                            backgroundImage: "linear-gradient(#131514, #000304EE )",
+                         
+                          
                     }}>
                         Profile
                     </div>
-                    <div style={{ paddingLeft: "15px", display: "flex", height:"430px" }}>
+                    <div style={{ paddingLeft: "15px", display: "flex", height:"430px",  }}>
 
                         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", height: "150px", width: 200, padding: "10px" }}>
                             <div style={{ cursor: "pointer" }} className={styles.glow}>
@@ -100,7 +101,7 @@ export const ProfilePage = (props = {}) =>{
                             
                             <div className={styles.CancelButton} style={{
                                 position: "relative",
-                                transform: "translate(0px,250px)", 
+                                transform: "translate(0px,240px)", 
                                 fontSize: "13px", 
                                 color: "#cdd4da",
                                 textShadow: "2px 2px 2px #101314",
@@ -111,7 +112,8 @@ export const ProfilePage = (props = {}) =>{
                             }}>Create Referal Code</div>
                         </div>
                         <div style={{ width: 2, height: "100%", backgroundImage: "linear-gradient(to bottom, #000304DD, #77777733, #000304DD)", }}>&nbsp;</div>
-                        <div style={{ display: "flex", alignItems: "center", flexDirection:"column", justifyContent:"center", width:"500px", backgroundColor:"#33333322" }}>
+                        <div style={{ display: "flex", alignItems: "center", flexDirection:"column", justifyContent:"center", width:530 }}>
+                                <div style={{  width: "100%", flex: 1, backgroundColor: "#33333322", display: "flex", alignItems: "center", flexDirection: "column", justifyContent: "center", }}>
                             <div style={{width:"300px",
                                 fontFamily:"Webrockwell",
                                 color: "#cdd4da",
@@ -147,19 +149,28 @@ export const ProfilePage = (props = {}) =>{
                             </div>
                                 <div style={{ height: "20px" }}></div>
                             </div>
-                            <div style={{ 
-                                justifyContent: "center", 
-                                width: "500px", 
-                                paddingTop:"30px",
-                                display: "flex", 
-                                alignItems:"center" }}>
+                                </div>
+                                <div style={{
+                                    justifyContent: "center",
+                            
+                                    paddingTop: "10px",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    width:"100%"
+                                }}>
+                                    <div  className={styles.CancelButton} onClick={onCancelClick}>Cancel</div>
+                                   
+                                    <div style={{
 
-                                <div className={styles.OKButton} onClick={onOKclick} >OK</div>
-
-                                <div className={styles.CancelButton} onClick={onCancelClick}>Cancel</div>
-                            </div>
+                                        marginLeft: "20px", marginRight: "20px",
+                                        height: "50px",
+                                        width: "1px",
+                                        backgroundImage: "linear-gradient(to bottom, #000304DD, #77777755, #000304DD)",
+                                    }}></div>
+                                    <div  className={styles.OKButton} onClick={onOKclick} >OK</div>
+                                </div>
                         </div>
-                       
+                           
                     </div>
                 </div>
                 }

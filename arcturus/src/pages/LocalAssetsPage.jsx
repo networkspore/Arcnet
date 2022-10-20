@@ -224,31 +224,32 @@ export const LocalAssetsPage = () => {
     return (
         
        <>
-  <div id='AssetsPage' style={{
-            position: "fixed",
-            backgroundColor: "rgba(0,3,4,.95)",
-            width: pageSize.width - 285,
-            height: pageSize.height,
-            left: 285,
-            top: 0,
-            display:"flex",
-            flexDirection:"column"
-        }}>
-            <div style={{
-                paddingBottom: "10px",
-                textAlign: "center",
-                width: "100%",
-                paddingTop: "18px",
-                fontFamily: "WebRockwell",
-                fontSize: "18px",
-                fontWeight: "bolder",
-                color: "#cdd4da",
-                textShadow: "2px 2px 2px #101314",
-                backgroundImage: "linear-gradient(#22222250,#030507)"
-
+            <div id='AssetsPage' style={{
+                position: "fixed",
+                backgroundColor: "rgba(0,3,4,.95)",
+                width: pageSize.width - 285,
+                height: pageSize.height,
+                left: 285,
+                top: 0,
+                display: "flex",
+                flexDirection: "column",
+             
             }}>
-                Local Assets
-            </div>
+                <div style={{
+                    paddingBottom: "10px",
+                    textAlign: "center",
+                    width: "100%",
+                    paddingTop: "18px",
+                    fontFamily: "WebRockwell",
+                    fontSize: "18px",
+                    fontWeight: "bolder",
+                    color: "#cdd4da",
+                    textShadow: "2px 2px 2px #101314",
+                        backgroundImage: "linear-gradient(#131514, #000304EE )",
+
+                }}>
+                    Local Assets
+                </div>
                 <div style={{ 
                     display: "flex", 
                     height:"50px",

@@ -8,6 +8,7 @@ import LoginPage from "./pages/LoginPage"
 import WelcomePage from "./pages/WelcomePage";
 import { SearchPage } from "./pages/SearchPage";
 import { HomePage } from "./pages/HomePage";
+import { RecoverPasswordPage } from "./pages/RecoverPasswordPage";
 
 
 
@@ -55,13 +56,22 @@ const HomeMenu = ({ props}) => {
 
     useEffect(() => {
         const currentLocation = location.pathname;
-        if (currentLocation == '/login') {
-            setShowIndex(1)
+        
+        switch(currentLocation)
+        {
+            case '/login':
+                setShowIndex(1)
+                break;
+            case '/welcome':
+                setShowIndex(2)
+                break;
+                
+            case '/recoverpassword':
+                setShowIndex(5)
+                break;
         }
-        if(currentLocation == '/welcome') {
-            setShowIndex(2)
-        }
-
+        
+       
         if (currentLocation == '/') {
 
             if(connected){
@@ -72,23 +82,24 @@ const HomeMenu = ({ props}) => {
                 setShowMenu(false)
             }
 
-        }else{
-            if(currentLocation == '/search')
-            {
-                if(connected){
-                    if (!showMenu) setShowMenu(true)
-                     setShowIndex(3)
-                }else{
-                    setShowIndex(1)
-                  // navigate("/")
-                }
-               
-            }
-            if(currentLocation == '/home'){
-                setShowIndex(4)
-                if(!showMenu) setShowMenu(true)
-            }
         }
+
+        if(currentLocation == '/search')
+        {
+            if(connected){
+                if (!showMenu) setShowMenu(true)
+                    setShowIndex(3)
+            }else{
+                setShowIndex(1)
+                // navigate("/")
+            }
+            
+        }
+        if(currentLocation == '/home'){
+            setShowIndex(4)
+            if(!showMenu) setShowMenu(true)
+        }
+    
     }, [location,connected])
 
     useEffect(() => {
@@ -211,13 +222,14 @@ const HomeMenu = ({ props}) => {
         {showIndex == 2 && user.userID < 1 &&
             <WelcomePage />
         }
-        {
-            showIndex == 3 &&
+        {showIndex == 3 &&
             <SearchPage />
         }
-        {
-            showIndex == 4 &&
+        {showIndex == 4 &&
            <HomePage />
+        }
+        {showIndex == 5 &&
+            <RecoverPasswordPage />
         }
             
         </>
