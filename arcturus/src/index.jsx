@@ -9,9 +9,6 @@ import { Canvas} from '@react-three/fiber';
 
 import { CookiesProvider } from 'react-cookie';
 
-import LoginPage from "./pages/LoginPage";
-
-import WelcomePage from "./pages/WelcomePage";
 
 
 import {  Stars } from '@react-three/drei';
@@ -26,17 +23,13 @@ import Sizing from './dom/Sizing';
 import { MapSelector } from './pages/components/MapSelector';
 
 import  {CharacterSelection}  from './pages/components/CharacterSelection';
-import CampaignPage from './pages/CampaignPage';
-import CreateCampaignPage from './pages/CreateCampaignPage';
-import AdminPage from './pages/AdminPage';
-import FinalizeCampaign from './pages/FinalizeCampaign';
+
 import { PlaceableViewer } from './pages/components/PlaceableViewer';
 
 
-import HomeMenu from './pages/HomeMenu';
+import HomeMenu from './HomeMenu';
 
-import { SearchPage } from './pages/SearchPage';
-import { HomePage } from './pages/HomePage';
+
 import { LandingPage } from './LandingPage';
 
 
@@ -118,15 +111,7 @@ const App = () => {
                 <Routes>
                    
 
-                    {user.userID < 1 &&
-                        <>
-                     
-                            <Route path='/welcome' element={<WelcomePage />} />
-
-
-                        </>
-                    }
-               
+                
   
 
                     <Route path='*' element={ <LandingPage />} />

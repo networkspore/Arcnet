@@ -1,12 +1,13 @@
-import useZust from "../hooks/useZust";
+import useZust from "./hooks/useZust";
 import React, { useEffect, useState } from "react";
-import styles from './css/ContentMenu.module.css';
+import styles from './pages/css/ContentMenu.module.css';
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { ErgoDappConnector } from "ergo-dapp-connector";
 import produce from "immer";
-import LoginPage from "./LoginPage";
-import { SearchPage } from "./SearchPage";
-import { HomePage } from "./HomePage";
+import LoginPage from "./pages/LoginPage"
+import WelcomePage from "./pages/WelcomePage";
+import { SearchPage } from "./pages/SearchPage";
+import { HomePage } from "./pages/HomePage";
 
 
 
@@ -57,12 +58,15 @@ const HomeMenu = ({ props}) => {
         if (currentLocation == '/login') {
             setShowIndex(1)
         }
+        if(currentLocation == '/welcome') {
+            setShowIndex(2)
+        }
 
         if (currentLocation == '/') {
 
             if(connected){
                 if (!showMenu) setShowMenu(true)
-                setShowIndex(2)
+                setShowIndex(3)
             }else{
                 setShowIndex(1)
                 setShowMenu(false)
@@ -73,7 +77,7 @@ const HomeMenu = ({ props}) => {
             {
                 if(connected){
                     if (!showMenu) setShowMenu(true)
-                     setShowIndex(2)
+                     setShowIndex(3)
                 }else{
                     setShowIndex(1)
                   // navigate("/")
@@ -81,7 +85,7 @@ const HomeMenu = ({ props}) => {
                
             }
             if(currentLocation == '/home'){
-                setShowIndex(3)
+                setShowIndex(4)
                 if(!showMenu) setShowMenu(true)
             }
         }
@@ -185,7 +189,7 @@ const HomeMenu = ({ props}) => {
 
                             <NavLink className={location.pathname == "/createRealm" ? styles.menuActive : styles.menu__item} about="Create Realm"
                                 to={'/createRealm'}>
-                                <img src="Images/add.png" width={50} height={45} />
+                                <img src="Images/realm.svg" width={50} height={45} style={{filter:"invert(100%)"}}/>
                             </NavLink>
 
 
@@ -204,12 +208,15 @@ const HomeMenu = ({ props}) => {
         {showIndex == 1 &&
             <LoginPage />
         }
-        {
-            showIndex == 2 &&
-            <SearchPage />
+        {showIndex == 2 && user.userID < 1 &&
+            <WelcomePage />
         }
         {
             showIndex == 3 &&
+            <SearchPage />
+        }
+        {
+            showIndex == 4 &&
            <HomePage />
         }
             

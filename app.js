@@ -5,8 +5,8 @@ const mysqlx = require('@mysql/xdevapi');
 const fs = require('fs');
 const cryptojs = require('crypto-js');
 const util = require('util');
-const { homeURL, localURL, wwwURL, server, dbURL, dbPort, sqlCred, emailUser, emailPassword, authToken } = require('./httpVars');
-const { time } = require('console');
+const { homeURL, socketURL, wwwURL, server, dbURL, dbPort, sqlCred, emailUser, emailPassword, authToken } = require('./httpVars');
+
 
 
 const adminAddress = "noreply.ArcturusDnD@gmail.com";
@@ -14,7 +14,7 @@ const adminAddress = "noreply.ArcturusDnD@gmail.com";
 
 const io = require('socket.io')(server, {
     cors: {
-        origin: [homeURL, wwwURL ],
+        origin: [homeURL, wwwURL,socketURL ],
     },
     
 });

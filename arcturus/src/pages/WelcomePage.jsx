@@ -131,7 +131,7 @@ const WelcomePage = () => {
                 position: "fixed", 
                 display:"flex",
                 left: "50%", top: "50%", transform: "translate(-50%,-50%)", 
-                    boxShadow: "0 0 10px #ffffff20, 0 0 20px #ffffff10, inset 0 0 30px #77777740", 
+                    boxShadow: "0 0 10px #ffffff10, 0 0 20px #ffffff10, inset 0 0 30px #77777710", 
                 alignItems: "center",justifyContent: "center", flexDirection: "column"
             }}>
                 <div  style={{

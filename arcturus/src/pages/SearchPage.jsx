@@ -269,7 +269,12 @@ const endSearch = () => {
         <>
 
             <div style={{
-                width: 300, height: pageSize.height, backgroundImage:"linear-gradient(to bottom, #00000088,#10131488)", position: "fixed", padding: 0,  left:95, top: 0 }}>
+                width: 300, height: pageSize.height, 
+                backgroundImage:"linear-gradient(to bottom, #00000088,#10131488)", 
+                position: "fixed", 
+                padding: 0,  left:95, top: 0 ,
+                boxShadow: "0 0 10px #ffffff05, 0 0 20px #ffffff05", 
+                }}>
                 <div style={{
                
                     textAlign: "center",
@@ -285,13 +290,15 @@ const endSearch = () => {
                         <div style={{
 
                             textAlign: "center",
-                            fontFamily: "WebRockwell",
-                            fontSize: "15px",
+                            fontFamily: "Webpapyrus",
+                            fontSize: "16px",
                             fontWeight: "bolder",
                             color: "#cdd4da",
                             textShadow: "2px 2px 2px #101314",
-                            
-                        }} >Arcturus Network</div>
+                            display:"flex",
+                              justifyContent: "center",
+                              alignItems:"center",
+                        }} >Arcturus<div style={{fontSize:12, fontFammily:"Webrockwell"}}>RPG.io</div></div>
 
                     </div>
 

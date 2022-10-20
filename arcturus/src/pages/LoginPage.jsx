@@ -188,7 +188,7 @@ return (
        
 
         <div style={{ padding: "30px", width: "100%", 
-            boxShadow: "0 0 10px #ffffff20, 0 0 20px #ffffff10, inset 0 0 30px #77777740", 
+            boxShadow: "0 0 10px #ffffff10, 0 0 20px #ffffff10, inset 0 0 30px #77777710", 
             backgroundImage: "linear-gradient(to bottom,  #00030490,#13161780)", 
             textShadow: "2px 2px 2px black",  
             textAlign:"center", 
