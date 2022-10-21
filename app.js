@@ -195,6 +195,11 @@ io.on('connection', (socket) =>{
                     returnID(results);
                 })
             });
+            socket.on("sendRecoveryEmail", (email,callback)=>{
+                sendRecoveryEmail(email, (sent) =>{
+                    callback(sent)
+                })
+            })
         }else{
             checkUser(socket.handshake.auth.user, ( success, loginUser) => {
                 
@@ -6163,48 +6168,6 @@ function createUser(user, callback) {
 
 }
 
-function addIdb(userID, type, callback)
-{
-    
-    console.log("new idb..")
-
-    if(typeof(userID) == "number"){
-
-        const idbType = mysql.escape(type);
-        const idbName = mysql.escape( cryptojs.MD5(String(new Date().getTime())))
-
-        if (!util.types.isPromise(mySession)) {
-            mySession = mysqlx.getSession(sqlCredentials)
-        }
-
-
-
-        mySession.then((session) => {
-            var arcDB = session.getSchema('arcturus');
-            var idb = arcDB.getTable("idb");
-            var userIdb = arcDB.getTable("userIdb");
-
-            session.startTransaction();
-            try{
-                var res = idb.insert(['idbName', 'idbType']).values([idbName, idbType]).execute();
-                const idbID = res.getAutoIncrementValue();
-
-                userIdb.insert(['userID', 'idbID']).values([userID, idbID]).execute();
-                
-                session.commit();
-
-                callback(true, { id: idbID, name: idbName })
-            }catch{
-                session.rollback();
-                callback(false, null);
-            }
-        })
-    }else{
-        console.log("userID for idb is not a number")
-        callback(false, null)
-    }
-}
-
 function formatedNow(now = new Date()) {
 
     const year = now.getUTCFullYear();
@@ -6268,20 +6231,18 @@ const createRefCode = (user,code, callback) => {
     })
 }
 
-function emailPassReset(user = {userName:"", userPass: ""},callback)
+function emailPassReset(emailAddress, userCode, callback)
 {
     
 
-    var emailHtml = user.userName +",<br>"
-    emailHtml += "<p>Your Password has been reset.</p>";
-    emailHtml += "<p>Please use the following tempoary password in order to log into your account:</p><br>";
-    emailHtml += "<h2>" + user.userPass + "</h2>";
-    emailHtml += "<br><p>Please update your password immediately after logging into your account.</p";
+    var emailHtml = "<h3>Password Recovery</h3><p></p>";
+      emailHtml += "<p>Code: <h4> " + userCode + "</h4></p>";
+    emailHtml += "<br>If you have not requested this please reply to this email.";
     emailHtml += "<br><p>Regards</p><br>";
     emailHtml += "<p>Arcturus RPG</p>";
 
 
-    email(emailAddress,"Arcturus RPG: Temporary Password",emailHtml,callback);
+    email(emailAddress,"Arcturus RPG: Password Recovery Code",emailHtml,callback);
 
 
 }
@@ -6537,4 +6498,46 @@ LOWER( " + name_email + ") OR LOWER(userEmail) = LOWER(" + name_email + ")) AND 
         console.log(reason);
         callback(false, null)
     })
+}
+
+const sendRecoveryEmail = (email, callback) => {
+    var date = new Date().toString();
+    var veriCode = cryptojs.SHA256(date).toString();
+
+    emailPassReset(email, veriCode, (callback)=>{
+
+    })
+    /*
+    if (!util.types.isPromise(mySession)) {
+        mySession = mysqlx.getSession(sqlCredentials)
+    }
+
+    mySession.then((session) => {
+
+        var arcDB = session.getSchema('arcturus');
+        var userTable = arcDB.getTable("user");
+
+
+        session.startTransaction();
+        try {
+         
+            var res = userTable.insert(['userName']).values([]).execute();
+            res.then((value) => {
+                var id = value.getAutoIncrementValue();
+
+                callback({ create: true, msg: id + "created" })
+            }).catch((error) => {
+                console.log(error)
+            })
+
+            session.commit();
+
+
+        } catch (error) {
+            console.log(error)
+            session.rollback();
+            callback({ create: false, msg: "Rolled back" });
+        }
+    })
+*/
 }

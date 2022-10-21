@@ -227,9 +227,9 @@ export const LocalAssetsPage = () => {
             <div id='AssetsPage' style={{
                 position: "fixed",
                 backgroundColor: "rgba(0,3,4,.95)",
-                width: pageSize.width - 285,
+                width: pageSize.width - 385,
                 height: pageSize.height,
-                left: 285,
+                left: 385,
                 top: 0,
                 display: "flex",
                 flexDirection: "column",

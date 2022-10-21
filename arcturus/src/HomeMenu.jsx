@@ -171,6 +171,23 @@ const HomeMenu = ({ props}) => {
                 </div>
             </div>
 
+            
+       
+        {showIndex == 1 &&
+            <LoginPage />
+        }
+        {showIndex == 2 && user.userID < 1 &&
+            <WelcomePage />
+        }
+        {showIndex == 3 &&
+            <SearchPage />
+        }
+        {showIndex == 4 &&
+           <HomePage />
+        }
+        {showIndex == 5 &&
+            <RecoverPasswordPage />
+        }
             {(connected && showMenu) &&
                 <div style={{ position: "fixed", top: 0, left: 0, height: pageSize.height, width: 85, backgroundImage: "linear-gradient(to bottom, #00000088,#20232588)" }}>
                     <div style={{ display: "flex", flexDirection: "column", height: pageSize.height, fontFamily: "WebPapyrus" }}>
@@ -181,7 +198,7 @@ const HomeMenu = ({ props}) => {
                                     <NavLink className={location.pathname == "/search" ? styles.menuActive : styles.menu__item} about="Arcturus Network" to={'/search'}>
                                         <img src="Images/logo.png" width={50} height={50} />
                                     </NavLink>
-                               
+
                                 </>
                             }
 
@@ -215,23 +232,6 @@ const HomeMenu = ({ props}) => {
                 </div>
 
             }
-       
-        {showIndex == 1 &&
-            <LoginPage />
-        }
-        {showIndex == 2 && user.userID < 1 &&
-            <WelcomePage />
-        }
-        {showIndex == 3 &&
-            <SearchPage />
-        }
-        {showIndex == 4 &&
-           <HomePage />
-        }
-        {showIndex == 5 &&
-            <RecoverPasswordPage />
-        }
-            
         </>
     )
     

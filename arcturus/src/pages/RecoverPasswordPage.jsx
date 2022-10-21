@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 import { useNavigate } from 'react-router-dom';
 
@@ -18,11 +18,11 @@ export const RecoverPasswordPage = (props = {}) => {
 
 
     const socket = useZust((state) => state.socket)
-    const setSocket = useZust((state) => state.setSocket)
+ 
 
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
-    const [emailCode, setEmailCode] = useState(false);
+    const [emailCode, setEmailCode] = useState("");
     
 
     const [pass, setPass] = useState("");
@@ -33,17 +33,15 @@ export const RecoverPasswordPage = (props = {}) => {
 
     const [attempts, setAttempts] = useState(0)
 
+    const refEmailCodeInput = useRef()
+
     useEffect(()=>{
-        if(socket == null){
+        if(socket == null)
+        {
             navigate("/")
-        }else{
-            socket.off("disconnect")
-            socket.on("disconnect",(value)=>{
-                setSocket(null)
-                navigate("/")
-            })
-        }   
+        }
     },[])
+
 
     function handleChange(e) {
         const { name, value } = e.target;
@@ -128,6 +126,30 @@ export const RecoverPasswordPage = (props = {}) => {
 
     }
 
+    const [emailSent, setEmailSent] = useState(false) 
+
+    function onSendEmailCode(event) {
+        event.preventDefault();
+
+        if(!emailSent)
+        {
+            setEmailSent(true)
+            if(email.length > 6){
+                socket.emit("sendRecoveryEmail", email, (callback)=>{
+                    if(callback.success){
+                        refEmailCodeInput.value.placeholder = "Place the code sent to your email here."
+                        
+                    }else{
+                        setEmailSent(false);
+                        alert( "Unable to send code. " + callback.msg)
+                    }
+                })
+            }else{
+                alert("Please enter an email address.")
+            }
+        }
+    }
+
     return (
         <div style={{
             width: 850,
@@ -142,7 +164,7 @@ export const RecoverPasswordPage = (props = {}) => {
             <div style={{ height: 2, width: "100%", backgroundImage: "linear-gradient(to right, #000304DD, #77777755, #000304DD)", paddingBottom: 5, marginBottom: 5 }}>&nbsp;</div>
             <div style={{
 
-                fontSize: "30px",
+                fontSize: "40px",
                 textAlign: "center",
                 fontFamily: "Webpapyrus",
                 textShadow: "0 0 10px #ffffff40, 0 0 20px #ffffff60",
@@ -150,7 +172,7 @@ export const RecoverPasswordPage = (props = {}) => {
                 color: "#cdd4da",
 
 
-            }} > Lost Password</div>
+            }} >Password &nbsp; Recovery</div>
             <div style={{ height: 2, width: "100%", backgroundImage: "linear-gradient(to right, #000304DD, #77777755, #000304DD)", paddingBottom: 5, marginBottom: 5 }}>&nbsp;</div>
 
 
@@ -166,11 +188,11 @@ export const RecoverPasswordPage = (props = {}) => {
                     color: "#99999a",
 
 
-                }} >Recovery Information</div>
+                }} >Recovery &nbsp; Information</div>
                 <div style={{ height: 5, width: "100%", backgroundImage: "linear-gradient(to right, #000304DD, #77777755, #000304DD)", }}>&nbsp;</div>
 
                 <div>
-                    <div style={{ height: 20 }}></div>
+                    <div style={{ height: 30 }}></div>
                     <div style={{
                         alignItems: "center", justifyContent: "center",
                         display: "flex",
@@ -187,11 +209,11 @@ export const RecoverPasswordPage = (props = {}) => {
                             if (e.code == "Enter") {
                                 handleSubmit(e)
                             }
-                        }} placeholder="email@somewhere.com" style={{
+                        }} placeholder="Enter your email here" style={{
                             outline: 0,
                             border: 0,
                             color: "white",
-                            width: 600, textAlign: "center", fontSize: "30px", backgroundColor: "black", fontFamily: "WebPapyrus"
+                            width: 600, textAlign: "center", fontSize: "15px", backgroundColor: "black", fontFamily: "WebPapyrus"
 
                         }} name="email" type="email" onChange={event => handleChange(event)} />
 
@@ -209,7 +231,7 @@ export const RecoverPasswordPage = (props = {}) => {
                             paddingRight: 20
                         }}>
 
-                            <input onKeyUp={(e) => {
+                            <input onClick={onSendEmailCode} ref={refEmailCodeInput} onKeyUp={(e) => {
                                 if (e.code == "Enter") {
                                     handleSubmit(e)
                                 }
@@ -217,9 +239,9 @@ export const RecoverPasswordPage = (props = {}) => {
                                 outline: 0,
                                 border: 0,
                                 color: "white",
-                                width: 600, textAlign: "center", fontSize: "30px", backgroundColor: "black", fontFamily: "WebPapyrus"
+                                width: 600, textAlign: "center", fontSize: "15px", backgroundColor: "black", fontFamily: "WebPapyrus"
 
-                            }} placeholder="email code" type="input"  onChange={event => handleChange(event)} />
+                            }} placeholder="Click to send code" type="input"  onChange={event => handleChange(event)} />
                         </div>
 
                     </div>
@@ -271,6 +293,7 @@ export const RecoverPasswordPage = (props = {}) => {
                     }
                     
                 </div>
+                <div>
                 <div style={{ display: "flex", paddingTop: "20px", marginBottom: 30, alignItems: "center", justifyContent: "center", }} >
 
                     <div style={{
@@ -291,8 +314,8 @@ export const RecoverPasswordPage = (props = {}) => {
                         Cancel
                     </div>
 
-                    {emailCode != ""}
-                    <div>
+                   
+                
                     <div style={{
 
                         marginLeft: "10px", marginRight: "10px",
@@ -302,23 +325,21 @@ export const RecoverPasswordPage = (props = {}) => {
                     }}></div>
                     <div onClick={handleSubmit} style={{
                         textAlign: "center",
-                        cursor: (name.length > 2 && pass.length > 7 && confirm == pass && refID > 0) ? "pointer" : "default",
+                        cursor: (name.length > 2 && pass.length > 7 && confirm == pass) ? "pointer" : "default",
                         fontFamily: "WebPapyrus",
                         fontSize: "18px",
                         fontWeight: "bolder",
                         width: 100,
-                        color: (name.length > 2 && pass.length > 7 && confirm == pass && refID > 0) ? enableColor : defaultColor,
+                        color: (name.length > 2 && pass.length > 7 && confirm == pass) ? enableColor : defaultColor,
                         paddingLeft: "0px",
-                        paddingTop: "10px",
-                        paddingBottom: "10px",
+                      
                     }}
-                        class={(name.length > 2 && pass.length > 7 && confirm == pass && refID > 0) ? styles.OKButton : ""}
+                        class={(name.length > 2 && pass.length > 7 && confirm == pass) ? styles.OKButton : ""}
 
                     > Confirm </div>
 
                     </div>
-
-                </div>
+              </div>
 
 
 

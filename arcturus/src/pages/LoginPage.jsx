@@ -196,7 +196,7 @@ return (
         flexDirection:"column",
         alignItems:"center",
         paddingLeft:60,
-        paddingRight:60,
+        paddingRight:30,
         paddingBottom: 30,
     }}
     >
@@ -275,10 +275,11 @@ return (
                         fontSize: "25px",
                         fontWeight: "bolder",
                         width: 100,
-                        color: (data.loginName.length > 2 && data.loginPass.length > 7) || (disable) ? "white" : "#777777",
+                        color: (data.loginName.length > 2 && data.loginPass.length > 7) || (disable) ? "white" : "#77777750",
                         
                         paddingTop: "10px",
                         paddingBottom: "10px",
+                        transform:"translate(5px, 20px)"
                     }}
                         className={(data.loginName.length > 2 && data.loginPass.length > 7) || (disable) ? styles.OKButton : ""}
 
