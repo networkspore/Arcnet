@@ -26,7 +26,7 @@ New Realm will utilize P2P and chrome's File System Acess (with async/await) - n
 
 HomeMenu handles routing based on the browser location, rather than using the built in 'Routes'.
 
-Browser location can now be parsed allowing for more control. <Routes> seems clunky.
+Browser location can now be parsed allowing for more control.
 
 App.js
 -Contains many database functions for use in the campaign, these will eventually be pruned.
