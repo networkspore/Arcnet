@@ -78,7 +78,7 @@ export const RecoverPasswordPage = (props = {}) => {
         }
 
         if (name == "emailCode") {
-            if (value.length > 7) {
+            if (value.length > 5) {
                 setEmailCode(value)
             } else {
                 setEmailCode("")
@@ -93,23 +93,23 @@ export const RecoverPasswordPage = (props = {}) => {
 
 
     function handleSubmit(e) {
-        e.preventDefault();
-        setEnabled(false);
-        
+       
+     
         if(attempts > 4)
         {
             alert("Error: Your password could not be updated.")
             navigate("/")
         }else{
-            if (pass == confirm && pass != "" && confirm != "")
+            if ( pass == confirm && pass != "" )
             {
-                if (emailCode != "" && email != "" && name != "")
+                if (emailCode != "" )
                 {
                     var shapass = sha256(pass).toString();
 
-                    socket.emit("updateUserPassword", { userName: name, userEmail:email, emailCode: emailCode, newPass: shapass }, (callback) => {
-                        if(callback)
+                    socket.emit("updateUserPassword", { email:email, code: emailCode, password: shapass }, (callback) => {
+                        if(callback.success)
                         {
+                            navigate("/")
                             alert("Your password has been updated.")
                         }else{
                             alert("The information you have provided does not match our records.")
@@ -117,7 +117,11 @@ export const RecoverPasswordPage = (props = {}) => {
                         }
                     })
 
+                }else{
+                    alert("Recovery code required.")
                 }
+            }else{
+                alert("Passwords do not match")
             }
         }
         
@@ -127,24 +131,27 @@ export const RecoverPasswordPage = (props = {}) => {
     }
 
     const [emailSent, setEmailSent] = useState(false) 
-
+   
     function onSendEmailCode(event) {
         event.preventDefault();
 
         if(!emailSent)
         {
-            setEmailSent(true)
+          
             if(email.length > 6){
+                setEmailSent(true)
                 socket.emit("sendRecoveryEmail", email, (callback)=>{
                     if(callback.success){
-                        refEmailCodeInput.value.placeholder = "Place the code sent to your email here."
+                        setEmailSent(true)
+                  
                         
                     }else{
                         setEmailSent(false);
-                        alert( "Unable to send code. " + callback.msg)
+                        alert( "Unable to send code. " + callback.error)
                     }
                 })
             }else{
+                setEmailSent(false)
                 alert("Please enter an email address.")
             }
         }
@@ -213,7 +220,7 @@ export const RecoverPasswordPage = (props = {}) => {
                             outline: 0,
                             border: 0,
                             color: "white",
-                            width: 600, textAlign: "center", fontSize: "15px", backgroundColor: "black", fontFamily: "WebPapyrus"
+                            width: 600, textAlign: "center", fontSize: "18px", backgroundColor: "black", fontFamily: "WebPapyrus"
 
                         }} name="email" type="email" onChange={event => handleChange(event)} />
 
@@ -228,20 +235,27 @@ export const RecoverPasswordPage = (props = {}) => {
                             paddingBottom: 5,
                             paddingTop: 5,
                             paddingLeft: 20,
-                            paddingRight: 20
+                            paddingRight: 20,
+                            transform:"translate(27px,0px)"
                         }}>
-
-                            <input onClick={onSendEmailCode} ref={refEmailCodeInput} onKeyUp={(e) => {
+                            <div>
+                            <input ref={refEmailCodeInput} onKeyUp={(e) => {
                                 if (e.code == "Enter") {
-                                    handleSubmit(e)
+                                    if(emailSent){
+                                        handleSubmit(e)
+                                    }
                                 }
                             }} name="emailCode" style={{
                                 outline: 0,
                                 border: 0,
                                 color: "white",
-                                width: 600, textAlign: "center", fontSize: "15px", backgroundColor: "black", fontFamily: "WebPapyrus"
+                                width: 550, textAlign: "center", fontSize: "18px", backgroundColor: "black", fontFamily: "WebPapyrus"
 
-                            }} placeholder="Click to send code" type="input"  onChange={event => handleChange(event)} />
+                            }} placeholder={emailSent ? "Place code here":"Send code"} type="input"  onChange={event => handleChange(event)} />
+                            </div>
+                            <div>
+                                <div style={{paddingTop:5, paddingBottom:5}} onClick={(e) => { if (!emailSent) onSendEmailCode(e) }} className={emailSent ? styles.CancelButton : styles.OKButton}>{emailSent ? "Sent" : "Send"}</div>
+                            </div>
                         </div>
 
                     </div>
@@ -325,16 +339,16 @@ export const RecoverPasswordPage = (props = {}) => {
                     }}></div>
                     <div onClick={handleSubmit} style={{
                         textAlign: "center",
-                        cursor: (name.length > 2 && pass.length > 7 && confirm == pass) ? "pointer" : "default",
+                        cursor: (pass.length > 7 && confirm == pass) ? "pointer" : "default",
                         fontFamily: "WebPapyrus",
                         fontSize: "18px",
                         fontWeight: "bolder",
                         width: 100,
-                        color: (name.length > 2 && pass.length > 7 && confirm == pass) ? enableColor : defaultColor,
+                        color: ( pass.length > 7 && confirm == pass) ? enableColor : defaultColor,
                         paddingLeft: "0px",
                       
                     }}
-                        class={(name.length > 2 && pass.length > 7 && confirm == pass) ? styles.OKButton : ""}
+                        class={( pass.length > 7 && confirm == pass) ? styles.OKButton : ""}
 
                     > Confirm </div>
 

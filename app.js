@@ -9,7 +9,7 @@ const { homeURL, socketURL, wwwURL, server, dbURL, dbPort, sqlCred, emailUser, e
 
 
 
-const adminAddress = "noreply.ArcturusDnD@gmail.com";
+const adminAddress = emailUser;
 
 
 const io = require('socket.io')(server, {
@@ -198,6 +198,11 @@ io.on('connection', (socket) =>{
             socket.on("sendRecoveryEmail", (email,callback)=>{
                 sendRecoveryEmail(email, (sent) =>{
                     callback(sent)
+                })
+            })
+            socket.on("updateUserPassword", (info, callback)=>{
+                updateUserPassword(info, (result)=>{
+                    callback(result)
                 })
             })
         }else{
@@ -6224,25 +6229,24 @@ const createRefCode = (user,code, callback) => {
             session.rollback();
             callback(false, null);
         }
-        
+        emailpassrest
     }).catch((error)=>{
         console.log(error)
         callback(false, null);
     })
 }
 
-function emailPassReset(emailAddress, userCode, callback)
+function emailPassReset(name, emailAddress, userCode, callback)
 {
     
 
-    var emailHtml = "<h3>Password Recovery</h3><p></p>";
-      emailHtml += "<p>Code: <h4> " + userCode + "</h4></p>";
-    emailHtml += "<br>If you have not requested this please reply to this email.";
-    emailHtml += "<br><p>Regards</p><br>";
-    emailHtml += "<p>Arcturus RPG</p>";
+    var emailHtml = name +",<br>"; 
+    emailHtml += "<br>Please use the following code: " + userCode;
+    emailHtml += "<p>Regards</p>";
+    emailHtml += "<p>ArcturusRPG.io</p>";
 
 
-    email(emailAddress,"Arcturus RPG: Password Recovery Code",emailHtml,callback);
+    email(emailAddress,"Arcturus.io Code",emailHtml,callback);
 
 
 }
@@ -6254,7 +6258,7 @@ function emailValidateCode(userName ="",emailAddress ="",veriCode ="",callback){
     emailHtml += "<p>Please click the following link to verify your email address.:</p><br>";
     emailHtml += "<h3><a href='" +homeURL + "/validate?email="+ emailAddress +",validateEmail=" + veriCode + "'>Verify Email</a></h3>";
     emailHtml += "<br><p>A verified email address will be required in order to recover your account if you lose your password.</p>"
-    emailHtml += "<br><p>Regards</p>";
+    emailHtml += "<p>Regards</p>";
     emailHtml += "<p>Arcturus RPG</p>";
     email(emailAddress, "Arcturus RPG: Verify Email", emailHtml, callback);
  
@@ -6268,7 +6272,7 @@ function email(emailAddress, subject, emailHtml, callback)
 
 
     message = {
-        from: adminAddress,
+        from: emailUser,
         to: emailAddress,
         subject: subject,
         html: emailHtml
@@ -6282,11 +6286,10 @@ function email(emailAddress, subject, emailHtml, callback)
             console.log(info);
         }
 
-        if(typeof callback === 'function')
-        {
+      
             
-            callback(err,info);
-        }
+        callback(err,info);
+        
     });
 
 
@@ -6502,16 +6505,8 @@ LOWER( " + name_email + ") OR LOWER(userEmail) = LOWER(" + name_email + ")) AND 
 
 const sendRecoveryEmail = (email, callback) => {
     var date = new Date().toString();
-    var veriCode = cryptojs.SHA256(date).toString();
-
-    emailPassReset(email, veriCode, (callback)=>{
-
-    })
-    /*
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
+    var veriCode = cryptojs.SHA256(date).toString().slice(0,6);
+    
     mySession.then((session) => {
 
         var arcDB = session.getSchema('arcturus');
@@ -6520,24 +6515,84 @@ const sendRecoveryEmail = (email, callback) => {
 
         session.startTransaction();
         try {
-         
-            var res = userTable.insert(['userName']).values([]).execute();
+
+            var res = userTable.select(['userName','userID']).where("userEmail = :userEmail").bind("userEmail", email).execute();
             res.then((value) => {
-                var id = value.getAutoIncrementValue();
+                const row = value.fetchOne();
+                console.log(row)
+                const userName = row[0];
+                const userID = row[1];
 
-                callback({ create: true, msg: id + "created" })
-            }).catch((error) => {
-                console.log(error)
+                const modifiedString = formatedNow();
+            
+                userTable.update().set(
+                    'userRecoveryCode', veriCode
+                ).set(
+                    'userModified', modifiedString
+                ).where(
+                    "userID = :userID"
+                ).bind("userID", userID).execute().then((res)=>{
+                    if(res.getAffectedItemsCount() > 0){
+                        emailPassReset(userName, email, veriCode, (err, info) => {
+                            if (err) {
+                                throw("unable to send email")
+                            } else {
+                                callback({success:true})
+                            }
+                        })
+                    }else{
+                        throw("unable to update user")
+                    }
+                })
+
+                session.commit();
+           
             })
-
-            session.commit();
-
-
         } catch (error) {
             console.log(error)
             session.rollback();
-            callback({ create: false, msg: "Rolled back" });
+            callback({ success: false, msg: error });
         }
     })
-*/
+}
+
+const updateUserPassword = (info, callback) => {
+    console.log("update password")
+    console.log(info)
+    mySession.then((session) => {
+
+        var arcDB = session.getSchema('arcturus');
+        var userTable = arcDB.getTable("user");
+        const modifiedString = formatedNow();
+        const password = info.password;
+        const userEmail = info.email;
+        const code = info.code;
+
+        session.startTransaction();
+        try {
+            userTable.update().set(
+                'userRecoveryCode', ""
+            ).set(
+                'userPassword', password
+            ).set(
+                'userModified', modifiedString
+            ).where(
+                "userEmail = :userEmail AND userRecoveryCode = :code"
+            ).bind(
+                "userEmail", userEmail
+            ).bind(
+                "code", code
+            ).execute().then((result)=>{
+                const affected = result.getAffectedItemsCount()
+                if(affected > 0)
+                {
+                    callback({success:true})
+                }
+            })
+        } catch (error) {
+            console.log(error)
+            session.rollback();
+            callback({ success: false, msg: error });
+        }
+    })
 }
