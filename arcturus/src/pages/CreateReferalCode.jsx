@@ -48,7 +48,7 @@ export const CreateReferalCode = (props = {}) => {
             
         }
     }
-
+    const [copied, setCopied] = useState("")
     useEffect(()=>{
         if(availableCodes.length > 0)
         {
@@ -60,11 +60,11 @@ export const CreateReferalCode = (props = {}) => {
 
 
                 tmpCodes.push(
-                    <div style={{ display: "flex", width: "100%", marginLeft: "10px", height: "25px" }}>
+                    <div key={code} style={{ display: "flex", width: "100%", marginLeft: "10px", height: "25px" }}>
                         <div style={{ width: 90, color: "#777777" }}>{created}</div>
                         <div style={{ width: (275) }}>{code}</div>
-                        <div style={{ width: 60, fontSize: 12 }} className={styles.hoverWhite}>
-                            <div onClick={(e)=>{copyToClipboard(code)}} >(copy)</div>
+                        <div style={{ width: 60, fontSize: 12 }} className={copied == code ? styles.noResult : styles.hoverWhite}>
+                            <div onClick={(e)=>{copyToClipboard(code)}} >{copied == code? "copied" : "copy"}</div>
                         </div>
                     </div>
                 )
@@ -76,7 +76,8 @@ export const CreateReferalCode = (props = {}) => {
     },[availableCodes])
 
     function copyToClipboard(value){
-        alert("Copied: " + value)
+  
+        setCopied(value)
         navigator.clipboard.writeText(value);
     }
 

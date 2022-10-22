@@ -236,8 +236,9 @@ export const RecoverPasswordPage = (props = {}) => {
                             paddingTop: 5,
                             paddingLeft: 20,
                             paddingRight: 20,
-                            transform:"translate(27px,0px)"
+                          
                         }}>
+                            <div ><div style={{ width: 60 }}></div></div>
                             <div>
                             <input ref={refEmailCodeInput} onKeyUp={(e) => {
                                 if (e.code == "Enter") {
@@ -249,18 +250,18 @@ export const RecoverPasswordPage = (props = {}) => {
                                 outline: 0,
                                 border: 0,
                                 color: "white",
-                                width: 550, textAlign: "center", fontSize: "18px", backgroundColor: "black", fontFamily: "WebPapyrus"
+                                width: 200, textAlign: "center", fontSize: "18px", backgroundColor: "black", fontFamily: "WebPapyrus"
 
                             }} placeholder={emailSent ? "Place code here":"Send code"} type="input"  onChange={event => handleChange(event)} />
                             </div>
                             <div>
-                                <div style={{paddingTop:5, paddingBottom:5}} onClick={(e) => { if (!emailSent) onSendEmailCode(e) }} className={emailSent ? styles.CancelButton : styles.OKButton}>{emailSent ? "Sent" : "Send"}</div>
+                                <div style={{paddingTop:6, paddingBottom:4, paddingLeft:6, paddingRight:6}} onClick={(e) => { if (!emailSent) onSendEmailCode(e) }} className={emailSent ? styles.CancelButton : styles.OKButton}>{emailSent ? "Sent" : "Send"}</div>
                             </div>
                         </div>
 
                     </div>
                     {emailCode != "" &&
-                        <div>
+                        <div style={{paddingTop:20}}>
                             <div style={{
 
                                 display: "flex",
@@ -282,7 +283,7 @@ export const RecoverPasswordPage = (props = {}) => {
                                 }} name="pass" placeholder="Password" type="password" onChange={event => handleChange(event)} />
                                 <div style={{ display: (pass.length < 8 && confirm.length > 1) ? "block" : "none" }} className={styles.disclaimer}>Password must be at least 8 characters.</div>
                             </div>
-                            <div style={{ height: 30 }}></div>
+                            <div style={{ height: 20 }}></div>
                             <div style={{
 
                                 display: "flex",
@@ -301,11 +302,11 @@ export const RecoverPasswordPage = (props = {}) => {
                                     width: 400, textAlign: "center", fontSize: "15px", backgroundColor: "black", fontFamily: "WebPapyrus"
 
                                 }} placeholder="Re-enter password" type="password" onChange={event => handleChange(event)} />
-                                <div style={{ display: ((confirm.length > 7) && (confirm != pass)) ? "block" : "none" }} className={styles.disclaimer}>Passwords must match</div>
+                                
                             </div>
                         </div>
                     }
-                    
+                  
                 </div>
                 <div>
                 <div style={{ display: "flex", paddingTop: "20px", marginBottom: 30, alignItems: "center", justifyContent: "center", }} >

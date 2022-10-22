@@ -84,22 +84,12 @@ let transporter = nodemailer.createTransport({
 
 let sqlCredentials = sqlCred;
 
-
 var mySession = mysqlx.getSession(sqlCredentials);
 
 mySession.catch((reason) => {
     console.log(reason)
 })
 
-/*
-var commandQueue = [];
-
-const executeCommands = () =>{
-    var cmds = commandQueue;
-    commandQueue = [];
-
-    setTimeout(executeCommands, 100)
-}*/
 
 const pingAlive = () =>{
     if (!util.types.isPromise(mySession)) {
@@ -124,15 +114,6 @@ WHERE \
 
 pingAlive();
 
-//console.log(mySession.getSchema('arcturus'));
-
-
-//mySess.sql('select * from user');
-
-//results[0].userID
-
-
-//https.createServer(options,app).listen(443);
 
 io.on("connect_error", (err) => {
     console.log(`connect_error due to ${err.message}`);
@@ -6127,7 +6108,7 @@ function createUserOld(user,socketID, callback){
 
 function createUser(user, callback) {
     var date = new Date().toString();
-    var veriCode = cryptojs.SHA256(user.userEmail + date).toString();
+    var veriCode = cryptojs.SHA256(user.userEmail + date).toString().slice(0,8);
 
 
   
@@ -6148,10 +6129,26 @@ function createUser(user, callback) {
 
         session.startTransaction();
         try {
-            var res = userTable.insert(['userName', 'userPassword', "userEmail", 'refID', 'userCode', 'statusID']).values([user.userName, user.userPass, user.userEmail, user.userRefID, veriCode, 3 ]).execute();
+            var res = userTable.insert(
+                ['userName', 'userPassword', "userEmail", 'refID', 'userCode', 'statusID']
+                ).values(
+                    [user.userName, user.userPass, user.userEmail, user.userRefID, veriCode, 3 ]
+                ).execute();
               res.then((value) => {
                 var id = value.getAutoIncrementValue();
-
+                
+                const eHTML = "\
+<p>" + user.userName + ",</p>\
+<p>Your email verification code is: " + veriCode + "</p>\
+<p>Best Regards,</p>\
+<p>ArcturusRPG.io</p>"
+                email(user.userEmail,"Arcturus RPG", eHTML, (err, info)=>{
+                    if(err){
+                        console.log(err)
+                    }else{
+                        console.log("Email sent to: "+ user.userEmail)
+                    }
+                })
                 callback({ create: true, msg: id + "created" })
             }).catch((error)=>{
                 console.log(error)
@@ -6571,8 +6568,6 @@ const updateUserPassword = (info, callback) => {
         session.startTransaction();
         try {
             userTable.update().set(
-                'userRecoveryCode', ""
-            ).set(
                 'userPassword', password
             ).set(
                 'userModified', modifiedString
@@ -6587,6 +6582,8 @@ const updateUserPassword = (info, callback) => {
                 if(affected > 0)
                 {
                     callback({success:true})
+                }else{
+                    callback({success:false})
                 }
             })
         } catch (error) {

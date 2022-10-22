@@ -13,6 +13,7 @@ dist
 dist-ssr
 *.local
 
+vite.config.js
 
 back2
 arcturus/objects/
@@ -31,8 +32,11 @@ arcturus/node_modules/
 *.sw?
 *.crt
 *.key
+*.p7b
+*.ca-bundle
 yarn.lock
 package-lock.json
 httpVars.js
 httpVars.jsx
 node_modules
+arcturus/vite.config.js
