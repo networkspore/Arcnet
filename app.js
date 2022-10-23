@@ -192,6 +192,7 @@ io.on('connection', (socket) =>{
                 if(success)
                 {
                     user = loginUser;
+                    user["loggedIn"] = true;
                     console.log(user)
                     getContacts(user, (contacts) => {
                         getContactRequests(user, (requests => {
