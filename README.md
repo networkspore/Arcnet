@@ -14,7 +14,6 @@ require npm or yarn
 ----
 const app = require('express');
 const http = require('http');
-const fs = require('fs')
 
 
 const homeURL = "http://localhost:3000";
