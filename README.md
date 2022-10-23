@@ -1,7 +1,5 @@
 # ArcturusNetwork
-NodeJS + MySQL socket server with a p2p network on top for Game Master game creation.
-
-The front end utilizes a vite (webpack) react server and WebGL graphics.
+NodeJS + MySQL  Socket.io Server 
 
 
 Running this project.
