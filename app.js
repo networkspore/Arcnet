@@ -1099,8 +1099,8 @@ io.on('connection', (socket) =>{
 
 
                 }else{
-                    console.log("wrong password")
-                    io.to(id).emit("failedLogin")
+                    console.log("disconnected")
+                    socket.disconnect();
                 }
             });
         }
