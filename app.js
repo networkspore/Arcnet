@@ -108,7 +108,7 @@ WHERE \
             console.log("ping")
         })
     })
-    setTimeout(pingAlive, 30000);
+    setTimeout(pingAlive, 100000);
 }
 
 pingAlive();
