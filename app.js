@@ -94,19 +94,24 @@ const pingAlive = () => {
     if (!util.types.isPromise(mySession)) {
         mySession = mysqlx.getSession(sqlCredentials)
     }
-    const pingQuery = "\
-SELECT \
- keepAliveID \
-FROM \
- arcturus.keepAlive \
-WHERE \
- keepAliveID =  1";
 
-    mySession.then((mySession) => {
-        mySession.sql(pingQuery).execute().then((result) => {
+    mySession.then((session) => {
 
-            console.log("ping")
+        const arcDB = session.getSchema("arcturus");
+        const keepAliveTable = arcDB.getTable("keepAlive");
+
+        keepAliveTable.select(["keepAliveValue"]).where("keepAliveID = 1").execute().then((res) =>{
+            const keepAliveValue = res.fetchOne();
+            if (keepAliveValue != undefined){
+                console.log(keepAliveValue[0]);
+            }else{
+                console.log(0)
+            }
+        }).catch((err)=>{
+            console.log("KeepAlive error: ")
+            console.log(err)
         })
+       
     })
     setTimeout(pingAlive, 100000);
 }
