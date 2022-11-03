@@ -276,8 +276,29 @@ io.on('connection', (socket) => {
                             })
                         }
                     })
+                    socket.on("createUserStorage", (crc, engineKey, peer2peer, callback) => {
+                     
+                        createUserStorage(user.userID, crc, engineKey, peer2peer, (created) => {
+                            if(created)
+                            {
+                                callback({ success: created })
+                            }
+                        })
+                    })
 
+                    socket.on("checkStorageCRC", (crc, engineKey, callback) => {
 
+                        checkStorageCRC(user.userID, crc, engineKey, (updated)=>{
+                            callback({valid:updated})
+                        })
+
+                    })
+
+                    socket.on("deleteUserFiles", (userID, callback) =>{
+                        deleteUserFiles(userID, (deleted)=>{
+                            callback(deleted)
+                        })
+                    } )
 
                     socket.on("updateSocketID", (userID) => {
                         updateSocketID(userID, id);
@@ -347,6 +368,12 @@ io.on('connection', (socket) => {
                         }
 
                     });
+
+
+
+//////////////////////////////////////////////////////////////CAMPAING STUFF MOSTLY?////////////////////////////////////////
+
+
 
                     socket.on("sendCampMsg", (room = "", userName = "", userID = 0, type = 0, msg = "", sent) => {
                         console.log("emiting to:" + room + " username: " + userName + " type: " + type + " msg: " + msg);
@@ -6562,5 +6589,199 @@ const updateUserPassword = (info, callback) => {
             session.rollback();
             callback({ success: false, msg: error });
         }
+    })
+}
+
+const createUserStorage = (userID, crc, storageKey, enabled, callback ) =>{
+    console.log(crc) 
+
+    mySession.then((session) => {
+
+        var arcDB = session.getSchema('arcturus');
+        var storageTable = arcDB.getTable("storage");
+         
+       
+        storageTable.insert(
+            ['userID', 'storageCRC', 'storageKey', "statusID", "lastModified"]
+        ).values(
+            [userID, crc, storageKey, enabled ? status.Online : status.Offline, formatedNow()]
+        ).execute().then((res)=>{
+            const affected = res.getAffectedItemsCount();
+
+    
+
+            callback(affected > 0 ? true : false)
+        }).catch((err) => {
+            console.log(err)
+        
+            callback(false)
+        })
+       
+    }).catch((err) => {
+        console.log(err)
+        callback(false)
+    })
+}
+
+
+const deleteUserFiles = (userID, callback) => {
+    mySession.then((session) => {
+
+        var arcDB = session.getSchema('arcturus');
+        var storageTable = arcDB.getTable("storage");
+        var fileTable = arcDB.getTable("file");
+
+        storageTable.select(["storageID"]).where("userID = :userID").bind("userID", userID).execute().then((res) => {
+            const all = res.fetchAll()
+
+            if (all != undefined) {
+             
+                try {
+                all.forEach(row => {
+                    const storageID = row[0];
+                   
+                    fileTable.delete().where("storageID = :storageID").bind("storageID", storageID).execute().then((res) => {
+                       
+                        
+                    })
+                
+                })
+                callback(true)
+                }catch{
+                    callback(false)
+                }
+            }
+        })
+    })
+}
+
+
+const deleteStorageFiles = (userID, storageKey, callback) => {
+    mySession.then((session) => {
+
+        var arcDB = session.getSchema('arcturus');
+        var storageTable = arcDB.getTable("storage");
+        var fileTable = arcDB.getTable("file");
+
+        storageTable.select(["storageID"]).where("userID = :userID AND storageKey = :storageKey").bind("userID", userID).bind("storageKey", storageKey).execute().then((res) => {
+            const one = res.fetchOne()
+
+            if (one != undefined) {
+                const storageID = one[0];
+
+                fileTable.delete().where("storageID = :storageID").bind("storageID", storageID).execute().then((res) => {
+                    if (affected > 0) {
+                        callback(true)
+                    } else {
+                        callback(false)
+                    }
+                }).catch((err) => {
+                    console.log(err)
+                    callback(false)
+                })
+            }
+        })
+
+
+
+
+    })
+}
+
+const deleteUserStorage = (userID, storageKey, callback) =>{
+    mySession.then((session) => {
+
+        var arcDB = session.getSchema('arcturus');
+        var storageTable = arcDB.getTable("storage");
+        var fileTable = arcDB.getTable("file");
+
+        storageTable.select(["storageID"]).where("userID = :userID AND storageKey = :storageKey").bind("userID", userID).bind("storageKey", storageKey).execute().then((res)=>{
+            const one = res.fetchOne()
+
+            if(one != undefined)
+            {
+                const storageID = one[0];
+
+                fileTable.delete().where("storageID = :storageID").bind("storageID", storageID).execute().then((res)=>{
+                    storageTable.delete().where("storageID = :storageID").bind("storageID", storageID).execute().then((res) => {
+                        const affected = res.getAffectedItemsCount();
+
+                        if (affected > 0) {
+                            callback(true)
+                        } else {
+                            callback(false)
+                        }
+                    }).catch((err) => {
+                        console.log(err)
+                        callback(false)
+                    })
+                }).catch((err) => {
+                    console.log(err)
+                    callback(false)
+                })
+            }
+        })
+
+        
+
+        
+    })
+}
+
+function formatedNow(now = new Date(), small = false) {
+
+    const year = now.getUTCFullYear();
+    const month = now.getUTCMonth()
+    const day = now.getUTCDate();
+    const hours = now.getUTCHours();
+    const minutes = now.getUTCMinutes();
+    const seconds = now.getUTCSeconds();
+    const miliseconds = now.getUTCMilliseconds();
+
+    const stringYear = year.toString();
+    const stringMonth = month < 10 ? "0" + month : String(month);
+    const stringDay = day < 10 ? "0" + day : String(day);
+    const stringHours = hours < 10 ? "0" + hours : String(hours);
+    const stringMinutes = minutes < 10 ? "0" + minutes : String(minutes);
+    const stringSeconds = seconds < 10 ? "0" + seconds : String(seconds);
+    const stringMiliseconds = miliseconds < 100 ? (miliseconds < 10 ? "00" + miliseconds : "0" + miliseconds) : String(miliseconds);
+
+
+   return  stringNow = stringYear + "-" + stringMonth + "-" + stringDay + " " + stringHours + ":" + stringMinutes;
+
+
+
+    
+}
+
+const checkStorageCRC = (userID, crc, storageKey, callback) =>{
+    
+    mySession.then((session) => {
+
+        var arcDB = session.getSchema('arcturus');
+        var storageTable = arcDB.getTable("storage");
+    
+        storageTable.select(["storageCRC"]).where("userID = :userID AND storageKey = :storageKey AND storageCRC = :storageCRC").bind(
+            "userID", userID
+        ).bind(
+            "storageKey", storageKey
+        ).bind(
+            "storageCRC", crc
+        ).execute().then((result)=>{
+            const one = result.fetchOne()
+            console.log(one)
+            if(one == undefined)
+            {
+                callback(false)
+            }else{
+                callback(true)      
+            }
+        }).catch((err) => {
+            console.log(err)
+            callback(false)
+        })
+    }).catch((err) => {
+        console.log(err)
+        callback(false)
     })
 }
