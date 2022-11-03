@@ -276,13 +276,12 @@ io.on('connection', (socket) => {
                             })
                         }
                     })
-                    socket.on("createUserStorage", (crc, engineKey, peer2peer, callback) => {
+                    socket.on("createUserStorage", (crc, engineKey,  callback) => {
                      
-                        createUserStorage(user.userID, crc, engineKey, peer2peer, (created) => {
-                            if(created)
-                            {
-                                callback({ success: created })
-                            }
+                        createUserStorage(user.userID, crc, engineKey,  (created) => {
+                           
+                            callback({ success: created })
+                            
                         })
                     })
 
@@ -6592,7 +6591,7 @@ const updateUserPassword = (info, callback) => {
     })
 }
 
-const createUserStorage = (userID, crc, storageKey, enabled, callback ) =>{
+const createUserStorage = (userID, crc, storageKey, callback ) =>{
     console.log(crc) 
 
     mySession.then((session) => {
@@ -6604,7 +6603,7 @@ const createUserStorage = (userID, crc, storageKey, enabled, callback ) =>{
         storageTable.insert(
             ['userID', 'storageCRC', 'storageKey', "statusID", "lastModified"]
         ).values(
-            [userID, crc, storageKey, enabled ? status.Online : status.Offline, formatedNow()]
+            [userID, crc, storageKey, status.Offline, formatedNow()]
         ).execute().then((res)=>{
             const affected = res.getAffectedItemsCount();
 
