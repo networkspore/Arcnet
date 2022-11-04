@@ -293,6 +293,12 @@ io.on('connection', (socket) => {
 
                     })
 
+                    socket.on("updateStorageCRC", (crc, engineKey, callback)=>{
+                        updateStorageCRC(user.userID, crc, engineKey, (result)=>{
+                            callback(result)
+                        })
+                    })
+
                     socket.on("deleteUserFiles", (userID, callback) =>{
                         deleteUserFiles(userID, (deleted)=>{
                             callback(deleted)
@@ -6591,8 +6597,26 @@ const updateUserPassword = (info, callback) => {
     })
 }
 
+const updateStorageCRC = (userID, crc, storageKey, callback) =>{
+    mySession.then((session) => {
+
+        var arcDB = session.getSchema('arcturus');
+        var storageTable = arcDB.getTable("storage");
+        console.log(storageKey)
+        storageTable.update().set("storageCRC", crc).set("lastModified",formatedNow()).where("userID = :userID AND storageKey = :storageKey").bind("userID", userID).bind("storageKey", storageKey).execute().then((res)=>{
+            const affected = res.getAffectedItemsCount() > 0;
+            
+            console.log(affected)
+
+            callback(affected)
+        }).catch((err)=>{
+            console.log(err)
+            callback(false);
+        })
+    })
+}
 const createUserStorage = (userID, crc, storageKey, callback ) =>{
-    console.log(crc) 
+
 
     mySession.then((session) => {
 
