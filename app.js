@@ -215,7 +215,9 @@ io.on('connection', (socket) => {
 
 
                     /* //////////////SUCCESS///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
-
+                    socket.on("checkRealmName", (name, callback)=>{
+                        checkRealmName(name, callback)
+                    })
                     socket.on("requestContact", (contactID, msg, callback) => {
                         const userID = user.userID;
                         requestContact(userID, contactID, msg, (result) => {
@@ -6806,5 +6808,29 @@ const checkStorageCRC = (userID, crc, storageKey, callback) =>{
     }).catch((err) => {
         console.log(err)
         callback(false)
+    })
+}
+
+
+const checkRealmName = (name, callback) => {
+    mySession.then((session) => {
+
+        var arcDB = session.getSchema('arcturus');
+        var realmTable = arcDB.getTable("realm");
+
+
+        realmTable.select(["realmName"]).where("realmName = :realmName").bind(
+            "realmName", name
+        ).execute().then((result)=>{
+            if(result.fetchOne() == undefined)
+            {
+                callback(true)
+            }else{
+                callback(false)
+            }
+        }).catch((err)=>{
+            console.log(err)
+            callback(false)
+        })
     })
 }
