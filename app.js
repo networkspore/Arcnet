@@ -219,8 +219,8 @@ io.on('connection', (socket) => {
                         checkRealmName(name, callback)
                     })
 
-                    socket.on("createRealm", (realmName, engineKey, image, callback) =>{
-                        createRealm(user.userID, realmName, engineKey, image, (created) =>{
+                    socket.on("createRealm", (realmName, imageFile, page, index, callback) =>{
+                        createRealm(user.userID, realmName, imageFile, page, index, (created) =>{
                             callback(created)
                         })
                     })
@@ -6804,29 +6804,26 @@ function formatedNow(now = new Date(), small = false) {
     
 }
 
-const checkFileCRC = (userID, crc, callback) =>{
+const checkFileCRC = (crc, callback) =>{
     
     mySession.then((session) => {
 
-        const query = "SELECT userFile.userID from arcturus.userFile, arcturus.user, arcturus.file,  where userFile.userID = user.userID AND file.fileID = userFile.fileID \
-AND file.crc = " + mysql.escape(crc) + " AND user.userID = " + userID;
-
-        session.sql.query(query).then((result)=>{
-            const one = result.hasData();
-            
-            if(one == true)
+        var arcDB = session.getSchema('arcturus');
+        var fileTable = arcDB.getTable("file");
+        
+        fileTable.select(["fileID", "nftID"]).where("fileCRC = :fileCRC").bind("fileCRC", crc).execute().then((selectRes)=>{
+            const one = selectRes.fetchOne()
+            if(one != undefined)
             {
-                callback(false)
+                callback({fileID: one[0], nftID:one[1]})
             }else{
-                callback(true)      
+                callback({fileID: null, nftID:null})
             }
-        }).catch((err) => {
-            console.log(err)
-            callback(false)
         })
+
     }).catch((err) => {
         console.log(err)
-        callback(false)
+        callback({error:new Error("DB error")})
     })
 }
 
@@ -6854,29 +6851,163 @@ const checkRealmName = (name, callback) => {
     })
 }
 
-const createRealm = (userID, realmName,imageCRC, callback) => {
+const checkUserFile = (userID, fileID, callback) => {
+    mySession.then((session) => {
+
+        var arcDB = session.getSchema('arcturus');
+        var userFileTable = arcDB.getTable("userFile");
+
+
+        userFileTable.select(["userFilePermissions"]).where(
+            "userID = :userID AND fileID = :fileID"
+        ).bind(
+            "userID", userID
+        ).bind(
+            "fileID", fileID
+        ).execute().then((result) => {
+            const one = result.fetchOne();
+            if (one == undefined) {
+                callback({userFilePermissions:null})
+            } else {
+                callback({userFilePermissions:one[0]})
+            }
+        }).catch((err) => {
+            console.log(err)
+            callback(false)
+        })
+    })
+}
+
+const publishFile = (userID, fileInfo, permissions = "NONE", callback) =>{
+    mySession.then((session) => {
+
+        var arcDB = session.getSchema('arcturus');
+        var fileTable = arcDB.getTable("file")
+        var userFileTable = arcDB.getTable("userFile")
+        
+        checkFileCRC(fileInfo.crc, (result) => {
+            const fileID = result.fileID;
+            const nftID = result.nftID;
+            session.startTransaction()
+            if(fileID == null)
+            {
+                
+                fileTable.insert(
+                    ["fileName", "fileCRC", "fileSize", "fileType", "fileMimeType", "fileLastModified"]
+                ).values(
+                    [fileInfo.name, fileInfo.crc, fileInfo.size, fileInfo.type, fileInfo.mimeType, fileInfo.lastModified]
+                ).execute().then((fileInsert) => {
+
+                    const fileID = fileInsert.getAutoIncrementValue()
+
+                    userFileTable.insert(["userID", "fileID", "userFilePermissions"]).values([userID, fileID, permissions]).execute().then((userFileInsert)=>{
+                        const affected = userFileInsert.getAffectedItemsCount()
+                        if(affected > 0)
+                        {
+                            session.commit()
+                            callback({fileID: fileID, nftID:nftID, userFilePermissions:permissions})
+                        }else{
+                            session.rollback()
+                            callback({error:new Error("Can not publish file.")})
+                        }
+
+                    }).catch((err) => {
+                        console.log(err)
+                        session.rollback();
+                        callback({ error: new Error("userFile Insert failed.") })
+                    })
+
+                }).catch((err)=>{
+                    console.log(err)
+                    session.rollback();
+                    callback({error: new Error("File Insert failed.")})
+                })
+            }else{
+                if(nftID == null){
+                    checkUserFile(userID, fileID, (found)=>{
+                        if(found.userFilePermissions != null)
+                        {
+                            callback({fileID:fileID, userFilePermissions:found.userFilePermissions})
+                        }else{
+                            userFileTable.insert().set("userID", userID).set("fileID", fileID).set("userFilePermissions", permissions).execute().then((userFileInsert) => {
+                                const affected = userFileInsert.getAffectedItemsCount()
+                                if (affected > 0) {
+                                    session.commit()
+                                    callback({ fileID: fileID, nftID:nftID, userFilePermissions: permissions })
+                                } else {
+                                    session.rollback()
+                                    callback({ error: new Error("Can not publish file.") })
+                                }
+
+                            }).catch((err) => {
+                                console.log(err)
+                                session.rollback();
+                                callback({ error: new Error("userFile Insert failed.") })
+                            })
+                        }
+                    })
+                }else{
+                    callback({fileID:null, nftID:nftID, userFilePermissions:null })
+                }
+            }
+        })
+        
+    })
+}
+
+const createRealm = (userID, realmName, imageFile, page, index, callback) => {
     mySession.then((session) => {
 
         var arcDB = session.getSchema('arcturus');
         var realmTable = arcDB.getTable("realm");
         var roomTable = arcDB.getTable("room");
-        var fileTable = arcDB.getTable("file")
-
-
+      
         try{
+             session.startTransaction()
+            publishFile(userID, imageFile, "NONE", (pub) => {
+                if("error" in pub)
+                {
+                    session.rollback()
+                    callback({ error: new Error("Unable to create realm.") })
+                }else{
+                    const fileID = pub.fileID;
+                    const nftID = pub.nftID;
+                    const permissions = pub.userFilePermissions;   
 
-        
-        realmTable.insert().set("realmName", realmName).set("userID", userID).set().execute().then((realmResult)=>{
-            const realmID = realmResult.getAutoIncrementValue()
-            roomTable.insert().set("roomName", realmName).execute().then((roomResult)=>{
-                const roomID = roomResult.getAutoIncrementValue()
-                realmResult({realmID:realmID, roomID:roomID, new:true, imageID:imageID})
+                    if(fileID != null){
+                        roomTable.insert(["roomName"]).values([realmName]).execute().then((roomResult)=>{
+                            const roomID = roomResult.getAutoIncrementValue()
+                            if(roomID != undefined){
+                                realmTable.insert(["realmName", "userID", "imageID", "roomID", "realmPage", "realmIndex"]).values([
+                                    realmName, userID, fileID, roomID, page, index
+                                ]).execute().then((realmResult) => {
+                                    const realmID = realmResult.getAutoIncrementValue()
+                                    if (realmID != undefined) {   
+                                        session.commit();
+                                        imageFile.imageID = fileID;
+                                        imageFile.userFilePermissions = permissions;
+                                        imageFile.nftID = nftID;
+
+                                        callback({realmID:realmID, roomID:roomID, image:imageFile , configID: null, realmPage:page, realmIndex:index})
+                                    } else {
+                                        session.rollback()
+                                        callback({ error: new Error("Error adding realm.") })
+                                    }
+                                })
+                            }else{
+                                session.rollback()
+                                callback({ error: new Error("Error adding room.") })
+                            }
+                        })
+                    }else{
+                        callback({ error: new Error("Can not use file.") })
+                    }               
+                }
+                   
             })
-        
-        })
-
         }catch(err){
             console.log(err)
+            session.rollback()
             callback({ error: new Error ("Unable to create realm.") })
         }
         
