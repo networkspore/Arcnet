@@ -218,6 +218,13 @@ io.on('connection', (socket) => {
                     socket.on("checkRealmName", (name, callback)=>{
                         checkRealmName(name, callback)
                     })
+
+                    socket.on("createRealm", (realmName, engineKey, image, callback) =>{
+                        createRealm(user.userID, realmName, engineKey, image, (created) =>{
+                            callback(created)
+                        })
+                    })
+
                     socket.on("requestContact", (contactID, msg, callback) => {
                         const userID = user.userID;
                         requestContact(userID, contactID, msg, (result) => {
@@ -278,25 +285,23 @@ io.on('connection', (socket) => {
                             })
                         }
                     })
-                    socket.on("createUserStorage", (crc, engineKey,  callback) => {
+                    socket.on("createStorage", (fileInfo, engineKey,  callback) => {
                      
-                        createUserStorage(user.userID, crc, engineKey,  (created) => {
-                           
-                            callback({ success: created })
-                            
+                        createStorage(fileInfo, engineKey,  (created) => {
+                            callback(created)
                         })
                     })
 
-                    socket.on("checkStorageCRC", (crc, engineKey, callback) => {
+                    socket.on("loadStorage", (crc, engineKey, callback) => {
 
-                        checkStorageCRC(user.userID, crc, engineKey, (updated)=>{
-                            callback({valid:updated})
+                        loadStorage(crc, engineKey, (storage)=>{
+                            callback(storage)
                         })
 
                     })
 
-                    socket.on("updateStorageCRC", (crc, engineKey, callback)=>{
-                        updateStorageCRC(user.userID, crc, engineKey, (result)=>{
+                    socket.on("updateStorageConfig", (fileID, storageID, newFIle, callback)=>{
+                        updateStorageConfig(fileID, storageID, newFIle, (result)=>{
                             callback(result)
                         })
                     })
@@ -6599,53 +6604,142 @@ const updateUserPassword = (info, callback) => {
     })
 }
 
-const updateStorageCRC = (userID, crc, storageKey, callback) =>{
+const updateStorageConfig = (fileID, storageID, fileInfo, callback) =>{
     mySession.then((session) => {
 
         var arcDB = session.getSchema('arcturus');
         var storageTable = arcDB.getTable("storage");
-        console.log(storageKey)
-        storageTable.update().set("storageCRC", crc).set("lastModified",formatedNow()).where("userID = :userID AND storageKey = :storageKey").bind("userID", userID).bind("storageKey", storageKey).execute().then((res)=>{
-            const affected = res.getAffectedItemsCount() > 0;
-            
-            console.log(affected)
+        var fileTable = arcDB.getTable('file')
 
-            callback(affected)
-        }).catch((err)=>{
-            console.log(err)
-            callback(false);
+        fileTable.insert(
+            ["fileName", "fileCRC", "fileSize", "fileType", "fileMimeType", "fileLastModified"]
+        ).values(
+            [fileInfo.name, fileInfo.crc, fileInfo.size, fileInfo.type, fileInfo.mimeType, fileInfo.lastModified]
+        ).execute().then((fileInsert) => {
+            const affected = fileInsert.getAffectedItemsCount()
+            if(affected > 0){
+                
+                fileTable.delete().where("fileID = :fileID").set("fileID", fileID).execute().then((deleted)=>{
+                    const delAffected = deleted.getAffectedItemsCount()
+
+                    if(delAffected > 0)
+                    {
+                        fileTable.insert(
+                            ["fileName", "fileCRC", "fileSize", "fileType", "fileMimeType", "fileLastModified"]
+                        ).values(
+                            [fileInfo.name, fileInfo.crc, fileInfo.size, fileInfo.type, fileInfo.mimeType, fileInfo.lastModified]
+                        ).execute().then((fileInsert) => {
+                            if(fileInsert.getAffectedItemsCount() > 0)
+                            {
+                                const fileID = fileInsert.getAutoIncrementValue();
+
+                                storageTable.update().set("fileID", fileID).set("statusID", status.Offline).where("storageID = :storageID").bind("storageID", storageID).execute().then((res) => {
+                                    const affected = res.getAffectedItemsCount() > 0;
+
+                                    if(affected)
+                                    {
+                                        callback({ success: true, fileID: fileID })
+                                    }else{
+                                        callback({error:new Error("Cannot update storage.")})
+                                    }
+
+                                    
+                                }).catch((err) => {
+                                    console.log(err)
+                                    callback(false);
+                                })
+                            }
+                        })
+                    }else{
+                        callback({ error: new Error("Cannot update storage. Unable to delete old file") })
+                    }
+                })
+
+               
+                
+            }else{
+                callback({error:"File not added"})
+            }
         })
+      
     })
 }
-const createUserStorage = (userID, crc, storageKey, callback ) =>{
+const createStorage = (fileInfo, storageKey, callback ) =>{
 
 
     mySession.then((session) => {
 
         var arcDB = session.getSchema('arcturus');
         var storageTable = arcDB.getTable("storage");
-         
-       
-        storageTable.insert(
-            ['userID', 'storageCRC', 'storageKey', "statusID", "lastModified"]
-        ).values(
-            [userID, crc, storageKey, status.Offline, formatedNow()]
-        ).execute().then((res)=>{
-            const affected = res.getAffectedItemsCount();
-
-    
-
-            callback(affected > 0 ? true : false)
-        }).catch((err) => {
-            console.log(err)
+        var fileTable = arcDB.getTable("file")
+   
         
-            callback(false)
+
+        fileTable.insert(
+            ["fileName", "fileCRC", "fileSize", "fileType", "fileMimeType" , "fileLastModified"]
+        ).values(
+            [fileInfo.name, fileInfo.crc, fileInfo.size, fileInfo.type, fileInfo.mimeType, fileInfo.lastModified]
+        ).execute().then((fileInsert)=>{
+            if(fileInsert.getAffectedItemsCount > 0){
+                callback({error:new Error("File not added.")})
+            }else{
+                const fileID = fileInsert.getAutoIncrementValue()
+
+                storageTable.insert(
+                    ['storageKey', "statusID", "fileID"]
+                ).values(
+                    [storageKey, status.Offline, fileID]
+                ).execute().then((res) => {
+                    const affected = res.getAffectedItemsCount();
+
+                    if(affected > 0)
+                    {
+                        const storageID = res.getAutoIncrementValue()
+
+                        callback({success:true, storageID: storageID, fileID: fileID})
+                    }
+                    
+                }).catch((err) => {
+                    console.log(err)
+
+                    callback({error:new Error("Storage not created")})
+                })
+            }
         })
+       
+        
        
     }).catch((err) => {
         console.log(err)
         callback(false)
     })
+}
+
+const loadStorage = (crc, engineKey, callback) => {
+    crc = mysql.escape(crc);
+    engineKey = mysql.escape(engineKey);
+
+    mySession.then((session) => {
+        const query = "select storage.storageID, storage.fileID from arcturus.storage, arcturus.file where file.fileCRC = " + crc + " \
+AND storage.storageKey = " + engineKey;
+
+        session.sql(query).execute().then((loaded)=>{
+            if(loaded.hasData())
+            {
+                const info = loaded.fetchOne();
+                const storageID = info[0];
+                const fileID = info[1];
+
+                callback({ success: true, storageID: storageID, fileID: fileID })
+            }else{
+                callback({ error: new Error("No storage.") })
+            }
+        })
+    }).catch((err)=>{
+        console.log(err)
+        callback({error: new Error("DB error")})
+    })
+
 }
 
 
@@ -6681,77 +6775,8 @@ const deleteUserFiles = (userID, callback) => {
 }
 
 
-const deleteStorageFiles = (userID, storageKey, callback) => {
-    mySession.then((session) => {
-
-        var arcDB = session.getSchema('arcturus');
-        var storageTable = arcDB.getTable("storage");
-        var fileTable = arcDB.getTable("file");
-
-        storageTable.select(["storageID"]).where("userID = :userID AND storageKey = :storageKey").bind("userID", userID).bind("storageKey", storageKey).execute().then((res) => {
-            const one = res.fetchOne()
-
-            if (one != undefined) {
-                const storageID = one[0];
-
-                fileTable.delete().where("storageID = :storageID").bind("storageID", storageID).execute().then((res) => {
-                    if (affected > 0) {
-                        callback(true)
-                    } else {
-                        callback(false)
-                    }
-                }).catch((err) => {
-                    console.log(err)
-                    callback(false)
-                })
-            }
-        })
 
 
-
-
-    })
-}
-
-const deleteUserStorage = (userID, storageKey, callback) =>{
-    mySession.then((session) => {
-
-        var arcDB = session.getSchema('arcturus');
-        var storageTable = arcDB.getTable("storage");
-        var fileTable = arcDB.getTable("file");
-
-        storageTable.select(["storageID"]).where("userID = :userID AND storageKey = :storageKey").bind("userID", userID).bind("storageKey", storageKey).execute().then((res)=>{
-            const one = res.fetchOne()
-
-            if(one != undefined)
-            {
-                const storageID = one[0];
-
-                fileTable.delete().where("storageID = :storageID").bind("storageID", storageID).execute().then((res)=>{
-                    storageTable.delete().where("storageID = :storageID").bind("storageID", storageID).execute().then((res) => {
-                        const affected = res.getAffectedItemsCount();
-
-                        if (affected > 0) {
-                            callback(true)
-                        } else {
-                            callback(false)
-                        }
-                    }).catch((err) => {
-                        console.log(err)
-                        callback(false)
-                    })
-                }).catch((err) => {
-                    console.log(err)
-                    callback(false)
-                })
-            }
-        })
-
-        
-
-        
-    })
-}
 
 function formatedNow(now = new Date(), small = false) {
 
@@ -6779,23 +6804,17 @@ function formatedNow(now = new Date(), small = false) {
     
 }
 
-const checkStorageCRC = (userID, crc, storageKey, callback) =>{
+const checkFileCRC = (userID, crc, callback) =>{
     
     mySession.then((session) => {
 
-        var arcDB = session.getSchema('arcturus');
-        var storageTable = arcDB.getTable("storage");
-    
-        storageTable.select(["storageCRC"]).where("userID = :userID AND storageKey = :storageKey AND storageCRC = :storageCRC").bind(
-            "userID", userID
-        ).bind(
-            "storageKey", storageKey
-        ).bind(
-            "storageCRC", crc
-        ).execute().then((result)=>{
-            const one = result.fetchOne()
-            console.log(one)
-            if(one == undefined)
+        const query = "SELECT userFile.userID from arcturus.userFile, arcturus.user, arcturus.file,  where userFile.userID = user.userID AND file.fileID = userFile.fileID \
+AND file.crc = " + mysql.escape(crc) + " AND user.userID = " + userID;
+
+        session.sql.query(query).then((result)=>{
+            const one = result.hasData();
+            
+            if(one == true)
             {
                 callback(false)
             }else{
@@ -6834,3 +6853,35 @@ const checkRealmName = (name, callback) => {
         })
     })
 }
+
+const createRealm = (userID, realmName,imageCRC, callback) => {
+    mySession.then((session) => {
+
+        var arcDB = session.getSchema('arcturus');
+        var realmTable = arcDB.getTable("realm");
+        var roomTable = arcDB.getTable("room");
+        var fileTable = arcDB.getTable("file")
+
+
+        try{
+
+        
+        realmTable.insert().set("realmName", realmName).set("userID", userID).set().execute().then((realmResult)=>{
+            const realmID = realmResult.getAutoIncrementValue()
+            roomTable.insert().set("roomName", realmName).execute().then((roomResult)=>{
+                const roomID = roomResult.getAutoIncrementValue()
+                realmResult({realmID:realmID, roomID:roomID, new:true, imageID:imageID})
+            })
+        
+        })
+
+        }catch(err){
+            console.log(err)
+            callback({ error: new Error ("Unable to create realm.") })
+        }
+        
+          
+    })
+}
+
+
