@@ -6258,7 +6258,7 @@ const createRealm = (userID, realmName, imageFile, page, index, callback) => {
                             const roomID = roomResult.getAutoIncrementValue()
                             if(roomID != undefined){
                                 realmTable.insert(["realmName","configID", "userID", "imageID", "roomID", "realmPage", "realmIndex"]).values([
-                                    realmName, -1,  userID, fileID, roomID, page, index, imageFile.crc
+                                    realmName, -1,  userID, fileID, roomID, page, index,
                                 ]).execute().then((realmResult) => {
                                     const realmID = realmResult.getAutoIncrementValue()
                                     if (realmID != undefined) {   
@@ -6266,8 +6266,8 @@ const createRealm = (userID, realmName, imageFile, page, index, callback) => {
                                         imageFile.fileID = fileID;
                                         imageFile.userFilePermissions = permissions;
                                         imageFile.nftID = nftID;
-
-                                        callback({userID:userID, realmID:realmID, roomID:roomID, imageFile:imageFile , config: {fileID:-1}, realmPage:page, realmIndex:index})
+                                       
+                                        callback({ realm: { userID: userID, realmID: realmID, roomID: roomID, imageFile: imageFile, config: { fileID: -1 }, realmPage: page, realmIndex: index } })
                                     } else {
                                         session.rollback()
                                         callback({ error: new Error("Error adding realm.") })
@@ -6301,11 +6301,11 @@ const getRealms = (userID, callback) =>{
 SELECT \
  realm.realmID, realm.realmName, realm.userID, realm.roomID, realm.realmPage, realm.realmIndex, \
  image.fileID, image.fileName, image.fileCRC, image.fileMimeType, image.fileSize, image.fileLastModified, \
- config.fileID, config.fileName, config.fileCRC, config.fileMimeType, config.fileSize, config.fileLastModified, \
+ config.fileID, config.fileName, config.fileCRC, config.fileMimeType, config.fileSize, config.fileLastModified \
 FROM \
  arcturus.realm, arcturus.file as image, arcturus.file as config \
 WHERE \
- realm.imageID = image.fileID AND realm.configID = file.fileID AND userID = " + userID
+ realm.imageID = image.fileID AND realm.configID = config.fileID AND userID = " + userID
 
        session.sql(query).execute().then((selectResult)=>{
             
