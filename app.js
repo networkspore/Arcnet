@@ -190,6 +190,7 @@ io.on('connection', (socket) => {
             })
         } else {
             checkUser(socket.handshake.auth.user, (success, loginUser) => {
+                /* //////////////SUCCESS///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 
                 if (success) {
                     user = loginUser;
@@ -213,8 +214,7 @@ io.on('connection', (socket) => {
 
                     })
 
-
-                    /* //////////////SUCCESS///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+                  
                     socket.on("checkRealmName", (name, callback)=>{
                         checkRealmName(name, callback)
                     })
@@ -222,6 +222,12 @@ io.on('connection', (socket) => {
                     socket.on("createRealm", (realmName, imageFile, page, index, callback) =>{
                         createRealm(user.userID, realmName, imageFile, page, index, (created) =>{
                             callback(created)
+                        })
+                    })
+
+                    socket.on("getRealms", (callback)=>{
+                        getRealms(user.userID, (realms)=>{
+                            callback(realms)
                         })
                     })
 
@@ -380,762 +386,6 @@ io.on('connection', (socket) => {
                         }
 
                     });
-
-
-
-//////////////////////////////////////////////////////////////CAMPAING STUFF MOSTLY?////////////////////////////////////////
-
-
-
-                    socket.on("sendCampMsg", (room = "", userName = "", userID = 0, type = 0, msg = "", sent) => {
-                        console.log("emiting to:" + room + " username: " + userName + " type: " + type + " msg: " + msg);
-                        io.to(room).emit("campMsg", userName, type, msg);
-
-                        storeMessage(room, userID, type, msg, (results) => {
-
-                            console.log("stored: " + results);
-
-                            sent(true, results);
-                        })
-
-                    })
-
-                    socket.on("newCampaign", (userID = -1, campaignName = "", imgFile = "", status = "", callback) => {
-                        console.log("Create new campaign: " + userID + ":" + campaignName);
-                        createCampaign(userID, campaignName, imgFile, status, (result) => {
-                            callback(result);
-                        })
-                    });
-
-                    socket.on("getImage", (imageID = -1, callback) => {
-                        console.log("getting Image: " + imageID);
-                        getImage(imageID, callback);
-                    });
-
-                    socket.on("searchCampaigns", (text, userID, callback) => {
-                        console.log("Searching Campaigns for ")
-                        searchCampaigns(text, userID, callback);
-                    });
-
-                    socket.on("addUserToRoom", (userID, roomID, callback) => {
-                        console.log("adding user : " + userID + " to room: " + roomID);
-
-                        addUserToRoom(userID, roomID, callback);
-                    })
-
-                    socket.on("joinCampaign", (userID, userName, campaignID, roomID, callback) => {
-                        console.log("user: " + userID + "joining:" + campaignID)
-                        createCampaignUser(userID, campaignID, (inserted) => {
-                            if (inserted > 0) {
-                                addUserToRoom(userID, roomID, (insertedIntoRoom) => {
-                                    if (insertedIntoRoom) {
-                                        const campaignUser = [userID, userName, "Online", "Offline", "", 0, 0, 0]
-                                        io.to(roomID).emit("newCampaignUser", campaignUser);
-                                        callback(insertedIntoRoom);
-                                    } else {
-                                        console.log("Couldn't add campaign user " + userID + " to room " + roomID + " cleanup required");
-                                        callback(0);
-                                    }
-
-                                });
-                            } else {
-                                callback(0)
-                            }
-                        });
-                    });
-
-                    socket.on("roomStream", (userID, userName, roomID, options, callback) => {
-                        console.log("user " + userID + " streaming");
-
-
-                        io.to(roomID).emit("newStream", userID, userName, options);
-                        updateUserRoom(userID, roomID, options, (userRoomUpdated) => {
-                            callback(userRoomUpdated);
-                        })
-
-                    })
-
-                    /*  socket.on("getCharacters", (returnCharacters)=>{
-                          console.log("getting characters");
-                  
-                          getCharacters((characters)=>{
-                              returnCharacters(characters);
-                          })
-                      })*/
-
-                    socket.on("addCharacter", (character, wasInserted) => {
-                        console.log("adding character");
-
-                        addCharacter(character, (inserted) => {
-                            wasInserted(inserted);
-                        })
-                    })
-                    socket.on("addObject", (object, wasInserted) => {
-                        console.log("adding object");
-
-                        addObject(object, (inserted) => {
-                            wasInserted(inserted);
-                        })
-                    })
-                    socket.on("updateCharacterObject", (characterID, objectID, wasInserted) => {
-                        updateCharacterObject(characterID, objectID, (affected) => {
-                            wasInserted(affected);
-                        })
-                    })
-                    socket.on("updateCharacter", (characterID, characterName, raceID, classID, playable, characterImageUrl, currentObjectID, objectName, objectUrl, objectColor, objectTextureUrl, isUpdated) => {
-                        updateCharacter(characterID, characterName, raceID, classID, playable, characterImageUrl, currentObjectID, objectName, objectUrl, objectColor, objectTextureUrl, (updated) => {
-                            isUpdated(updated)
-                        })
-                    })
-
-                    socket.on("getRaceNames", (callback) => {
-                        getRaceNames((races) => {
-                            callback(races);
-                        })
-                    })
-                    socket.on("getClassNames", (callback) => {
-                        getClassNames((classes) => {
-                            callback(classes);
-                        })
-                    })
-
-                    socket.on("getCharacters", (playable, callback) => {
-                        getCharacters(playable, (characterArray) => {
-                            getRaceNames((raceArray) => {
-                                getClassNames((classArray) => {
-                                    callback(raceArray, classArray, characterArray);
-                                })
-                            })
-                        })
-
-                    })
-
-                    socket.on("editMonsters", (callback) => {
-                        getMonsters((monsterArray) => {
-                            console.log(monsterArray)
-                            getSizes((sizeArray) => {
-                                getMonsterTypes((typeArray) => {
-                                    getAllMonsterSubTypes((subTypeArray) => {
-                                        getSkills((skillArray) => {
-                                            getSenses((senseArray) => {
-                                                getLanguages((languageArray) => {
-                                                    getTraits((traitArray) => {
-                                                        getMonsterActions((actionArray) => {
-                                                            callback(monsterArray, sizeArray, typeArray, subTypeArray, skillArray, senseArray, languageArray, traitArray, actionArray);
-                                                        })
-                                                    })
-                                                })
-                                            })
-                                        })
-                                    })
-                                })
-                            })
-                        })
-                    })
-
-                    socket.on("addMonster", (monster, wasInserted) => {
-                        console.log("adding monster");
-
-                        addMonster(monster, (insertedID) => {
-                            wasInserted(insertedID);
-                        })
-                    })
-
-                    socket.on("updateMonster", (monster, wasUpdated) => {
-                        console.log("updating monster");
-
-                        updateMonster(monster, (boolean) => {
-                            wasUpdated(boolean);
-                        })
-                    })
-
-                    socket.on("addMonsterObject", (monsterID, objectID, wasInserted) => {
-                        addMonsterObject(monsterID, objectID, (affected) => {
-                            wasInserted(affected);
-                        })
-                    })
-                    //socket.broadcast.emit
-                    //socket.to(id).emit
-                    //socket.join("text")
-
-
-                    socket.on('joinCampaignRoom', (roomID, campaignID, userID, isAdmin, userName, returnJoined) => {
-                        console.log("Joining room " + roomID);
-                        socket.join(roomID)
-                        setUserRoomStatus(roomID, userID, "Online", (statusUpdated) => {
-
-                            if (statusUpdated > 0) {
-                                console.log("sending:userRoomStatus(" + roomID + "):" + userID + " : " + "Online");
-                                io.to(roomID).emit("userRoomStatus", userID, userName, "Online");
-                                getRoomUsers(roomID, userID, (users) => {
-                                    getStoredMessages(roomID, (messages) => {
-                                        getCurrentScene(campaignID, isAdmin, userID, (scene) => {
-
-
-                                            returnJoined(true, users, messages, scene);
-
-                                        });
-                                    });
-                                });
-
-                            } else {
-                                returnJoined(false, [], []);
-                            }
-                        })
-
-                    });
-
-                    socket.on("getSceneAssets", (sceneID, userID, campaignID, callback) => {
-                        getCampaignUserPC(userID, campaignID, (PC) => {
-                            getParty(userID, campaignID, (party) => {
-                                getSceneMonsters(sceneID, (monsters) => {
-                                    getScenePlaceables(sceneID, (placeables) => {
-                                        callback(PC, party, monsters, placeables)
-                                    });
-                                });
-                            });
-                        });
-                    })
-
-                    socket.on("setPC", (userID, campaignID, roomID, PC, callbackID) => {
-
-                        setPC(userID, campaignID, PC, (PCID) => {
-                            if (PCID > 0) {
-                                PC.PCID = PCID;
-                                PC.userID = userID;
-                                io.to(roomID).emit("newPC", PC)
-                            }
-                            callbackID(PCID);
-                        })
-                    })
-
-                    socket.on("getSceneAttributes", (callback) => {
-                        getSceneSettings((settings) => {
-                            getTextures(1, (textures) => {
-                                callback(settings, textures);
-                            })
-                        })
-
-                    })
-                    socket.on("addCampaignScene", (campaignID, roomID, scene, callback) => {
-                        addCampaignScene(campaignID, roomID, scene, (sceneID, terrainID) => {
-                            if (sceneID > 0) {
-
-                                callback(sceneID, terrainID);
-
-                            } else {
-                                callback(false, false);
-                            }
-                        })
-                    })
-
-                    socket.on("getScenes", (campaignID, callback) => {
-                        getCampaignScenes(campaignID, (scenes) => {
-                            callback(scenes);
-                        })
-                    })
-
-                    socket.on("setCampaignScene", (campaignID, sceneID, callback) => {
-
-                        setCampaignScene(campaignID, sceneID, (set) => {
-
-                            callback(set);
-                        })
-
-                    })
-
-                    socket.on("removeScene", (campaignID, roomID, sceneID, callback) => {
-                        setCampaignScene(campaignID, null, (set) => {
-                            if (set) {
-                                removeScene(sceneID, (removed) => {
-                                    io.to(roomID).emit("campaignSceneChanged", { sceneID: -1, prevID: sceneID });
-                                    callback(removed);
-                                })
-
-                            }
-                        })
-
-
-                    })
-
-                    socket.on("noScene", (campaignID, roomID) => {
-                        setCampaignScene(campaignID, null, (set) => {
-                            if (set) io.to(roomID).emit("campaignSceneChanged", { sceneID: -1, prevID: -1 });
-                        })
-                    })
-
-                    socket.on("PCscenePosition", (roomID, PCID, sceneID, position) => {
-
-                        io.to(roomID).emit("PCscenePosition", PCID, sceneID, position)
-                        setPCscenePosition(PCID, sceneID, position);
-                    })
-
-                    socket.on("monsterScenePosition", (roomID, monsterSceneID, position) => {
-                        io.to(roomID).emit("monsterScenePosition", monsterSceneID, position)
-                        setMonsterScenePosition(monsterSceneID, position);
-                    })
-
-
-                    socket.on("leaveScene", (roomID, PCID, sceneID) => {
-                        console.log("leaving scene (PCID:sceneID): " + PCID + " : " + sceneID);
-                        io.to(roomID).emit("leaveScene", PCID, sceneID)
-                        leaveScene(PCID, sceneID, (left) => {
-
-                        });
-                    })
-
-                    socket.on("endScene", (roomID, sceneID, callback) => {
-                        io.to(roomID)("endScene", sceneID);
-                        endScene(sceneID, (ended) => {
-                            callback(ended);
-                        });
-                    })
-                    socket.on("getMonsterTypes", (callback) => {
-                        getMonsterTypes((types) => {
-                            callback(types);
-                        })
-                    })
-
-                    socket.on("findMonsters", (searchText, monsterTypeID, monsterSubTypeID, callback) => {
-                        findMonsters(searchText, monsterTypeID, monsterSubTypeID, (monsters) => {
-                            callback(monsters);
-                        })
-                    })
-
-                    socket.on("addMonsterScene", (monster, count, random, idCallback) => {
-
-                        let diceMax = 0;
-                        let max = 0;
-                        let min = 0;
-                        const diceID = monster.dice.diceID;
-                        const diceMultiplier = monster.dice.diceMultiplier;
-                        const diceModifier = monster.dice.diceModifier;
-
-                        if (random) {
-                            for (let index = 0; index < dice.length; index++) {
-                                if (diceID == dice[index].diceID) diceMax = dice[index].diceMax;
-                            }
-                            max = (diceMax * diceMultiplier) + diceModifier;
-                            min = diceModifier + diceMultiplier;
-
-                        }
-                        var str = new Date().toString();
-
-                        var seed = xmur3(str);
-                        function loop(i, arr, c) {
-
-                            if (i < c) {
-                                var monsterClone = structuredClone(monster);
-
-                                if (random) monsterClone.HP = getRandomInt(min, max, seed);
-
-                                addMonsterScene(monsterClone, (monsterSceneID) => {
-
-
-                                    monsterClone.monsterSceneID = monsterSceneID;
-                                    arr.push(monsterClone)
-                                    i++;
-                                    loop(i, arr, c);
-                                })
-
-                            } else {
-                                idCallback(arr);
-                            }
-                        }
-                        loop(0, [], count);
-                    })
-
-                    socket.on("removeSceneMonster", (roomID, monsterSceneID) => {
-                        console.log("remove monsterScene " + monsterSceneID)
-                        io.to(roomID).emit("removeMonsterScene", monsterSceneID)
-                        removeSceneMonster(monsterSceneID);
-                    })
-
-                    socket.on("updateMonsterScene", (roomID, monster) => {
-                        console.log("updating mosnterScene " + monster.monsterSceneID)
-                        io.to(roomID).emit("updateMonsterScene", monster);
-
-                        updateMonsterScene(monster);
-                    })
-
-                    socket.on("getMonsterAttributes", (callback) => {
-                        getMonsterTypes((types) => {
-                            getAllMonsterSubTypes((subTypes) => {
-                                getSizes((sizes) => {
-                                    callback(types, subTypes, sizes);
-                                })
-                            })
-                        })
-
-
-                    })
-
-                    socket.on("addPlaceableType", (typeName, callback) => {
-                        console.log("adding placeable type")
-                        addPlaceableType(typeName, (autoID) => {
-                            callback(autoID);
-                        })
-                    })
-
-                    socket.on("editPlaceables", (callback) => {
-                        getMaterials((materials) => {
-                            getIntegrity((integrity) => {
-                                getSizes((sizes) => {
-                                    getPlaceableTypes((types) => {
-                                        getPlaceables((placeables) => {
-                                            callback(placeables, types, materials, integrity, sizes);
-                                        })
-                                    })
-                                })
-                            })
-                        })
-                    })
-
-                    socket.on("addPlaceable", (placeable, callback) => {
-                        addPlaceable(placeable, (autoID) => {
-                            callback(autoID);
-                        })
-                    })
-
-                    socket.on("updatePlaceable", (placeable, callback) => {
-                        updatePlaceable(placeable, (updated) => {
-                            callback(updated);
-                        })
-                    })
-
-                    socket.on("getPlaceableAttributes", (callback) => {
-                        getMaterials((materials) => {
-                            getIntegrity((integrity) => {
-                                getSizes((sizes) => {
-                                    getPlaceableTypes((types) => {
-                                        callback(types, sizes, integrity, materials);
-                                    })
-                                })
-                            })
-                        })
-                    })
-
-                    socket.on("findPlaceables", (searchText, placeableTypeID, callback) => {
-                        findPlaceables(searchText, placeableTypeID, (placeables) => {
-                            callback(placeables);
-                        })
-                    })
-
-                    socket.on("addPlaceableScene", (roomID, sceneID, placeable, count, random) => {
-
-                        function loop(i, arr) {
-
-                            if (i < count) {
-                                var placeableClone = structuredClone(placeable);
-
-                                addPlaceableScene(placeableClone, (placeableSceneID) => {
-
-                                    if (placeableSceneID > 0) {
-                                        placeableClone.placeableSceneID = placeableSceneID;
-                                        arr.push(placeableClone)
-                                    }
-                                    i++;
-                                    loop(i, arr);
-                                })
-
-                            } else {
-                                console.log(arr)
-                                console.log("sending placeableScene update")
-                                io.to(roomID).emit("addPlaceableScene", sceneID, arr);
-                            }
-                        }
-
-                        loop(0, []);
-
-                    })
-
-                    socket.on("findObjects", (searchText, ID, callback) => {
-                        /*  
-                         { value: 0, label: "Placeables"},
-                            { value: 1, label: "Monsters"},
-                            { value: 2, label: "Characters"},
-                            { value: 3, label: "All" },
-                        */
-                        console.log("Searching...")
-                        switch (ID) {
-                            case 0:
-                                findPlaceables(searchText, 0, (objects) => {
-                                    callback(objects);
-                                })
-                                break;
-                            case 1:
-
-                                findMonsters(searchText, 0, 0, (objects) => {
-                                    callback(objects);
-                                })
-                                break;
-                            case 2:
-                                findCharacters(searchText, (objects) => {
-                                    callback(objects)
-                                })
-                                break;
-                            case 3:
-                                find3DObjects(searchText, (objects) => {
-                                    callback(objects);
-                                })
-                                break;
-                        }
-
-                    })
-
-                    socket.on("placeableScenePosition", (roomID, placeableSceneID, position) => {
-                        io.to(roomID).emit("placeableScenePosition", placeableSceneID, position)
-                        setplaceableScenePosition(placeableSceneID, position);
-                        //  placeableScenePosition()
-                    })
-
-                    socket.on("updateScenePlaceable", (roomID, placeable) => {
-                        console.log("update placeableScene")
-                        io.to(roomID).emit("updatePlaceableScene", placeable)
-
-                        updateScenePlaceable(placeable);
-                    })
-
-                    socket.on("removeScenePlaceable", (roomID, placeableSceneID) => {
-                        console.log("remove placeableScene " + placeableSceneID)
-                        io.to(roomID).emit("removeScenePlaceable", placeableSceneID)
-                        removeScenePlaceable(placeableSceneID);
-                    })
-
-                    socket.on("findPlayers", (searchText, searchOptions, campaignID, sceneID, callback) => {
-                        findPlayers(searchText, searchOptions, campaignID, sceneID, (players) => {
-                            callback(players)
-                        })
-                    })
-
-                    socket.on("editTextures", (callback) => {
-                        getTextures(0, (textures) => {
-                            getTextureTypes((types) => {
-                                callback(textures, types);
-                            })
-                        })
-                    })
-
-                    socket.on("getTextures", (typeID, callback) => {
-                        getTextures(typeID, (textures) => {
-
-                            callback(textures);
-
-                        })
-                    })
-
-
-
-                    socket.on("addTexture", (texture, callback) => {
-                        console.log("adding Texture")
-                        received = 0;
-
-                        textureBuffer = "";
-                        addTexture(texture, (autoID) => {
-                            console.log("textureID " + autoID)
-                            callback(autoID)
-                        })
-
-                    })
-
-                    socket.on("updateTextureEffect", (texture, callback) => {
-                        updateTextureEffect(texture, (success) => {
-                            callback(success)
-                        })
-                    })
-
-                    let received = 0;
-                    //let textureBuffer = null;
-
-                    socket.on("sendTextureData", (textureName, directory, textureData = new Uint8Array(), sending, complete, count, callback) => {
-                        if (textureData) {
-                            console.log("sending:" + sending + " received: " + received + " count: " + count + " bytes Recieved: " + textureData.byteLength)
-                            console.log(textureName)
-                            /*if (sending == 0) {
-                                console.log("creating buffer length : " + imgLength)
-                                textureBuffer = new Uint8Array(imgLength)
-                            }*/
-                            if (received == sending) {
-                                if (!complete) {
-                                    console.log("adding to file: " + textureData.length)
-                                    received++;
-                                    appendTexture(textureName, directory, textureData, (written) => {
-                                        callback(written)
-                                    })
-                                } else {
-                                    received = 0;
-                                    console.log("verifying texture")
-                                    checkTexture(textureName, directory, (verified) => {
-
-                                        callback(verified);
-                                    })
-                                    /* writeTexture(textureName, directory, textureBuffer, (complete)=>{
-                                    //     textureBuffer = null;
-                                         received =0;
-                                         callback(complete);
-                                     });*/
-                                }
-                            } else {
-                                console.log("sending received mismatch")
-                                received = 0;
-                                //   textureBuffer = null;
-                                callback(false);
-                            }
-                        } else {
-                            received = 0;
-                            console.log("texuredata null")
-                            callback(false)
-                        }
-                    })
-
-                    socket.on("getTextureEffectRev", (textureID, callback) => {
-                        getTextureEffectRev(textureID, (rev) => {
-                            callback(rev)
-                        })
-                    })
-
-                    socket.on("updateTextureURL", (texture, callback) => {
-                        console.log("finalizing texture:")
-                        console.log(texture)
-                        updateTextureURL(texture, (updated) => {
-                            callback(updated)
-                        })
-                    })
-
-                    socket.on("deleteTexture", (textureID, deleteFiles, fileName) => {
-
-                        if (deleteFiles == true) {
-                            console.log("Deleting texture. (and files)")
-                            deleteTexture(textureID);
-
-                            if (fileName && fileName.length > 15) {
-                                unlinkTexture(fileName)
-                            }
-
-                        } else if (files == false) {
-                            console.log("Deleting texture. (Database)")
-                            deleteTexture(textureID);
-                        }
-                    })
-
-                    socket.on("clearTerrainGeometry", (terrainID, rev, callback) => {
-                        clearTerrainGeometry(terrainID, rev, (updated) => {
-                            console.log("terrain " + terrainID + " cleared " + updated)
-                            callback(true)
-                        })
-                    })
-
-                    socket.on("getTerrainRev", (terrainID, callback) => {
-                        getTerrainRev(terrainID, (rev) => {
-                            callback(rev);
-                        })
-
-                    })
-
-                    socket.on("sendTerrainData", (terrainID, rev, geometryString = "", sending, complete, count, callback) => {
-                        if (geometryString) {
-                            console.log("sending:" + sending + " received: " + received + " count: " + count + " recieved: " + geometryString.length)
-
-                            /*if (sending == 0) {
-                                console.log("creating buffer length : " + imgLength)
-                                textureBuffer = new Uint8Array(imgLength)
-                            }*/
-                            if (received == sending) {
-                                if (!complete) {
-                                    console.log("adding to file: " + geometryString.length)
-                                    received++;
-                                    appendTerrainGeometry(terrainID, rev, geometryString, (written) => {
-                                        callback(true);
-                                    })
-
-                                } else {
-                                    received = 0;
-                                    console.log("last data: " + geometryString.length)
-                                    appendTerrainGeometry(terrainID, rev, geometryString, (written) => {
-                                        updateTerrainGeometryUrl(terrainID, rev, (updated) => {
-                                            callback(true);
-                                        })
-                                    })
-                                }
-                            } else {
-                                console.log("sending received mismatch")
-                                received = 0;
-                                //   textureBuffer = null;
-                                callback(false);
-                            }
-                        } else {
-                            received = 0;
-                            console.log("terainString null")
-                            callback(false)
-                        }
-                    })
-
-                    socket.on("getCampaignSettings", (campaignID, callback) => {
-                        console.log("getting Campaign Settings " + campaignID)
-                        getCampaignSettings(campaignID, (campaignInfo) => {
-                            //  console.log(campaignInfo)
-                            callback(campaignInfo)
-                        })
-                    })
-                    socket.on("updateCampaignName", (campaignID, name, callback) => {
-                        console.log("Updating campaign " + campaignID + " name to: " + name)
-                        updateCampaignName(campaignID, name, (updated) => {
-                            callback(updated)
-                        })
-                    })
-                    socket.on("sendCampaignImageData", (campaignID, name, rev, imageData = null, sending, complete, count, callback) => {
-                        if (imageData) {
-                            console.log("sending:" + sending + " received: " + received + " count: " + count + " recieved: " + imageData.byteLength)
-
-                            /*if (sending == 0) {
-                                console.log("creating buffer length : " + imgLength)
-                                textureBuffer = new Uint8Array(imgLength)
-                            }*/
-                            if (received == sending) {
-                                if (!complete) {
-                                    console.log("adding to file: " + imageData.byteLength)
-                                    received++;
-                                    appendCampaignImageData(campaignID, rev, name, imageData, (written) => {
-                                        if (written == false) received = 0;
-                                        callback(written);
-                                    })
-
-                                } else {
-                                    received = 0;
-                                    console.log("last data: " + imageData.byteLength)
-                                    appendCampaignImageData(campaignID, rev, name, imageData, (written) => {
-                                        if (written) {
-                                            updateCampaignImageUrl(campaignID, rev, name, (updated) => {
-                                                callback(updated);
-                                            })
-                                        }
-                                    })
-                                }
-                            } else {
-                                console.log("sending received mismatch")
-                                received = 0;
-                                //   textureBuffer = null;
-                                callback(false);
-                            }
-                        } else {
-                            received = 0;
-                            console.log("imageData null")
-                            callback(false)
-                        }
-                    })
-
-                    socket.on("getSceneTerrain", (sceneID, callback) => {
-                        getSceneTerrain(sceneID, (terrainArray) => {
-
-                            callback(terrainArray);
-                        })
-                    })
-
-                    socket.on("removeTerrainLayer", (layerID, callback) => {
-                        removeTerrainLayer(layerID, (removed) => {
-                            callback(removed)
-                        })
-                    })
 
 
                 } else {
@@ -6466,8 +5716,11 @@ const checkUser = (user, callback) => {
     var name_email = (mysql.escape(user.nameEmail));
     var pass = (mysql.escape(user.password));
 
-    var query = "SELECT DISTINCT userID, userName, userEmail, userHandle, imageID FROM arcturus.user WHERE ( LOWER(userName) = \
-LOWER( " + name_email + ") OR LOWER(userEmail) = LOWER(" + name_email + ")) AND userPassword = " + pass;
+    var query = `SELECT DISTINCT userID, userName, userEmail, userHandle, imageID, fileName, fileType, fileCRC, fileMimeType, fileSize, fileLastModified \
+FROM arcturus.user, arcturus.file \
+WHERE \
+ ( LOWER(userName) = LOWER( ${name_email}) OR LOWER(userEmail) = LOWER(${name_email})) AND userPassword = ${pass} AND \
+ fileID = imageID`;
 
 
 
@@ -6495,6 +5748,15 @@ LOWER( " + name_email + ") OR LOWER(userEmail) = LOWER(" + name_email + ")) AND 
                     userName: userArr[1],
                     userEmail: userArr[2],
                     userHandle: userArr[3],
+                    image:{
+                        imageID:userArr[4],
+                        name: userArr[5], 
+                        type: userArr[6], 
+                        crc: userArr[7], 
+                        mimeType: userArr[8], 
+                        size: userArr[9], 
+                        lastModified: userArr[10]
+                    }
                 }
 
 
@@ -6905,7 +6167,11 @@ const publishFile = (userID, fileInfo, permissions = "NONE", callback) =>{
                         if(affected > 0)
                         {
                             session.commit()
-                            callback({fileID: fileID, nftID:nftID, userFilePermissions:permissions})
+                            fileInfo.fileID = fileID;
+                            fileInfo.nft = {nftID: nftID};
+                            fileInfo.permissions = permissions;
+
+                            callback(fileInfo)
                         }else{
                             session.rollback()
                             callback({error:new Error("Can not publish file.")})
@@ -6927,13 +6193,22 @@ const publishFile = (userID, fileInfo, permissions = "NONE", callback) =>{
                     checkUserFile(userID, fileID, (found)=>{
                         if(found.userFilePermissions != null)
                         {
-                            callback({fileID:fileID, userFilePermissions:found.userFilePermissions})
+                            fileInfo.fileID = fileID;
+                            fileInfo.nft = { nftID: nftID };
+                            fileInfo.permissions = found.userFilePermissions;
+
+                            callback(fileInfo)
+
                         }else{
                             userFileTable.insert().set("userID", userID).set("fileID", fileID).set("userFilePermissions", permissions).execute().then((userFileInsert) => {
                                 const affected = userFileInsert.getAffectedItemsCount()
                                 if (affected > 0) {
                                     session.commit()
-                                    callback({ fileID: fileID, nftID:nftID, userFilePermissions: permissions })
+                                    fileInfo.fileID = fileID;
+                                    fileInfo.nft = { nftID: nftID };
+                                    fileInfo.permissions = permissions;
+
+                                    callback(fileInfo)
                                 } else {
                                     session.rollback()
                                     callback({ error: new Error("Can not publish file.") })
@@ -6947,7 +6222,11 @@ const publishFile = (userID, fileInfo, permissions = "NONE", callback) =>{
                         }
                     })
                 }else{
-                    callback({fileID:null, nftID:nftID, userFilePermissions:null })
+                    fileInfo.fileID = fileID;
+                    fileInfo.nft = { nftID: nftID };
+                    fileInfo.permissions = permissions;
+
+                    callback(fileInfo)
                 }
             }
         })
@@ -6978,17 +6257,17 @@ const createRealm = (userID, realmName, imageFile, page, index, callback) => {
                         roomTable.insert(["roomName"]).values([realmName]).execute().then((roomResult)=>{
                             const roomID = roomResult.getAutoIncrementValue()
                             if(roomID != undefined){
-                                realmTable.insert(["realmName", "userID", "imageID", "roomID", "realmPage", "realmIndex"]).values([
-                                    realmName, userID, fileID, roomID, page, index
+                                realmTable.insert(["realmName","configID", "userID", "imageID", "roomID", "realmPage", "realmIndex"]).values([
+                                    realmName, -1,  userID, fileID, roomID, page, index, imageFile.crc
                                 ]).execute().then((realmResult) => {
                                     const realmID = realmResult.getAutoIncrementValue()
                                     if (realmID != undefined) {   
                                         session.commit();
-                                        imageFile.imageID = fileID;
+                                        imageFile.fileID = fileID;
                                         imageFile.userFilePermissions = permissions;
                                         imageFile.nftID = nftID;
 
-                                        callback({realmID:realmID, roomID:roomID, image:imageFile , configID: null, realmPage:page, realmIndex:index})
+                                        callback({userID:userID, realmID:realmID, roomID:roomID, imageFile:imageFile , config: {fileID:-1}, realmPage:page, realmIndex:index})
                                     } else {
                                         session.rollback()
                                         callback({ error: new Error("Error adding realm.") })
@@ -7013,6 +6292,70 @@ const createRealm = (userID, realmName, imageFile, page, index, callback) => {
         
           
     })
+}
+
+const getRealms = (userID, callback) =>{
+    mySession.then((session) => {
+
+        const query = "\
+SELECT \
+ realm.realmID, realm.realmName, realm.userID, realm.roomID, realm.realmPage, realm.realmIndex, \
+ image.fileID, image.fileName, image.fileCRC, image.fileMimeType, image.fileSize, image.fileLastModified, \
+ config.fileID, config.fileName, config.fileCRC, config.fileMimeType, config.fileSize, config.fileLastModified, \
+FROM \
+ arcturus.realm, arcturus.file as image, arcturus.file as config \
+WHERE \
+ realm.imageID = image.fileID AND realm.configID = file.fileID AND userID = " + userID
+
+       session.sql(query).execute().then((selectResult)=>{
+            
+            if(selectResult.hasData())
+            {
+                const all = selectResult.fetchAll()
+                let realms = []
+
+                all.forEach((value) => {
+                    const realm = {
+                        realmID: value[0],
+                        realmName: value[1],
+                        userID: value[2],
+                        roomID: value[3],
+                        realmPage: value[4],
+                        realmIndex: value[5],
+                        image:{
+                            fileID:value[6],
+                            name:value[7],
+                            crc:value[8],
+                            mimeType:value[9],
+                            size:value[10],
+                            lastModified: value[11],
+                        },
+                        config:{
+                            fileID: value[12],
+                            name: value[13],
+                            crc: value[14],
+                            mimeType: value[15],
+                            size: value[16],
+                            lastModified: value[17],
+                        }
+                    };
+                    console.log(realm)
+                    realms.push(realm);     
+                });
+                
+                
+                
+                callback({success:true, realms:realms})
+            } else {
+                callback({ success: false })
+            }
+        }).catch((err)=>{
+            console.log(err)
+
+            callback({error:new Error("DB error")})
+        })
+    })
+
 }
 
 
