@@ -5,6 +5,7 @@ const fs = require('fs');
 const cryptojs = require('crypto-js');
 const util = require('util');
 const { homeURL, socketURL, wwwURL, server, dbURL, dbPort, sqlCred, emailUser, emailPassword, authToken } = require('./httpVars');
+const { constants } = require('buffer');
 
 
 
@@ -6257,8 +6258,8 @@ const createRealm = (userID, realmName, imageFile, page, index, callback) => {
                         roomTable.insert(["roomName"]).values([realmName]).execute().then((roomResult)=>{
                             const roomID = roomResult.getAutoIncrementValue()
                             if(roomID != undefined){
-                                realmTable.insert(["realmName","configID", "userID", "imageID", "roomID", "realmPage", "realmIndex"]).values([
-                                    realmName, -1,  userID, fileID, roomID, page, index,
+                                realmTable.insert(["realmName","configID", "userID", "imageID", "roomID", "realmPage", "realmIndex", "realmPublished"]).values([
+                                    realmName, -1,  userID, fileID, roomID, page, index, "NONE"
                                 ]).execute().then((realmResult) => {
                                     const realmID = realmResult.getAutoIncrementValue()
                                     if (realmID != undefined) {   
@@ -6267,7 +6268,7 @@ const createRealm = (userID, realmName, imageFile, page, index, callback) => {
                                         imageFile.userFilePermissions = permissions;
                                         imageFile.nftID = nftID;
                                        
-                                        callback({ realm: { userID: userID, realmID: realmID, realmName: realmName, roomID: roomID, imageFile: imageFile, config: { fileID: -1 }, realmPage: page, realmIndex: index } })
+                                        callback({ realm: { userID: userID, realmID: realmID, realmName: realmName, roomID: roomID, imageFile: imageFile, config: { fileID: -1 }, realmPage: page, realmIndex: index, realmPublished:"NONE" } })
                                     } else {
                                         session.rollback()
                                         callback({ error: new Error("Error adding realm.") })
@@ -6301,7 +6302,7 @@ const getRealms = (userID, callback) =>{
 SELECT \
  realm.realmID, realm.realmName, realm.userID, realm.roomID, realm.realmPage, realm.realmIndex, \
  image.fileID, image.fileName, image.fileCRC, image.fileMimeType, image.fileSize, image.fileLastModified, \
- config.fileID, config.fileName, config.fileCRC, config.fileMimeType, config.fileSize, config.fileLastModified \
+ config.fileID, config.fileName, config.fileCRC, config.fileMimeType, config.fileSize, config.fileLastModified, realm.realmPublished \
 FROM \
  arcturus.realm, arcturus.file as image, arcturus.file as config \
 WHERE \
@@ -6322,6 +6323,7 @@ WHERE \
                         roomID: value[3],
                         realmPage: value[4],
                         realmIndex: value[5],
+                        realmPublished: value[18],
                         image:{
                             fileID:value[6],
                             name:value[7],
