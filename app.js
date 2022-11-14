@@ -6,6 +6,7 @@ const cryptojs = require('crypto-js');
 const util = require('util');
 const { homeURL, socketURL, wwwURL, server, dbURL, dbPort, sqlCred, emailUser, emailPassword, authToken } = require('./httpVars');
 const { constants } = require('buffer');
+const { escape } = require('mysql2');
 
 
 
@@ -294,8 +295,20 @@ io.on('connection', (socket) => {
                     })
                     socket.on("createStorage", (fileInfo, engineKey,  callback) => {
                      
-                        createStorage(fileInfo, engineKey,  (created) => {
+                        createStorage(user.userID, fileInfo, engineKey,  (created) => {
                             callback(created)
+                        })
+                    })
+
+                    socket.on("useConfig", (fileID, storageKey, callback)=>{
+                        useConfig(user.userID, fileID, storageKey, (success)=>{
+                            callback(success)
+                        })
+                    })
+
+                    socket.on("checkStorageCRC", (crc, callback) =>{
+                        checkStorageCRC(user.userID, crc, (result)=>{
+                            callback(result)
                         })
                     })
 
@@ -5398,9 +5411,9 @@ function createUser(user, callback) {
         session.startTransaction();
         try {
             var res = userTable.insert(
-                ['userName', 'userPassword', "userEmail", 'refID', 'userCode', 'statusID']
+                ['userName', 'userPassword', "userEmail", 'refID', 'userCode', 'statusID', "imageID"]
             ).values(
-                [user.userName, user.userPass, user.userEmail, user.userRefID, veriCode, 3]
+                [user.userName, user.userPass, user.userEmail, user.userRefID, veriCode, 3, -1]
             ).execute();
             res.then((value) => {
                 var id = value.getAutoIncrementValue();
@@ -5927,7 +5940,7 @@ const updateStorageConfig = (fileID, storageID, fileInfo, callback) =>{
       
     })
 }
-const createStorage = (fileInfo, storageKey, callback ) =>{
+const createStorage = (userID, fileInfo, storageKey, callback ) =>{
 
 
     mySession.then((session) => {
@@ -5936,7 +5949,7 @@ const createStorage = (fileInfo, storageKey, callback ) =>{
         var storageTable = arcDB.getTable("storage");
         var fileTable = arcDB.getTable("file")
    
-        
+        console.log(fileInfo)
 
         fileTable.insert(
             ["fileName", "fileCRC", "fileSize", "fileType", "fileMimeType" , "fileLastModified"]
@@ -5947,11 +5960,11 @@ const createStorage = (fileInfo, storageKey, callback ) =>{
                 callback({error:new Error("File not added.")})
             }else{
                 const fileID = fileInsert.getAutoIncrementValue()
-
+                console.log(fileID)
                 storageTable.insert(
-                    ['storageKey', "statusID", "fileID"]
+                    ['storageKey', "statusID", "fileID", "userID"]
                 ).values(
-                    [storageKey, status.Offline, fileID]
+                    [storageKey, status.Offline, fileID, userID]
                 ).execute().then((res) => {
                     const affected = res.getAffectedItemsCount();
 
@@ -5960,6 +5973,8 @@ const createStorage = (fileInfo, storageKey, callback ) =>{
                         const storageID = res.getAutoIncrementValue()
 
                         callback({success:true, storageID: storageID, fileID: fileID})
+                    }else{
+                        callback({success:false})
                     }
                     
                 }).catch((err) => {
@@ -5968,13 +5983,16 @@ const createStorage = (fileInfo, storageKey, callback ) =>{
                     callback({error:new Error("Storage not created")})
                 })
             }
+        }).catch((err) =>{
+            console.log(err)
+            callback({ error: new Error("Storage not created") })
         })
        
         
        
     }).catch((err) => {
         console.log(err)
-        callback(false)
+        callback({ error: new Error("Storage not created") })
     })
 }
 
@@ -6065,6 +6083,80 @@ function formatedNow(now = new Date(), small = false) {
 
 
     
+}
+
+const checkStorageCRC = (userID, crc, callback) =>{
+
+    mySession.then((session) => {
+      
+        const arcDB = session.getSchema("arcturus");
+        const fileTable = arcDB.getTable("file");
+        const storageTable = arcDB.getTable("storage");
+
+
+        fileTable.select(["fileID"]).where("fileCRC = :fileCRC").bind("fileCRC", crc).execute().then((fileResult)=>{
+
+            const one = fileResult.fetchOne()
+            if(one != undefined)
+            {
+                const fileID = one[0];
+                
+                storageTable.select(["storageID"]).where("fileID = :fileID AND userID = :userID").bind("fileID", fileID).bind("userID",userID).execute().then((storageResult)=>{
+                    
+                    const row = storageResult.fetchOne()
+
+                    if(row != undefined){
+                        const storageID = row[0];
+                        console.log("storageCRC passed")
+                        callback({ success: true, fileID: fileID, storageID: storageID })
+                    }else{
+                        console.log("no storage ID for file")
+                        callback({ success: false, fileID: fileID, storageID: null })
+                    }    
+                
+                }).catch((err)=>{
+                    console.log(err)
+                    callback({ error: new Error("DB error") })
+                })
+
+
+            }else{
+                callback({error:new Error("File CRC failed.")})
+            }
+
+        }).catch((err)=>{
+            console.log(err)
+            callback({error: new Error("DB error")})
+        })
+
+    })
+}
+
+const useConfig = (userID, fileID, storageKey, callback) =>{
+    mySession.then((session) => {
+
+        const arcDB = session.getSchema("arcturus");
+        const storageTable = arcDB.getTable("storage");
+
+        storageTable.insert(["userID", "fileID", "storageKey", "statusID",]).values(
+            userID, fileID, storageKey, status.Offline, 
+        ).execute().then((storageInsert)=>{
+            const affected = storageInsert.getAffectedItemsCount()
+
+            if(affected > 0)
+            {
+                const storageID = storageInsert.getAutoIncrementValue();
+
+                callback({success:true, storageID: storageID})
+            }else{
+                callback({success:false})
+            }
+        }).catch((err)=>{
+            console.log(err)
+            callback({error: new Error("DB error")})
+        })
+
+    })
 }
 
 const checkFileCRC = (crc, callback) =>{
