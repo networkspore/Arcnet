@@ -6360,7 +6360,7 @@ const createRealm = (userID, realmName, imageFile, page, index, callback) => {
                                         imageFile.userFilePermissions = permissions;
                                         imageFile.nftID = nftID;
                                        
-                                        callback({ realm: { userID: userID, realmID: realmID, realmName: realmName, roomID: roomID, imageFile: imageFile, config: { fileID: -1 }, realmPage: page, realmIndex: index, realmPublished:"NONE" } })
+                                        callback({ realm: { userID: userID, realmID: realmID, realmName: realmName, roomID: roomID, image: imageFile, config: { fileID: -1 }, realmPage: page, realmIndex: index, realmPublished:"NONE" } })
                                     } else {
                                         session.rollback()
                                         callback({ error: new Error("Error adding realm.") })
