@@ -6184,13 +6184,13 @@ const checkFileCRC = (crc, callback) =>{
         var arcDB = session.getSchema('arcturus');
         var fileTable = arcDB.getTable("file");
         
-        fileTable.select(["fileID", "nftID"]).where("fileCRC = :fileCRC").bind("fileCRC", crc).execute().then((selectRes)=>{
+        fileTable.select(["fileID"]).where("fileCRC = :fileCRC").bind("fileCRC", crc).execute().then((selectRes)=>{
             const one = selectRes.fetchOne()
             if(one != undefined)
             {
-                callback({fileID: one[0], nftID:one[1]})
+                callback({fileID: one[0]})
             }else{
-                callback({fileID: null, nftID:null})
+                callback({fileID: null})
             }
         })
 
@@ -6260,7 +6260,6 @@ const publishFile = (userID, fileInfo, permissions = "NONE", callback) =>{
         
         checkFileCRC(fileInfo.crc, (result) => {
             const fileID = result.fileID;
-            const nftID = result.nftID;
             session.startTransaction()
             if(fileID == null)
             {
@@ -6279,7 +6278,6 @@ const publishFile = (userID, fileInfo, permissions = "NONE", callback) =>{
                         {
                             session.commit()
                             fileInfo.fileID = fileID;
-                            fileInfo.nft = {nftID: nftID};
                             fileInfo.permissions = permissions;
 
                             callback(fileInfo)
@@ -6300,45 +6298,39 @@ const publishFile = (userID, fileInfo, permissions = "NONE", callback) =>{
                     callback({error: new Error("File Insert failed.")})
                 })
             }else{
-                if(nftID == null){
-                    checkUserFile(userID, fileID, (found)=>{
-                        if(found.userFilePermissions != null)
-                        {
-                            fileInfo.fileID = fileID;
-                            fileInfo.nft = { nftID: nftID };
-                            fileInfo.permissions = found.userFilePermissions;
+              
+                checkUserFile(userID, fileID, (found)=>{
+                    if(found.userFilePermissions != null)
+                    {
+                        fileInfo.fileID = fileID;
+                    
+                        fileInfo.permissions = found.userFilePermissions;
 
-                            callback(fileInfo)
+                        callback(fileInfo)
 
-                        }else{
-                            userFileTable.insert().set("userID", userID).set("fileID", fileID).set("userFilePermissions", permissions).execute().then((userFileInsert) => {
-                                const affected = userFileInsert.getAffectedItemsCount()
-                                if (affected > 0) {
-                                    session.commit()
-                                    fileInfo.fileID = fileID;
-                                    fileInfo.nft = { nftID: nftID };
-                                    fileInfo.permissions = permissions;
+                    }else{
+                        userFileTable.insert().set("userID", userID).set("fileID", fileID).set("userFilePermissions", permissions).execute().then((userFileInsert) => {
+                            const affected = userFileInsert.getAffectedItemsCount()
+                            if (affected > 0) {
+                                session.commit()
+                                fileInfo.fileID = fileID;
+                         
+                                fileInfo.permissions = permissions;
 
-                                    callback(fileInfo)
-                                } else {
-                                    session.rollback()
-                                    callback({ error: new Error("Can not publish file.") })
-                                }
+                                callback(fileInfo)
+                            } else {
+                                session.rollback()
+                                callback({ error: new Error("Can not publish file.") })
+                            }
 
-                            }).catch((err) => {
-                                console.log(err)
-                                session.rollback();
-                                callback({ error: new Error("userFile Insert failed.") })
-                            })
-                        }
-                    })
-                }else{
-                    fileInfo.fileID = fileID;
-                    fileInfo.nft = { nftID: nftID };
-                    fileInfo.permissions = permissions;
-
-                    callback(fileInfo)
-                }
+                        }).catch((err) => {
+                            console.log(err)
+                            session.rollback();
+                            callback({ error: new Error("userFile Insert failed.") })
+                        })
+                    }
+                })
+              
             }
         })
         
@@ -6361,7 +6353,7 @@ const createRealm = (userID, realmName, imageFile, page, index, callback) => {
                     callback({ error: new Error("Unable to create realm.") })
                 }else{
                     const fileID = pub.fileID;
-                    const nftID = pub.nftID;
+            
                     const permissions = pub.userFilePermissions;   
 
                     if(fileID != null){
@@ -6376,7 +6368,7 @@ const createRealm = (userID, realmName, imageFile, page, index, callback) => {
                                         session.commit();
                                         imageFile.fileID = fileID;
                                         imageFile.userFilePermissions = permissions;
-                                        imageFile.nftID = nftID;
+                                    
                                        
                                         callback({ realm: { userID: userID, realmID: realmID, realmName: realmName, roomID: roomID, image: imageFile, config: { fileID: -1 }, realmPage: page, realmIndex: index, realmPublished:"NONE" } })
                                     } else {
