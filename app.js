@@ -227,9 +227,27 @@ io.on('connection', (socket) => {
                         })
                     })
 
+                    socket.on("deleteRealm", (realmID, callback) =>{
+                        deleteRealm(user.userID,realmID,(result) =>{
+                            callback(result)
+                        })
+                    })
+
                     socket.on("getRealms", (callback)=>{
                         getRealms(user.userID, (realms)=>{
                             callback(realms)
+                        })
+                    })
+
+                    socket.on("getQuickBar", (callback) => {
+                        getQuickBar(user.userID, (result)=>{
+                            callback(result);
+                        })
+                    })
+
+                    socket.on("setQuickBar", (qBarJSON, callback) => {
+                        setQuickBar(user.userID, qBarJSON, (result)=>{
+                            callback(result)
                         })
                     })
 
@@ -6452,4 +6470,118 @@ WHERE \
 
 }
 
+const deleteRealm = (userID, realmID, callback) =>{
+    
+    mySession.then((session) => {
+        //to get more complicated?
+
+        var arcDB = session.getSchema("arcturus")
+        var userTable = arcDB.getTable("user")
+        var realmTable = arcDB.getTable("realm")
+        console.log("deleting realm: " + realmID + " by userID: " + userID)
+        realmTable.delete().where("userID = :userID AND realmID = :realmID").bind("userID", userID).bind("realmID", realmID).execute().then((deleted)=>{
+            const affectedRealms = deleted.getAffectedItemsCount();
+            userTable.select(["userQuickBar"]).where("userID = :userID").bind("userID", userID).execute().then((qbResult)=>{
+                const one = qbResult.fetchOne()
+                if(one != undefined && one[0] != null)
+                {
+                    const uQB = one[0];
+                    if(uQB.length > 0)
+                    {
+                        const qbArray = JSON.parse(uQB)
+                        if(Array.isArray(qbArray)){
+                            const index = qbArray.findIndex(qb => qb.realmID == realmID)
+
+                            if(index > -1)
+                            {
+                                if(qbArray.length == 1){
+                                    qbArray.pop()
+                                }else{
+                                    qbArray.splice(index, 1)
+                                }
+                               
+                                const str = JSON.stringify(qbArray)
+                                userTable.update().set("userQuickBar", str).where("userID = :userID").bind("userID", userID).execute().then((qbUpdate) =>{
+                                        const affectedUser = qbUpdate.getAffectedItemsCount()
+                                        
+                                        callback({ quickBarUpdate:affectedUser > 0, realmDeleted: affectedRealms > 0})
+                                        
+                                        
+                                }).catch((err) => {
+                                    console.log(err)
+                                    callback({ error: new Error("quickBar select error"), realmDeleted: (affectedRealms > 0) })
+                                })
+                            
+                            }else{
+                                callback({ quickBarUpdate: false, realmDeleted: affectedRealms > 0 })
+                            }
+                        } else {
+                            callback({ quickBarUpdate: false, realmDeleted: affectedRealms > 0 })
+                        }
+                    } else {
+                        callback({ quickBarUpdate: false, realmDeleted: affectedRealms > 0 })
+                    }
+                } else {
+                    callback({ quickBarUpdate: false, realmDeleted: affectedRealms > 0 })
+                }
+
+            }).catch((err)=>{
+                console.log(err)
+                callback({ error: new Error("quickBar select error"), realmDeleted: (affectedRealms > 0) })
+            })
+        }).catch((err) =>{
+            console.log(err)
+            callback({ error: new Error("realm delete DB error") })
+        })
+    })
+
+}
+
+const getQuickBar = (userID, callback) =>{
+    mySession.then((session) => {
+
+        var arcDB = session.getSchema('arcturus');
+        var userTable = arcDB.getTable("user");
+
+        userTable.select(["userQuickBar"]).where("userID = :userID").bind("userID", userID).execute().then((uqbResult)=>{
+            const one = uqbResult.fetchOne()
+            if(one != undefined)
+            {
+                const qBar = one[0];
+                if(qBar != "" && qBar != null){
+                    callback({ success: true, quickBar: qBar })
+                }else{
+                    callback({ success: false })
+                }
+            }else{
+                callback({success:false})
+            }
+        }).catch((err)=>{
+            callback({error: new Error("DB error")})
+        })
+    
+    })
+}
+
+const setQuickBar = (userID, qBarJSON, callback) => {
+    mySession.then((session) => {
+
+        var arcDB = session.getSchema('arcturus');
+        var userable = arcDB.getTable("user");
+
+
+        userTable.update().set("userQuickBar", qBarJSON).where("userID = :userID").bind("userID", userID).execute().then((uqbResult) => {
+            const affected = uqbResult.getAffectedItemsCount()
+            if (affected > 0) {
+                callback({ success: true })
+            } else {
+                callback({ success: false })
+            }
+        }).catch((err) => {
+            console.log(err)
+            callback({ error: new Error("DB error") })
+        })
+
+    })
+}
 
