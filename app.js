@@ -338,8 +338,8 @@ io.on('connection', (socket) => {
 
                     })
 
-                    socket.on("updateStorageConfig", (fileID, storageID, newFIle, callback)=>{
-                        updateStorageConfig(fileID, storageID, newFIle, (result)=>{
+                    socket.on("updateStorageConfig", (fileID, fileInfo, callback)=>{
+                        updateStorageConfig(fileID, fileInfo, (result)=>{
                             callback(result)
                         })
                     })
@@ -5898,62 +5898,33 @@ const updateUserPassword = (info, callback) => {
     })
 }
 
-const updateStorageConfig = (fileID, storageID, fileInfo, callback) =>{
+const updateStorageConfig = (fileID, fileInfo, callback) =>{
     mySession.then((session) => {
 
         var arcDB = session.getSchema('arcturus');
-        var storageTable = arcDB.getTable("storage");
         var fileTable = arcDB.getTable('file')
 
-        fileTable.insert(
-            ["fileName", "fileCRC", "fileSize", "fileType", "fileMimeType", "fileLastModified"]
-        ).values(
-            [fileInfo.name, fileInfo.crc, fileInfo.size, fileInfo.type, fileInfo.mimeType, fileInfo.lastModified]
-        ).execute().then((fileInsert) => {
-            const affected = fileInsert.getAffectedItemsCount()
-            if(affected > 0){
-                
-                fileTable.delete().where("fileID = :fileID").set("fileID", fileID).execute().then((deleted)=>{
-                    const delAffected = deleted.getAffectedItemsCount()
+        fileTable.update().set(
+            "fileName", fileInfo.name
+        ).set(
+            "fileCRC", fileInfo.crc
+        ).set(
+            "fileSize", fileInfo.size
+        ).set(
+            "fileType", fileInfo.type
+        ).set(
+            "fileMimeType", fileInfo.mimeType
+        ).set(
+            "fileLastModified", fileInfo.lastModified
+        ).where("fileID = :fileID").bind(
+            "fileID", fileID
+        ).execute().then((fileUpdateResult)=>{
+            const result = fileUpdateResult.getAffectedItemsCount()
 
-                    if(delAffected > 0)
-                    {
-                        fileTable.insert(
-                            ["fileName", "fileCRC", "fileSize", "fileType", "fileMimeType", "fileLastModified"]
-                        ).values(
-                            [fileInfo.name, fileInfo.crc, fileInfo.size, fileInfo.type, fileInfo.mimeType, fileInfo.lastModified]
-                        ).execute().then((fileInsert) => {
-                            if(fileInsert.getAffectedItemsCount() > 0)
-                            {
-                                const fileID = fileInsert.getAutoIncrementValue();
-
-                                storageTable.update().set("fileID", fileID).set("statusID", status.Offline).where("storageID = :storageID").bind("storageID", storageID).execute().then((res) => {
-                                    const affected = res.getAffectedItemsCount() > 0;
-
-                                    if(affected)
-                                    {
-                                        callback({ success: true, fileID: fileID })
-                                    }else{
-                                        callback({error:new Error("Cannot update storage.")})
-                                    }
-
-                                    
-                                }).catch((err) => {
-                                    console.log(err)
-                                    callback(false);
-                                })
-                            }
-                        })
-                    }else{
-                        callback({ error: new Error("Cannot update storage. Unable to delete old file") })
-                    }
-                })
-
-               
-                
-            }else{
-                callback({error:"File not added"})
-            }
+            callback({success:result > 0})
+        }).catch((err)=>{
+            console.log(err);
+            callback({error: new Error("DB error")})
         })
       
     })
