@@ -245,9 +245,10 @@ io.on('connection', (socket) => {
                         })
                     })
 
-                    socket.on("setQuickBar", (qBarJSON, callback) => {
+                    socket.on("setQuickBar", (qBarJSON) => {
+                       
                         setQuickBar(user.userID, qBarJSON, (result)=>{
-                            callback(result)
+                            console.log(result)
                         })
                     })
 
@@ -6530,7 +6531,7 @@ const setQuickBar = (userID, qBarJSON, callback) => {
     mySession.then((session) => {
 
         var arcDB = session.getSchema('arcturus');
-        var userable = arcDB.getTable("user");
+        var userTable = arcDB.getTable("user");
 
 
         userTable.update().set("userQuickBar", qBarJSON).where("userID = :userID").bind("userID", userID).execute().then((uqbResult) => {
