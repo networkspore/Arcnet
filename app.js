@@ -236,6 +236,16 @@ io.on('connection', (socket) => {
 
                     socket.on("deleteRealm", (realmID, callback) =>{
                         deleteRealm(user.userID,realmID,(result) =>{
+                            if(!("error" in result)){
+                                if(result.success)
+                                {
+                                    result.realmUsers.forEach(user => {
+                                        getUserSocket(user.userID, (userSocket)=>{     
+                                            if(userSocket != null) io.to(userSocket).emit("realmDelete", realmID)
+                                        }) 
+                                    });
+                                }
+                            }
                             callback(result)
                         })
                     })
@@ -246,6 +256,12 @@ io.on('connection', (socket) => {
                         })
                     })
 
+                    socket.on("updateRealmInformation", (information, callback)=>{
+                        updateRealmInformation(information, (result)=>{
+                            callback(result)
+                        })
+                    })
+                     
                     socket.on("getQuickBar", (callback) => {
                         getQuickBar(user.userID, (result)=>{
                             callback(result);
@@ -372,23 +388,28 @@ io.on('connection', (socket) => {
 
 
 
-                    socket.on('joinRoom', (room, userID, userName, returnJoined) => {
-                        console.log("Joining room " + room);
-                        socket.join(room)
-                        setUserRoomStatus(room, userID, "Online", (statusUpdated) => {
-
-                            if (statusUpdated > 0) {
-                                console.log("sending:userRoomStatus(" + room + "):" + userID + " : " + "Online");
-                                io.to(room).emit("userRoomStatus", userID, userName, "Online");
-                                getRoomUsers(room, userID, (users) => {
-                                    getStoredMessages(room, (messages) => {
-                                        returnJoined(true, users, messages);
+                    socket.on('joinRoom', (roomID, returnJoined) => {
+                        console.log("Joining room " + roomID);
+                        
+                        setUserRoomStatus(user.userID,roomID,status.Online, (statusUpdated) => {
+                            if("error" in statusUpdated)
+                            {
+                                returnJoined({error:statusUpdated.error})
+                            }else{
+                                if (statusUpdated.success) {
+                                    console.log("sending:userRoomStatus(" + roomID + "):" + user.userID + " : " + "Online");
+                                    io.to(roomID).emit("userRoomStatus", user.userID, user.userName, "Online");
+                                    getRoomUsers(user.userID, roomID, (users) => {
+                                        getStoredMessages(roomID, (messages) => {
+                                            socket.join(roomID)
+                                            returnJoined({success:true, users:users, messages:messages});
+                                        });
                                     });
-                                });
 
-                            } else {
-                                returnJoined(false, [], []);
-                            }
+                                } else {
+                                    returnJoined({success:false});
+                                }
+                            } 
                         })
 
                     });
@@ -4721,7 +4742,6 @@ const updateUserStatus = (userID = -1, statusID = 5, socketID = "", callback) =>
     let query = "UPDATE arcturus.user SET user.userSocket = " + mysql.escape(socketID) + "\
 , user.statusID = " + statusID + " WHERE userID =" + userID;
 
-    console.log(query)
 
 
     if (!util.types.isPromise(mySession)) {
@@ -4820,47 +4840,38 @@ WHERE\
 
 
 
-const setUserRoomStatus = (room = "", userID = -1, status = "Offline", callback) => {
-    room = mysql.escape(room);
-    if (userID == "" || userID == null || userID === undefined || userID < 1) { callback(false); }
-    let affectedRows = 0;
-
-    let update = "\
-UPDATE arcturus.userRoom, arcturus.status \
-SET userRoom.statusID = status.statusID \
-WHERE userRoom.userID = " + userID + " \
-AND status.statusName = " + mysql.escape(status);
-
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    console.log(update);
-    console.log("setUserRoomStatus (room:userID): " + room + ":" + userID)
+const setUserRoomStatus = (userID , roomID, statusID = 4, callback) => {
+ 
 
 
-    mySession.then((mySession) => {
-        mySession.sql(update).execute().then((results) => {
+    mySession.then((session) => {
+        const arcDB = session.getSchema("arcturus")
+        const userRoomTable = arcDB.getTable("userRoom")
+
+        userRoomTable.update().set("statusID", statusID).where("userID = :userID AND roomID = :roomID").bind("userID", userID).bind("roomID", roomID).execute().then((results) => {
             affectedRows = results.getAffectedItemsCount();
 
             if (affectedRows > 0) {
-                callback(true);
+                callback({success:true});
             } else {
-                callback(false);
+                callback({success:false});
             }
+        }).catch((err)=>{
+            console.log(err)
+            callback({error: new Error("DB error")})
         })
     })
 
 }
 
-const getRoomUsers = (room = "", userID = -1, callback) => {
-    room = mysql.escape(room);
+const getRoomUsers = (userID, roomID, callback) => {
+  
     let query = "\
 SELECT \
 user.userID, \
 user.userName, \
 s1.statusName as userStatus, \
 s2.statusName as roomStatus, \
-userRoom.userRoomID, \
 userRoom.userRoomAudio, \
 userRoom.userRoomVideo, \
 userRoom.userRoomMedia \
@@ -4870,13 +4881,14 @@ arcturus.userRoom, \
 arcturus.status s1, \
 arcturus.status s2 \
 WHERE \
+userRoom.userRoomBanned <> 1 AND \
 s1.statusID = user.statusID AND \
 s2.statusID = userRoom.statusID AND \
 user.userID = userRoom.userID AND \
-userRoom.roomID = " + room + " AND \
+userRoom.roomID = " + roomID + " AND \
 userRoom.userID <> " + userID;
 
-    console.log("Getting users in: " + room);
+    console.log("Getting users in: " + roomID);
 
 
     if (!util.types.isPromise(mySession)) {
@@ -4887,12 +4899,26 @@ userRoom.userID <> " + userID;
         mySession.sql(query).execute().then((result) => {
             console.log("room has users: " + result.hasData());
             if (result.hasData()) {
-                const users = result.fetchAll();
-
-                callback(users);
+                const array = result.fetchAll();
+                let users = []
+                array.forEach(user => {
+                    users.push({
+                        userID: user[0],
+                        userName: user[1],
+                        userStatus: user[2],
+                        roomStatus: user[3],
+                        audio:user[4],
+                        video:user[5],
+                        media:user[6]
+                    })
+                });
+                callback({success:true, users});
             } else {
-                callback([]);
+                callback({success:false});
             }
+        }).catch((err)=>{
+            console.log(err)
+            callback({error:new Error("DB error")})
         })
     })
 }
@@ -6350,71 +6376,134 @@ const checkRealmFile = (realmID, fileID, callback) => {
     })
 }
 
+const insertFile = (fileTable, fileInfo) =>{
+    return new Promise(resolve =>{
+        fileTable.insert(
+            ["fileName", "fileCRC", "fileSize", "fileType", "fileMimeType", "fileLastModified"]
+        ).values(
+            [fileInfo.name, fileInfo.crc, fileInfo.size, fileInfo.type, fileInfo.mimeType, fileInfo.lastModified]
+        ).execute().then((fileInsert) => {
+
+            const fileID = fileInsert.getAutoIncrementValue()
+            fileInfo.fileID = fileID
+            resolve(fileInfo)
+        })
+    })
+    
+}
+
 const createRealm = (userID, realmName, imageFile, page, index, callback) => {
     mySession.then((session) => {
 
         var arcDB = session.getSchema('arcturus');
         var realmTable = arcDB.getTable("realm");
         var roomTable = arcDB.getTable("room");
+        const fileTable = arcDB.getTable("file")
       
+        const insertRealm = (innerRealmTable, realmName, userID,imageID, page, index, roomID, gatewayRoomID) =>{
+            return new Promise(resolve =>{
+            
+                innerRealmTable.insert([
+                    "realmName", 
+                    "configID",
+                    "userID", 
+                    "roomID", 
+                    "gatewayRoomID", 
+                    "imageID",  
+                    "realmPage", 
+                    "realmIndex", 
+                    "statusID", 
+                    "accessID", 
+                    "advisoryID", 
+                    "realmType"
+                 ]).values([
+                    realmName, 
+                    -1, 
+                    userID, 
+                    roomID, 
+                    gatewayRoomID, 
+                    imageID, 
+                    page, 
+                    index, 
+                    status.Offline, 
+                    access.private, 
+                    advisory.none, 
+                    ""
+                ]).execute().then((realmResult) => {
+                    const realmID = realmResult.getAutoIncrementValue()
+                    resolve(realmID)
+                })
+
+            })
+        }
+
+      
+           
+     
+
         try{
              session.startTransaction()
            
                 roomTable.insert(["roomName"]).values([realmName]).execute().then((roomResult)=>{
                     const roomID = roomResult.getAutoIncrementValue()
-                    if(roomID != undefined){
-                        realmTable.insert(["realmName","configID", "userID", "imageID", "roomID", "realmPage", "realmIndex", "statusID", "accessID", "advisoryID", "realmType"]).values([
-                            realmName, -1,  userID, roomID, page, index, status.Offline, access.private, advisory.none, ""
-                        ]).execute().then((realmResult) => {
-                            const realmID = realmResult.getAutoIncrementValue()
-                            if (realmID != undefined) {   
-                               
-                                addFileToRealm(userID, realmID, imageFile, (addResult) => {
-                                    if ("error" in addResult) {
-                                        session.rollback()
-                                        callback({ error: new Error("Adding image to realm failed.") })
-                                    } else {
-                                        if(addResult.success){
-                                            
-                                            const addedImage = addResult.file
-
-                                            callback({
-                                                success:true, 
-                                                realm: 
-                                                { 
-                                                    userID: userID, 
-                                                    realmID: realmID, 
-                                                    realmName: realmName, 
-                                                    roomID: roomID, 
-                                                    image: addedImage,
-                                                    
-                                                    config: { fileID: -1, value:null, handle:null }, 
-                                                    realmPage: page, 
-                                                    realmIndex: index, 
-                                                    realmDescription: null,
-                                                    statusID: status.Offline,
-                                                    advisoryID: advisory.none,
-                                                    accessID: access.private,
-                                                    realmType:"",
-                                                } 
-                                            })
-                                        }
-                                    }
-                                }) 
-
-                               
-                            
-                            } else {
-                                session.rollback()
-                                callback({ error: new Error("Error adding realm.") })
+                    roomTable.insert(["roomName"]).values([realmName+"Gateway"]).execute().then((gatewayRoomResult) => {
+                        const gatewayRoomID = gatewayRoomResult.getAutoIncrementValue()
+                    if(roomID != undefined && gatewayRoomID != undefined){
+                        let realm = {
+                                userID: userID,
+                                realmName: realmName,
+                                roomID: roomID,
+                                gatewayRoomID: gatewayRoomID,
+                                config: { fileID: -1, value: null, handle: null },
+                                realmPage: page,
+                                realmIndex: index,
+                                realmDescription: null,
+                                statusID: status.Offline,
+                                advisoryID: advisory.none,
+                                accessID: access.private,
+                                realmType: "",
                             }
+                        checkFileCRC(imageFile.crc,(crcResult) =>{
+                            if("error" in crcResult){
+                                session.rollback()
+                                callback({error:"Error in crc result"})
+                            }else{
+                                if(crcResult.fileID == null)
+                                {
+                                    insertFile(fileTable, imageFile).then((imageFileInfo)=>{
+                                        const imageID = imageFileInfo.fileID;
+
+                                        insertRealm(realmTable, realmName, userID, imageID, page, index, roomID, gatewayRoomID).then((realmID) => {
+                                            
+                                            realm.image = imageFileInfo;
+                                            realm.realmID = realmID;
+                                            session.commit()
+                                            callback({success:true, realm:realm})
+                                        })
+                                    })
+                                   
+                                 
+                                }else{
+                                    insertRealm(realmTable, realmName, userID, crcResult.fileID, page, index, roomID, gatewayRoomID).then((realmID) => {
+                                        if (realmID != undefined) {
+                                            imageFile.fileID = crcResult.fileID;
+                                            realm.image = imageFile;
+                                            realm.realmID = realmID;
+                                            session.commit()
+                                            callback({ success: true, realm: realm })
+                                        }
+                                    })
+                                }
+                            }
+                         
                         })
+
                     }else{
                         session.rollback()
                         callback({ error: new Error("Error adding room.") })
                     }
                 })
-                       
+            })    
              
         }catch(err){
             console.log(err)
@@ -6431,56 +6520,80 @@ const getRealms = (userID, callback) =>{
 
         const query = "\
 SELECT DISTINCT \
- realm.realmID, realm.realmName, realm.userID, realm.roomID, realm.realmPage, realm.realmIndex, \
- image.fileID, image.fileName, image.fileCRC, image.fileMimeType, image.fileSize, image.fileLastModified, \
- config.fileID, config.fileName, config.fileCRC, config.fileMimeType, config.fileSize, config.fileLastModified, \
- realm.statusID, realmFile.realmFileID, realm.accessID, realmDescription, advisoryID, realm.realmType \
+ realm.realmID, \
+ realm.realmName, \
+ realm.userID, \
+ realm.roomID, \
+ realm.statusID, \
+ realm.realmPage, \
+ realm.realmIndex, \
+ image.fileID, \
+ image.fileName, \
+ image.fileCRC, \
+ image.fileMimeType, \
+ image.fileSize, \
+ image.fileLastModified, \
+ config.fileID, \
+ config.fileName, \
+ config.fileCRC, \
+ config.fileMimeType, \
+ config.fileSize, \
+ config.fileLastModified, \
+ realm.accessID, \
+ realm.realmDescription, \
+ realm.advisoryID, \
+ realm.realmType, \
+ realm.gatewayRoomID \
 FROM \
- arcturus.realm, arcturus.status, arcturus.realmFile, arcturus.file as image, arcturus.file as config \
+ arcturus.realm, arcturus.status, arcturus.file as image, arcturus.file as config \
 WHERE \
- realmFile.realmID = realm.realmID AND realmFile.fileID = realm.imageID AND realm.imageID = image.fileID AND realm.configID = config.fileID AND userID = " + userID 
+ realm.imageID = image.fileID AND realm.configID = config.fileID AND userID = " + userID 
 
+
+ 
        session.sql(query).execute().then((selectResult)=>{
             
             if(selectResult.hasData())
             {
                 const all = selectResult.fetchAll()
                 let realms = []
-
+               
+      
                 all.forEach((value) => {
                     const realm = {
                         realmID: value[0],
                         realmName: value[1],
                         userID: value[2],
                         roomID: value[3],
-                        realmPage: value[4],
-                        realmIndex: value[5],
-                        statusID: value[18],
-                        accessID: value[20],
-                        realmDescription: value[21],
-                        advisoryID: value[22],
-                        realmType: value[23],
-                        image:{
-                            fileID:value[6],
-                            name:value[7],
-                            crc:value[8],
-                            mimeType:value[9],
-                            size:value[10],
-                            lastModified: value[11],
-                            realmFileID: value[19],
-                            handle:null,
-                            value:null
+                        statusID: value[4],
+                        realmPage: value[5],
+                        realmIndex: value[6],
+                        image: {
+                            fileID: value[7],
+                            name: value[8],
+                            crc: value[9],
+                            mimeType: value[10],
+                            size: value[11],
+                            lastModified: value[12],
+                            handle: null,
+                            value: null
                         },
-                        config:{
-                            fileID: value[12],
-                            name: value[13],
-                            crc: value[14],
-                            mimeType: value[15],
-                            size: value[16],
-                            lastModified: value[17],
-                            value:null,
-                            handle:null,
-                        }
+                        config: {
+                            fileID: value[13],
+                            name: value[14],
+                            crc: value[15],
+                            mimeType: value[16],
+                            size: value[17],
+                            lastModified: value[18],
+                            value: null,
+                            handle: null,
+                        },
+                        accessID: value[19],
+                        realmDescription: value[20],
+                        advisoryID: value[21],
+                        realmType: value[22],
+                        gatewayRoomID:value[23]
+                       
                     };
                     console.log(realm)
                     realms.push(realm);     
@@ -6500,6 +6613,29 @@ WHERE \
     })
 
 }
+const getUserSocket = (userID, callback) =>{
+    mySession.then((session)=>{
+        const arcDB = session.getSchema("arcturus")
+        const userTable = arcDB.getTable("user")
+
+        userTable.select(["userSocket"]).where("userID = :userID").bind("userID", userID).then((userSelect)=>{
+            const one = userSelect.fetchOne()
+            if(one != undefined)
+            {
+                const userSocket = one[0]
+                if(userSocket == ""){ 
+                    callback(null)
+                }else{
+                    callback(userSocket)
+                }
+            }else{
+                callback(null)
+            }
+        }).catch((err)=>{
+            callback(null)
+        })
+    })
+}
 
 const deleteRealm = (userID, realmID, callback) =>{
     
@@ -6507,65 +6643,120 @@ const deleteRealm = (userID, realmID, callback) =>{
         //to get more complicated?
 
         var arcDB = session.getSchema("arcturus")
-        var userTable = arcDB.getTable("user")
+        
         var realmTable = arcDB.getTable("realm")
+        const roomTable = arcDB.getTable("room")
+        const userRoomTable = arcDB.getTable("userRoom")
+        const realmUserTable = arcDB.getTable("realmUser")
+
         console.log("deleting realm: " + realmID + " by userID: " + userID)
-        realmTable.delete().where("userID = :userID AND realmID = :realmID").bind("userID", userID).bind("realmID", realmID).execute().then((deleted)=>{
-            const affectedRealms = deleted.getAffectedItemsCount();
-            userTable.select(["userQuickBar"]).where("userID = :userID").bind("userID", userID).execute().then((qbResult)=>{
-                const one = qbResult.fetchOne()
-                if(one != undefined && one[0] != null)
-                {
-                    const uQB = one[0];
-                    if(uQB.length > 0)
-                    {
-                        const qbArray = JSON.parse(uQB)
-                        if(Array.isArray(qbArray)){
-                            const index = qbArray.findIndex(qb => qb.realmID == realmID)
 
-                            if(index > -1)
-                            {
-                                if(qbArray.length == 1){
-                                    qbArray.pop()
-                                }else{
-                                    qbArray.splice(index, 1)
-                                }
-                               
-                                const str = JSON.stringify(qbArray)
-                                userTable.update().set("userQuickBar", str).where("userID = :userID").bind("userID", userID).execute().then((qbUpdate) =>{
-                                        const affectedUser = qbUpdate.getAffectedItemsCount()
-                                        
-                                        callback({ quickBarUpdate:affectedUser > 0, realmDeleted: affectedRealms > 0})
-                                        
-                                        
-                                }).catch((err) => {
-                                    console.log(err)
-                                    callback({ error: new Error("quickBar select error"), realmDeleted: (affectedRealms > 0) })
-                                })
-                            
-                            }else{
-                                callback({ quickBarUpdate: false, realmDeleted: affectedRealms > 0 })
-                            }
-                        } else {
-                            callback({ quickBarUpdate: false, realmDeleted: affectedRealms > 0 })
-                        }
-                    } else {
-                        callback({ quickBarUpdate: false, realmDeleted: affectedRealms > 0 })
+        realmTable.select(["roomID", "gatewayRoomID"]).where("userID = :userID and realmID = :realmID").bind("userID", userID).bind("realmID", realmID).execute().then((realmSelect)=>{
+            const rsOne = realmSelect.fetchOne()
+            if(rsOne != undefined){
+                const roomID = rsOne[0]
+                const gatewayRoomID = rsOne[1]
+
+                realmUserTable.select(["userID",]).where("realmID = :realmID").bind("realmID", realmID).execute().then((realmUserSelect)=>{
+                    const rusrs = realmUserSelect.fetchAll()
+                    session.startTransaction()
+                    try {
+                        let realmUsers = []
+                        rusrs.forEach(realmUser => {
+                            const realmUserID = realmUser[0];
+                            realmUsers.push({userID:realmUserID})
+                            quickBarRealmRemove(realmUserID, realmID)
+                        });
+                        
+                        realmFile.delete().where("realmID = :realmID").bind("realmID", realmID).execute();
+               
+
+                        userRoomTable.delete().where("roomID = :roomID").bind("roomID", roomID).execute();
+                        userRoomTable.delete().where("roomID = :roomID").bind("roomID", gatewayRoomID).execute();
+
+                        realmUserTable.delete().where("realmID = :realmID").bind("realmID", realmID).execute()
+
+                        roomTable.delete().where("roomID = :roomID").bind("roomID", roomID).execute();
+                        roomTable.delete().where("roomID = :roomID").bind("roomID", gatewayRoomID).execute();
+
+                        realmTable.delete().where("userID = :userID AND realmID = :realmID").bind("userID", userID).bind("realmID", realmID).execute().then((deleted) => {
+                            const affectedRealms = deleted.getAffectedItemsCount();
+                            callback({success:affectedRealms > 0, realmUsers:realmUsers})
+                        })
+                        session.commit()
+                    }catch(err){
+                        console.log(err)
+                        session.rollback()
+                        callback({ error: new Error("realm delete DB error") })
                     }
-                } else {
-                    callback({ quickBarUpdate: false, realmDeleted: affectedRealms > 0 })
-                }
+                        
 
-            }).catch((err)=>{
-                console.log(err)
-                callback({ error: new Error("quickBar select error"), realmDeleted: (affectedRealms > 0) })
-            })
-        }).catch((err) =>{
-            console.log(err)
-            callback({ error: new Error("realm delete DB error") })
+               
+                })
+              
+            }
         })
+
+      
     })
 
+}
+
+const quickBarRealmRemove = (userID, realmID) =>{
+    return new Promise(resolve =>{
+
+    
+    mySession.then((session) =>{
+        const arcDB = session.getSchema("arcturus")
+        const userTable = arcDB.getTable("user")
+
+        userTable.select(["userQuickBar"]).where("userID = :userID").bind("userID", userID).execute().then((qbResult) => {
+            const one = qbResult.fetchOne()
+            if (one != undefined && one[0] != null) {
+                const uQB = one[0];
+                if (uQB.length > 0) {
+                    const qbArray = JSON.parse(uQB)
+                    if (Array.isArray(qbArray)) {
+                        const index = qbArray.findIndex(qb => qb.realmID == realmID)
+
+                        if (index > -1) {
+                            if (qbArray.length == 1) {
+                                qbArray.pop()
+                            } else {
+                                qbArray.splice(index, 1)
+                            }
+
+                            const str = JSON.stringify(qbArray)
+                            userTable.update().set("userQuickBar", str).where("userID = :userID").bind("userID", userID).execute().then((qbUpdate) => {
+                                const affectedUser = qbUpdate.getAffectedItemsCount()
+
+                                resolve({ quickBarUpdate: affectedUser > 0})
+
+
+                            }).catch((err) => {
+                                console.log(err)
+                                throw new Error("userTable update failed.");
+                            })
+
+                        } else {
+                            resolve({ quickBarUpdate: false })
+                        }
+                    } else {
+                        resolve({ quickBarUpdate: false })
+                    }
+                } else {
+                    resolve({ quickBarUpdate: false })
+                }
+            } else {
+                resolve({ quickBarUpdate: false})
+            }
+
+        }).catch((err) => {
+            console.log(err)
+            throw new Error("quickBar select error")
+        })
+    })
+    })
 }
 
 const getQuickBar = (userID, callback) =>{
@@ -6616,3 +6807,41 @@ const setQuickBar = (userID, qBarJSON, callback) => {
     })
 }
 
+const updateRealmInformation = (information, callback) =>{
+    const realmID = information.realmID
+    const accessID = information.accessID
+    const realmDescription = information.realmDescription
+    const advisoryID = information.advisoryID
+    const realmType = information.realmType
+
+    console.log(information)
+
+    mySession.then((session) => {
+
+        var arcDB = session.getSchema('arcturus');
+        var realmTable = arcDB.getTable("realm");
+    
+
+
+        realmTable.update().set(
+            "accessID", accessID
+        ).set(
+            "realmDescription", realmDescription
+        ).set(
+            "advisoryID", advisoryID
+        ).set(
+            "realmType",realmType
+        ).where("realmID = :realmID").bind("realmID", realmID).execute().then((realmUpdateResult)=>{
+            const affected = realmUpdateResult.getAffectedItemsCount()
+            if(affected > 0)
+            {
+                callback({success:true})
+            }else{
+                callback({sucess:false})
+            }
+        }).catch((err)=>{
+            console.log(err)
+            callback({error: new Error("DB error")})
+        })
+    })
+}
