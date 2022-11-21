@@ -223,6 +223,11 @@ io.on('connection', (socket) => {
 
                     })
 
+                    socket.on("enterRealmGateway", (realmID, callback)=>{
+                        enterRealmGateway(user, realmID, (enteredGateway)=>{
+                            callback(enteredGateway)
+                        })
+                    })
                   
                     socket.on("checkRealmName", (name, callback)=>{
                         checkRealmName(name, callback)
@@ -4719,23 +4724,13 @@ const addRoomToCampaign = (campID = -1, roomID = -1, callback) => {
     })
 }
 
-const addUserToRoom = (userID = -1, roomID = -1, callback) => {
-    console.log("adding user " + userID + " to room: " + roomID);
-    const userRoomQuery = "INSERT INTO arcturus.userRoom SET userRoom.roomID = " + roomID + ", userRoom.userID = " + userID + ", userRoom.statusID = (\
-SELECT status.statusID FROM arcturus.status WHERE status.statusName = 'Offline')";
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    //d
-
-
-    mySession.then((mySession) => {
-        mySession.sql(userRoomQuery).execute().then((userAddedToRoom) => {
-            const affected = userAddedToRoom.getAffectedItemsCount();
-            console.log(userID + "affected: " + affected + " room: ", roomID)
-            callback(affected)
+const addUserToRoom = (userRoomTable, userID , roomID) => {
+   return new Promise(resolve => {
+        userRoomTable.insert(["userID", "roomID"]).values(userID, roomID).execute().then((userAddedToRoom) => {
+                const affected = userAddedToRoom.getAffectedItemsCount();
+                resolve(affected > 0)
         })
-    })
+   })
 }
 
 const updateUserStatus = (userID = -1, statusID = 5, socketID = "", callback) => {
@@ -4840,10 +4835,9 @@ WHERE\
 
 
 
-const setUserRoomStatus = (userID , roomID, statusID = 4, callback) => {
+const setUserRoomStatus = (userID , roomID, statusID = 4) => {
  
-
-
+return new Promise(resolve =>{
     mySession.then((session) => {
         const arcDB = session.getSchema("arcturus")
         const userRoomTable = arcDB.getTable("userRoom")
@@ -4852,16 +4846,16 @@ const setUserRoomStatus = (userID , roomID, statusID = 4, callback) => {
             affectedRows = results.getAffectedItemsCount();
 
             if (affectedRows > 0) {
-                callback({success:true});
+                resolve({success:true});
             } else {
-                callback({success:false});
+                resolve({success:false});
             }
         }).catch((err)=>{
             console.log(err)
-            callback({error: new Error("DB error")})
+            resolve({error: new Error("DB error")})
         })
     })
-
+})
 }
 
 const getRoomUsers = (userID, roomID, callback) => {
@@ -6643,7 +6637,7 @@ const deleteRealm = (userID, realmID, callback) =>{
         //to get more complicated?
 
         var arcDB = session.getSchema("arcturus")
-        
+        const realmFile = arcDB.getTable("realmFile")
         var realmTable = arcDB.getTable("realm")
         const roomTable = arcDB.getTable("room")
         const userRoomTable = arcDB.getTable("userRoom")
@@ -6669,18 +6663,15 @@ const deleteRealm = (userID, realmID, callback) =>{
                         });
                         
                         realmFile.delete().where("realmID = :realmID").bind("realmID", realmID).execute();
-               
-
-                        userRoomTable.delete().where("roomID = :roomID").bind("roomID", roomID).execute();
-                        userRoomTable.delete().where("roomID = :roomID").bind("roomID", gatewayRoomID).execute();
-
                         realmUserTable.delete().where("realmID = :realmID").bind("realmID", realmID).execute()
-
-                        roomTable.delete().where("roomID = :roomID").bind("roomID", roomID).execute();
-                        roomTable.delete().where("roomID = :roomID").bind("roomID", gatewayRoomID).execute();
 
                         realmTable.delete().where("userID = :userID AND realmID = :realmID").bind("userID", userID).bind("realmID", realmID).execute().then((deleted) => {
                             const affectedRealms = deleted.getAffectedItemsCount();
+                            userRoomTable.delete().where("roomID = :roomID").bind("roomID", roomID).execute();
+                            userRoomTable.delete().where("roomID = :roomID").bind("roomID", gatewayRoomID).execute();
+                            roomTable.delete().where("roomID = :roomID").bind("roomID", roomID).execute();
+                            roomTable.delete().where("roomID = :roomID").bind("roomID", gatewayRoomID).execute();
+
                             callback({success:affectedRealms > 0, realmUsers:realmUsers})
                         })
                         session.commit()
@@ -6845,3 +6836,176 @@ const updateRealmInformation = (information, callback) =>{
         })
     })
 }
+
+
+
+const enterRealmGateway = (user, realmID, callback)=>{
+
+
+    mySession.then((session) => {
+
+        const arcDB = session.getSchema('arcturus');
+        const realmTable = arcDB.getTable("realm");
+        const userRoomTable = arcDB.getTable("userRoom");
+        const userContactTable = arcDB.getTable("userContact")
+    
+        realmTable.select(["userID", "accessID", "gatewayRoomID", "roomID"]).where("realmID = :realmID").bind("realmID", realmID).then((realmSelect)=>{
+            const oneRealm = realmSelect.fetchOne()
+
+            if(oneRealm == undefined){
+                callback({success:false})
+            }else{
+                const realmAdminID = oneRealm[0];
+                const accessID = oneRealm[1];
+                const gatewayRoomID = oneRealm[2]
+                const roomID = oneRealm[3]
+
+                const admin = realmAdminID == user.userID;
+                userRoomTable.select(["userRoomBanned"]).where("userID =:userID and roomID = :roomID").bind("userID", user.userID).bind("roomID", gatewayRoomID).execute().then((userRoomSelect)=>{
+                    const oneUserRoom = userRoomSelect.fetchOne()
+                    if(!admin)
+                    {
+                        if (oneUserRoom == undefined) {
+                            switch(accessID)
+                            {
+                                case access.private:
+                                    callback({success:"false"})
+                                    break;
+                                case access.contacts:
+                                    userContactTable.select(["userID"]).where("userID = :userID and contactID = :contactID").bind("userID", realmAdminID).bind("contactID", user.userID).execute().then((userContactSelect)=>{
+                                        const ucsOne  = userContactSelect.fetchOne()
+                                        if(ucsOne == undefined)
+                                        {
+                                            callback({ success: "false" })
+                                        }else{
+                                            addUserToRoom(userRoomTable, user.userID,gatewayRoomID).then((added)=>{
+                                                if(added){
+                                                    setUserRoomStatus(gatewayRoomID, user.userID, status.Online).then((statusUpdated) => {
+
+                                                        io.to(gatewayRoomID).emit("userRoomStatus", user.userID, user.userName, status.Online);
+                                                        getRoomUsers(user.userID, gatewayRoomID, (gatewayUsers) => {
+                                                            getRoomUsers(user.userID, roomID, (realmUsers) => {
+                                                                getStoredMessages(gatewayRoomID, (messages) => {
+                                                                    socket.join(gatewayRoomID)
+                                                                    callback({ admin: admin, success: true, gatewayUsers: gatewayUsers, realmUsers: realmUsers, gatewayMessages: messages });
+                                                                })
+                                                            })
+                                                        })
+                                                    })
+                                                }else{
+                                                    callback({ success: "false" })
+                                                }
+                                            })
+                                        }
+                                    })
+                                    break;
+                                case access.public:
+                                    addUserToRoom(userRoomTable, user.userID, gatewayRoomID).then((added) => {
+                                        if(added){
+                                            setUserRoomStatus(gatewayRoomID, user.userID, status.Online).then((statusUpdated) => {
+
+                                                io.to(gatewayRoomID).emit("userRoomStatus", user.userID, user.userName, status.Online);
+                                                getRoomUsers(user.userID, gatewayRoomID, (gatewayUsers) => {
+                                                    getRoomUsers(user.userID, roomID, (realmUsers) => {
+                                                        getStoredMessages(gatewayRoomID, (messages) => {
+                                                            socket.join(gatewayRoomID)
+                                                            callback({ admin: admin, success: true, gatewayUsers: gatewayUsers, realmUsers: realmUsers, gatewayMessages: messages });
+                                                        })
+                                                    })
+                                                })
+                                            })
+                                        }
+                                    })
+                                    break;
+                            }
+                        }else{
+                            const banned = oneUserRoom[0]
+                            if(banned == 0){
+                                setUserRoomStatus(gatewayRoomID, user.userID, status.Online).then((statusUpdated) => {
+
+                                    io.to(gatewayRoomID).emit("userRoomStatus", user.userID, user.userName, status.Online);
+                                    getRoomUsers(user.userID, gatewayRoomID, (gatewayUsers) => {
+                                        getRoomUsers(user.userID, roomID, (realmUsers) => {
+                                            getStoredMessages(gatewayRoomID, (messages) => {
+                                                socket.join(gatewayRoomID)
+                                                callback({ admin: admin, success: true, gatewayUsers: gatewayUsers, realmUsers: realmUsers, gatewayMessages: messages });
+                                            })
+                                        })
+                                    })
+                                })
+                            }else[
+                                callback({ success: "false" })
+                            ]
+                        }
+                    
+                    }else{
+                        if(oneUserRoom == undefined)
+                        {
+                            addUserToRoom(userRoomTable, user.userID, gatewayRoomID).then((added) => {
+                                if(added){
+                                    setUserRoomStatus(gatewayRoomID, user.userID, status.Online).then((statusUpdated) => {
+
+                                        io.to(gatewayRoomID).emit("userRoomStatus", user.userID, user.userName, status.Online);
+
+                                        getRoomUsers(user.userID, gatewayRoomID, (gatewayUsers) => {
+                                            getRoomUsers(user.userID, roomID, (realmUsers) => {
+                                                getStoredMessages(gatewayRoomID, (messages) => {
+                                                    socket.join(gatewayRoomID)
+                                                    callback({ admin: admin, success: true, gatewayUsers: gatewayUsers, realmUsers: realmUsers, gatewayMessages: messages });
+                                                });
+                                            });
+                                        });
+
+                                    }).catch((err) => {
+                                        callback({ error: new Error("settingUserRoomStatus") })
+                                    })
+                                }else{
+                                    console.log("admin couldn't be added to gateway room")
+                                    callback({ error: new Error("error joining room") })
+                                }
+                            })
+                        }else{
+                            setUserRoomStatus(gatewayRoomID, user.userID, status.Online).then((statusUpdated) => {
+
+                                io.to(gatewayRoomID).emit("userRoomStatus", user.userID, user.userName, status.Online);
+
+                                getRoomUsers(user.userID, gatewayRoomID, (gatewayUsers) => {
+                                    getRoomUsers(user.userID, roomID, (realmUsers) => {
+                                        getStoredMessages(gatewayRoomID, (messages) => {
+                                            socket.join(gatewayRoomID)
+                                            callback({ admin: admin, success: true, gatewayUsers: gatewayUsers, realmUsers: realmUsers, gatewayMessages: messages });
+                                        });
+                                    });
+                                });
+
+                            }).catch((err) => {
+                                resolve({ error: new Error("settingUserRoomStatus") })
+                            })
+                        }
+
+                    
+                    }
+                })
+            }
+        })
+    })
+
+    addUserToRoom(userID, roomID, (insertedIntoRoom) => {
+        if (insertedIntoRoom) {
+            const campaignUser = [userID, userName, "Online", "Offline", "", 0, 0, 0]
+            io.to(roomID).emit("newCampaignUser", campaignUser);
+          
+        } else {
+            console.log("Couldn't add campaign user " + userID + " to room " + roomID + " cleanup required");
+            callback(0);
+        }
+
+    });
+
+    
+}
+
+
+        
+
+// getCurrentScene(campaignID, isAdmin, userID, (scene) => { });
