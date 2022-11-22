@@ -601,38 +601,39 @@ const getRoomUsers = (userRoomTable, userTable, fileTable, roomID) => {
     return new Promise(resolve => {
        
             userRoomTable.select(["userID", "statusID"]).where("roomID = :roomID").bind("roomID", roomID).execute().then((userRoomSelect)=>{
-                const one = userRoomSelect.fetchOne()
-                if(one != undefined){
+               
                     const all = userRoomSelect.fetchAll()
-                    let roomUsers = []
-                    let i = 0;
 
-                    const recursiveInformation = () =>{
-                       
-                        if (i < all.length) {
+                    if (all != undefined){
+                        
+                        let roomUsers = []
+                        let i = 0;
+                        const recursiveInformation = () =>{
+                        
+                            if (i < all.length) {
 
-                            const roomUser = all[i]
-                            const userID = roomUser[0]
-                            const statusID = roomUser[1]
+                                const roomUser = all[i]
+                                const userID = roomUser[0]
+                                const statusID = roomUser[1]
 
-                            getUserInformation(userTable, fileTable, userID).then((userInformation)=>{
-                                userInformation.roomStatusID = statusID;
-                                roomUsers.push(userInformation)
-                            })
-                            i++; 
-                            recursiveInformation()
+                                getUserInformation(userTable, fileTable, userID).then((userInformation)=>{
+                                    userInformation.roomStatusID = statusID;
+                                    roomUsers.push(userInformation)
+                                })
+                                i++; 
+                                recursiveInformation()
 
-                       } else {
-                            resolve({ success: true, users: roomUsers })
+                        } else {
+                                resolve({ success: true, users: roomUsers })
+                            }
                         }
-                    }
 
-                    recursiveInformation()
+                        recursiveInformation()
                 
-              
-                }else{
-                    resolve({ success: false, users: [] })
-                }
+                    }else{
+                        resolve({success:false, users:[]})
+                    }
+               
             })
        
     })
@@ -2522,7 +2523,11 @@ const enterRealmGateway = (user, realmID,socket, callback)=>{
                         getRoomUsers(userRoomTable, userTable, fileTable, roomID).then((realmRoomResult) => {
                             if (!("success" in gatewayRoomResult)) throw new Error("getRoomUsers not successfull")
 
-                            const realmUsers = realmRoomResult.users 
+                            const realmUsers = realmRoomResult.users
+
+                            const index = realmUsers.findIndex(search => search.userID == user.userID)
+
+                            const realmMember = index > 0
 
                             getStoredMessages(messageTable, gatewayRoomID).then((messagesResult) => {
                             
@@ -2531,7 +2536,7 @@ const enterRealmGateway = (user, realmID,socket, callback)=>{
                                     io.to(gatewayRoomID).emit("userRoomStatus", userID, status.Online);
                                     socket.join(gatewayRoomID)
 
-                                    resolve({ admin: admin, success: true, gatewayUsers: gatewayUsers, realmUsers: realmUsers, gatewayMessages: messagesResult.messages });
+                                    resolve({ admin: admin, realmMember:realmMember, success: true, gatewayUsers: gatewayUsers, realmUsers: realmUsers, gatewayMessages: messagesResult.messages });
                             })
                         })
                     })
