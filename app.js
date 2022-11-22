@@ -224,7 +224,7 @@ io.on('connection', (socket) => {
                     })
 
                     socket.on("enterRealmGateway", (realmID, callback)=>{
-                        enterRealmGateway(user, realmID, (enteredGateway)=>{
+                        enterRealmGateway(user, realmID,socket, (enteredGateway)=>{
                             callback(enteredGateway)
                         })
                     })
@@ -267,18 +267,7 @@ io.on('connection', (socket) => {
                         })
                     })
                      
-                    socket.on("getQuickBar", (callback) => {
-                        getQuickBar(user.userID, (result)=>{
-                            callback(result);
-                        })
-                    })
-
-                    socket.on("setQuickBar", (qBarJSON) => {
-                       
-                        setQuickBar(user.userID, qBarJSON, (result)=>{
-                            console.log(result)
-                        })
-                    })
+             
 
                     socket.on("requestContact", (contactID, msg, callback) => {
                         const userID = user.userID;
@@ -332,14 +321,14 @@ io.on('connection', (socket) => {
                         })
                     })
 
-                    socket.on('getUserInformation', (userInformation) => {
+                   /* socket.on('getUserInformation', (userInformation) => {
                         console.log(user)
                         if (user != null) {
                             getUserInformation(user, (info) => {
                                 userInformation(info);
                             })
                         }
-                    })
+                    })*/
                     socket.on("createStorage", (fileInfo, engineKey,  callback) => {
                      
                         createStorage(user.userID, fileInfo, engineKey,  (created) => {
@@ -373,11 +362,6 @@ io.on('connection', (socket) => {
                         })
                     })
 
-                    socket.on("deleteUserFiles", (userID, callback) =>{
-                        deleteUserFiles(userID, (deleted)=>{
-                            callback(deleted)
-                        })
-                    } )
 
                     socket.on("updateSocketID", (userID) => {
                         updateSocketID(userID, id);
@@ -391,66 +375,24 @@ io.on('connection', (socket) => {
                         });
                     });
 
-
-
-                    socket.on('joinRoom', (roomID, returnJoined) => {
-                        console.log("Joining room " + roomID);
-                        
-                        setUserRoomStatus(user.userID,roomID,status.Online, (statusUpdated) => {
-                            if("error" in statusUpdated)
-                            {
-                                returnJoined({error:statusUpdated.error})
-                            }else{
-                                if (statusUpdated.success) {
-                                    console.log("sending:userRoomStatus(" + roomID + "):" + user.userID + " : " + "Online");
-                                    io.to(roomID).emit("userRoomStatus", user.userID, user.userName, "Online");
-                                    getRoomUsers(user.userID, roomID, (users) => {
-                                        getStoredMessages(roomID, (messages) => {
-                                            socket.join(roomID)
-                                            returnJoined({success:true, users:users, messages:messages});
-                                        });
-                                    });
-
-                                } else {
-                                    returnJoined({success:false});
-                                }
-                            } 
+                    socket.on("updateUserPeerID", (peerID, callback) => {
+                       console.log("updatingPeerID: " + peerID)
+                        updateUserPeerID(user.userID, peerID, (result)=>{
+                            callback(result)
                         })
+                    })
 
-                    });
+                  
 
-                    socket.on('leaveRoom', (room, userID, userName, returnLeave) => {
-                        socket.leave(room)
-                        console.log("leaving room: " + room)
-                        returnLeave(true);
-                        setUserRoomStatus(room, userID, "Offline", (statusUpdated) => {
-                            if (statusUpdated > 0) {
-                                console.log("sending:userRoomStatus(" + room + "):" + userID + " : " + "Offline");
-                                io.to(room).emit("userRoomStatus", userID, userName, "Offline");
-
-                            }
-                        })
-
-                    });
 
                     socket.on('disconnect', () => {
                         const userName = user.userName;
                         const userID = user.userID;
                         if (userID > 0) {
                             cleanRooms(userID, (roomCount) => {
-                                console.log("cleaned " + roomCount + " rooms, disconnecting user...");
-                            });
-                            updateUserStatus(userID, status.Offline, "", (isRooms, rooms) => {
-                                if (isRooms) {
-                                    for (let i = 0; i < rooms.length; i++) {
-                                        console.log("sending userStatus message to: " + rooms[i][0] + " user: " + userID + " is: Offline");
-                                        io.to(rooms[i][0]).emit("userStatus", userID, userName, "Offline");
-
-                                    }
-                                }
+                                console.log("cleaned " + roomCount + " rooms, disconnecting user " + userName);
                             });
                         }
-
                     });
 
 
@@ -466,4269 +408,51 @@ io.on('connection', (socket) => {
     /* */
 
 });
-const terrainFilePath = "./arcturus/terrain/"
-const textureFilePath = "./arcturus/Images/texture/";
-const campaignImgFilePath = "./arcturus/Images/campaignIcons/";
 
-const removeTerrainLayer = (terrainLayerID, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const deleteQuery = "\
-DELETE FROM arcturus.terrainLayer \
-WHERE terrainLayer.terrainLayerID = " + terrainLayerID;
-
-
-    mySession.then((mySession) => {
-        mySession.sql(deleteQuery).execute().then((result) => {
-            if (result.getAffectedItemsCount() > 0) {
-                console.log("deleted")
-                callback(true)
-            } else {
-                console.log("not removed")
-                callback(false)
-            }
-        })
-    })
-}
-
-const getTextureEffectRev = (textureID, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const selectQuery = "\
-SELECT \
- texture.textureEffectRev \
-FROM \
- arcturus.texture \
-WHERE \
- texture.textureID = " + textureID;
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((result) => {
-            const revArray = result.fetchOne();
-
-            callback(revArray[0])
-        })
-    })
-}
-
-const updateTextureEffect = (texture, callback) => {
-
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const updateQuery = "\
-UPDATE \
- arcturus.texture \
-SET \
- texture.textureEffectUrl = " + mysql.escape(texture.url) + ", \
- texture.textureEffectRev = " + texture.rev + ", \
- texture.textureEffectEnable = true \
-WHERE \
- texture.textureID = " + texture.id;
-
-    mySession.then((mySession) => {
-        mySession.sql(updateQuery).execute().then((result) => {
-            if (result.getAffectedItemsCount() > 0) {
-                console.log("updated")
-                callback(true)
-            } else {
-                console.log("update not needed")
-                callback(false)
-            }
-        })
-    })
-}
-
-
-const appendCampaignImageData = (campaignID, rev, name, imgData, callback) => {
-    const filePath = campaignImgFilePath + campaignID + "_" + rev + "_" + name;
-
-    console.log("saving terrain Geometry" + filePath)
-    //   fs.writeFileSync(filePath, geoString)
-
-    fs.appendFile(filePath, Buffer.from(imgData), (error) => {
-        if (error) {
-            console.error(error)
-            callback(false)
-        } else {
-            console.log("saved")
-            callback(true)
-        }
-    })
-
-}
-
-const updateCampaignImageUrl = (campaignID, rev, name, callback) => {
-    const filePath = "Images/campaignIcons/" + campaignID + "_" + rev + "_" + name;
-
-
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const updateQuery = "\
-UPDATE \
- arcturus.campaign \
-SET \
- campaign.campaignImageUrl = " + mysql.escape(filePath) + " \
-WHERE \
- campaign.campaignID = " + campaignID;
-
-    mySession.then((mySession) => {
-        mySession.sql(updateQuery).execute().then((result) => {
-            if (result.getAffectedItemsCount() > 0) {
-                console.log("updated")
-                callback(true)
-            } else {
-                console.log("update not needed")
-                callback(false)
-            }
-        })
-    })
-}
-
-const updateCampaignName = (campaignID, name, callback) => {
-
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const updateQuery = "\
-UPDATE \
- arcturus.campaign \
-SET \
- campaign.campaignName = " + mysql.escape(name) + " \
-WHERE \
- campaign.campaignID = " + campaignID;
-
-    mySession.then((mySession) => {
-        mySession.sql(updateQuery).execute().then((result) => {
-            if (result.getAffectedItemsCount() > 0) {
-                console.log("updated")
-                callback(true)
-            } else {
-                console.log("update not needed")
-                callback(false)
-            }
-        })
-    })
-}
-
-const getTerrainRev = (terrainID, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const selectQuery = "\
-SELECT \
- terrain.terrainRev \
-FROM \
- arcturus.terrain \
-WHERE \
- terrain.terrainID = " + terrainID;
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((result) => {
-            const revArray = result.fetchOne();
-
-            callback(revArray[0])
-        })
-    })
-
-
-}
-
-const clearTerrainGeometry = (terrainID, rev, callback) => {
-    const filePath = terrainFilePath + terrainID + "_" + rev + "_terrainGeometry.csv";
-
-    if (fs.existsSync(filePath)) {
-        clearTerrainGeometryUrl(terrainID, (cleared) => {
-            console.log("terrain " + terrainID + " was cleared. " + cleared)
-            fs.unlink(filePath, err => {
-                if (err) {
-                    console.log("file: " + filePath + " error.")
-                    console.error(err)
-                    callback(true)
-                } else {
-                    console.log(filePath + " unlinked.")
-                    callback(true)
-                }
-            })
-        })
-    } else {
-        callback(true)
-    }
-}
-const clearTerrainGeometryUrl = (terrainID, callback) => {
-
-
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const updateQuery = "\
-UPDATE \
- arcturus.terrain \
-SET \
- terrain.terrainGeometryUrl = null \
-WHERE \
- terrain.terrainID = " + terrainID;
-
-    mySession.then((mySession) => {
-        mySession.sql(updateQuery).execute().then((result) => {
-            if (result.getAffectedItemsCount() > 0) {
-                callback(true)
-            } else {
-                callback(false)
-            }
-        })
-    })
-
-}
-
-const appendTerrainGeometry = (terrainID, rev, geoString, callback) => {
-    const filePath = terrainFilePath + terrainID + "_" + rev + "_terrainGeometry.csv";
-    console.log("saving terrain Geometry" + filePath)
-    //   fs.writeFileSync(filePath, geoString)
-
-    fs.appendFile(filePath, geoString, (error) => {
-        if (error) {
-            console.error(error)
-            callback(false)
-        } else {
-            console.log("saved")
-            callback(true)
-        }
-    })
-
-}
-
-const updateTerrainGeometryUrl = (terrainID, rev, callback) => {
-    const url = "terrain/" + terrainID + "_" + rev + "_terrainGeometry.csv";
-
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const updateQuery = "\
-UPDATE \
- arcturus.terrain \
-SET \
- terrain.terrainGeometryUrl = " + mysql.escape(url) + ", \
- terrain.terrainRev = " + rev + " \
-WHERE \
- terrain.terrainID = " + terrainID;
-
-    mySession.then((mySession) => {
-        mySession.sql(updateQuery).execute().then((result) => {
-            if (result.getAffectedItemsCount() > 0) {
-                callback(true)
-            } else {
-                callback(false)
-            }
-        })
-    })
-
-}
-
-const unlinkTexture = (url) => {
-    const path = "./arcturus/";
-    console.log("unlinking: " + path + url)
-    fs.unlink(path + url, err => {
-        if (err) {
-            console.log("file: " + textureName + " not removed. May not exist.")
-        }
-    })
-
-}
-
-const appendTexture = (textureName, directory, chunk, callback) => {
-    const path = textureFilePath + directory;
-
-    fs.appendFile(path + textureName, Buffer.from(chunk), (err) => {
-        if (err) {
-            console.log("write failed.")
-            callback(false);
-        } else {
-            console.log("write succeded")
-            callback(true);
-        }
-    });
-}
-
-const checkTexture = (textureName, directory, callback) => {
-
-
-
-    const path = textureFilePath + directory;
-    // console.log(path + textureName + " buffer: " + textureBuffer.length)
-    //  fs.writeFileSync(path + textureName, textureBuffer)
-    if (fs.existsSync(path + textureName)) {
-        console.log("verified.")
-        callback(true);
-    } else {
-        console.log("no file")
-        callback(false);
-    }
-}
-
-const deleteTexture = (textureID) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const deleteQuery = "\
-DELETE FROM \
- arcturus.texture \
-WHERE \
- texture.textureID = " + textureID;
-
-
-    mySession.then((mySession) => {
-        mySession.sql(deleteQuery).execute().then((result) => {
-
-            if (result.getAffectedItemsCount() > 0) {
-                console.log("texture removed");
-
-            } else {
-                console.log("failed texture removal");
-
-            }
-
-        })
-    })
-}
-
-
-const updateTextureURL = (texture, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    let updateQuery = "\
-UPDATE arcturus.texture SET \
- texture.textureUrl = " + mysql.escape(texture.url) + " \
-WHERE \
- texture.textureID = " + texture.textureID;
-
-
-    mySession.then((mySession) => {
-        mySession.sql(updateQuery).execute().then((results) => {
-            if (results.getAffectedItemsCount() > 0) {
-                callback(true);
-            } else {
-                callback(false);
-            }
-        })
-    })
-}
-
-const addTexture = (texture, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    let insertQuery = "\
-INSERT INTO arcturus.texture (\
- texture.textureName, \
- texture.textureTypeID )\
-Values (\
-" + mysql.escape(texture.name) + ", \
-" + texture.textureType.textureTypeID + ")"
-
-    mySession.then((mySession) => {
-        mySession.sql(insertQuery).execute().then((results) => {
-            if (results.getAffectedItemsCount() > 0) {
-                callback(results.getAutoIncrementValue());
-            } else {
-                callback(-1);
-            }
-        })
-    })
-}
-
-
-
-function formatTextureType(array) {
-    const textureType = {
-        textureTypeID: array[0],
-        name: array[1],
-        path: array[2]
-    }
-    console.log(textureType);
-    return textureType;
-}
-
-function formatTextureTypeArray(array) {
-    var textureArray = [];
-
-    for (let i = 0; i < array.length; i++) {
-        textureArray.push(
-            formatTextureType(array[i])
-        )
-    }
-    return textureArray;
-}
-
-const getTextureTypes = (callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    let selectQuery = "\
-SELECT \
- textureType.textureTypeID, \
- textureType.textureTypeName, \
- textureType.textureTypePath \
-FROM \
- arcturus.textureType"
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((selectResults) => {
-            if (selectResults.hasData()) {
-                callback(formatTextureTypeArray(selectResults.fetchAll()));
-            } else {
-                callback([]);
-            }
-        })
-    })
-}
-
-function formatPlayer(PCarray) {
-    const PC = {
-        PCID: PCarray[0],
-        name: PCarray[1],
-        imageUrl: PCarray[2],
-        race: {
-            raceID: PCarray[3],
-            name: PCarray[4],
-        },
-        size: {
-            sizeID: PCarray[5],
-            sizeName: PCarray[6]
-        },
-        speed: PCarray[7],
-        class: {
-            classID: PCarray[8],
-            name: PCarray[9]
-        },
-        dice: {
-            diceID: PCarray[10],
-            name: PCarray[11],
-            max: PCarray[12],
-        },
-        object: {
-            objectID: PCarray[13],
-            name: PCarray[14],
-            url: PCarray[15],
-            color: PCarray[16],
-            textureUrl: PCarray[17],
-            position: null,
-        },
-        background: {
-            backgroundID: -1
-        },
-        sceneID: PCarray[18],
-        user: {
-            userID: PCarray[19],
-            name: CapFirstLetter(PCarray[20]),
-            email: PCarray[21],
-        }
-    }
-    console.log(PC)
-    return PC;
-}
 
 function CapFirstLetter(string) {
     return string.charAt(0).toUpperCase() + string.slice(1);
 }
 
-function formatPlayersArray(playersArray) {
-    var array = [];
 
-    for (let i = 0; i < playersArray.length; i++) {
-        array.push(
-            formatPlayer(playersArray[i])
-        )
-    }
-
-    return array;
-}
-
-const findPlayers = (searchText, searchOptions, campaignID, sceneID, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    searchText = mysql.escape("%" + searchText + "%");
-    console.log(campaignID + " " + sceneID)
-    const selectQuery = "\
-SELECT \
- PC.PCID, \
- PC.PCName, \
- PC.PCImageUrl, \
- PC.raceID, \
- race.raceName, \
- race.sizeID, \
- size.sizeName, \
- PC.PCSpeed, \
- PC.classID, \
- class.className, \
- PC.diceID, \
- dice.diceName, \
- dice.diceMax, \
- object.objectID, \
- object.objectName, \
- object.objectUrl, \
- object.objectColor, \
- object.objectTextureUrl, \
- PC.sceneID, \
- campaignUser.userID, \
- user.userName, \
- user.userEmail \
- \
- FROM \
- arcturus.user, \
- arcturus.campaignUser, \
- arcturus.PC, \
- arcturus.object, \
- arcturus.race, \
- arcturus.size, \
- arcturus.class, \
- arcturus.dice \
- \
-WHERE \
- campaignUser.userID = user.userID AND \
- campaignUser.campaignID = "+ campaignID + " AND \
- campaignUser.PCID = PC.PCID AND \
- PC.objectID = object.objectID AND \
- PC.raceID = race.raceID AND \
- PC.sizeID = size.sizeID AND \
- PC.classID = class.classID AND \
- PC.diceID = dice.diceID AND \
-( \
- PC.PCName LIKE " + searchText + " OR \
- user.userName LIKE " + searchText + " OR \
- user.userEmail LIKE " + searchText + " \
-)";
-    switch (searchOptions) {
-        case 0:
-            //ALL
-            break;
-        case 1:
-            //ONLINE
-            break;
-        case 2:
-            //OFFLINE
-            break;
-    }
-
-    console.log()
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((result) => {
-
-            if (result.hasData()) {
-                console.log("players found");
-                callback(formatPlayersArray(result.fetchAll()))
-
-            } else {
-                console.log("not found players");
-                callback(null)
-            }
-
-        })
-    })
-}
-
-const removeSceneMonster = (monsterSceneID) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-
-    const deleteQuery = "\
-DELETE FROM \
- arcturus.monsterScene \
-WHERE \
- monsterScene.monsterSceneID = " + monsterSceneID;
-
-    mySession.then((mySession) => {
-        mySession.sql(deleteQuery).execute().then((result) => {
-
-            if (result.getAffectedItemsCount() > 0) {
-                console.log("monsterScene removed");
-
-            } else {
-                console.log("failed monsterScene removal");
-
-            }
-
-        })
-    })
-}
-
-const updateMonsterScene = (monster) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-
-    const deleteQuery = "\
-UPDATE \
- arcturus.monsterScene \
-SET \
- monsterScene.monsterSceneName = " + mysql.escape(monster.name) + ", \
- monsterScene.monsterSceneImageUrl = " + mysql.escape(monster.imageUrl) + ", \
- monsterScene.monsterTypeID = " + monster.monsterType.monsterTypeID + ", \
- monsterScene.monsterSubTypeID = " + monster.monsterSubType.monsterSubTypeID + ", \
- monsterScene.sizeID = " + monster.size.sizeID + ", \
- monsterScene.monsterSceneMorality = " + monster.morality + ", \
- monsterScene.monsterSceneLawful = " + monster.lawful + ", \
- monsterScene.monsterSceneSTR = " + monster.STR + ", \
- monsterScene.monsterSceneDEX = " + monster.DEX + ", \
- monsterScene.monsterSceneCON = " + monster.CON + ", \
- monsterScene.monsterSceneWIS = " + monster.WIS + ", \
- monsterScene.monsterSceneINT = " + monster.INT + ", \
- monsterScene.monsterSceneCHA = " + monster.CHA + ", \
- monsterScene.diceID = " + monster.dice.diceID + ", \
- monsterScene.monsterSceneDiceModifier = " + monster.diceModifier + ", \
- monsterScene.monsterSceneChallenge = " + monster.challenge + ", \
- monsterScene.monsterSceneSpeed = " + monster.speed + ", \
- monsterScene.monsterSceneXP = " + monster.XP + ", \
- monsterScene.monsterSceneAC = " + monster.AC + ", \
- monsterScene.monsterSceneHP = " + monster.HP + ", \
- monsterScene.monsterSceneObjectName = " + mysql.escape(monster.object.name) + ", \
- monsterScene.monsterSceneObjectUrl = " + mysql.escape(monster.object.url) + ", \
- monsterScene.monsterSceneObjectColor = " + mysql.escape(monster.object.color) + ", \
- monsterScene.monsterSceneObjectTextureUrl = " + mysql.escape(monster.object.textureUrl) + ", \
- monsterScene.monsterSceneObjectScaleX = " + monster.object.scale.x + ", \
- monsterScene.monsterSceneObjectScaleY = " + monster.object.scale.y + ", \
- monsterScene.monsterSceneObjectScaleZ = " + monster.object.scale.z + ", \
- monsterScene.monsterSceneObjectRotationX = " + monster.object.rotation.x + ", \
- monsterScene.monsterSceneObjectRotationY = " + monster.object.rotation.y + ", \
- monsterScene.monsterSceneObjectRotationZ = " + monster.object.rotation.z + ", \
- monsterScene.monsterSceneObjectOffsetX = " + monster.object.rotation.x + ", \
- monsterScene.monsterSceneObjectOffsetY = " + monster.object.rotation.y + ", \
- monsterScene.monsterSceneObjectOffsetZ = " + monster.object.rotation.z + " \
-WHERE \
- monsterScene.monsterSceneID = " + monster.monsterSceneID;
-
-    mySession.then((mySession) => {
-        mySession.sql(deleteQuery).execute().then((result) => {
-
-            if (result.getAffectedItemsCount() > 0) {
-                console.log("monsterScene removed");
-
-            } else {
-                console.log("failed monsterScene removal");
-
-            }
-
-        })
-    })
-}
-
-const removeScenePlaceable = (placeableSceneID) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-
-    const deleteQuery = "\
-DELETE FROM \
- arcturus.placeableScene \
-WHERE \
- placeableScene.placeableSceneID = " + placeableSceneID;
-
-    mySession.then((mySession) => {
-        mySession.sql(deleteQuery).execute().then((result) => {
-
-            if (result.getAffectedItemsCount() > 0) {
-                console.log("placeableScene removed");
-
-            } else {
-                console.log("failed placeableScene removal");
-
-            }
-
-        })
-    })
-}
-
-const updateScenePlaceable = (placeable) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    console.log(placeable)
-
-    const updateQuery = "UPDATE arcturus.placeableScene \
-SET \
- placeableScene.placeableSceneName = " + mysql.escape(placeable.name) + ", \
- placeableScene.placeableSceneHP = " + placeable.HP + ", \
- placeableScene.placeableSceneAC = " + placeable.AC + ", \
- placeableScene.placeableSceneStealth = " + placeable.stealth + ", \
- placeableScene.placeableTypeID = " + placeable.placeableType.placeableTypeID + ", \
- placeableScene.integrityID = " + placeable.integrity.integrityID + ", \
- placeableScene.sizeID = " + placeable.size.sizeID + ", \
- placeableScene.materialID = " + placeable.material.materialID + ", \
- placeableScene.placeableSceneObjectName = " + mysql.escape(placeable.object.name) + ", \
- placeableScene.placeableSceneObjectUrl = " + mysql.escape(placeable.object.url) + ", \
- placeableScene.placeableSceneObjectColor = " + mysql.escape(placeable.object.color) + ", \
- placeableScene.placeableSceneObjectTextureUrl = " + mysql.escape(placeable.object.textureUrl) + ", \
- placeableScene.placeableSceneRotationX = " + placeable.object.rotation.x + ", \
- placeableScene.placeableSceneRotationY = " + placeable.object.rotation.y + ", \
- placeableScene.placeableSceneRotationZ = " + placeable.object.rotation.z + ", \
- placeableScene.placeableSceneOffsetX = " + placeable.object.offset.x + ", \
- placeableScene.placeableSceneOffsetY = " + placeable.object.offset.y + ", \
- placeableScene.placeableSceneOffsetZ = " + placeable.object.offset.z + ", \
- placeableScene.placeableSceneScaleX = " + placeable.object.scale.x + ", \
- placeableScene.placeableSceneScaleY = " + placeable.object.scale.y + ", \
- placeableScene.placeableSceneScaleZ = " + placeable.object.scale.z + " \
-WHERE \
- placeableScene.placeableSceneID = " + placeable.placeableSceneID;
-
-
-
-    mySession.then((mySession) => {
-        mySession.sql(updateQuery).execute().then((result) => {
-
-            if (result.getAffectedItemsCount() > 0) {
-                console.log("placeableScene updated");
-
-            } else {
-                console.log("failed placeableScene update");
-
-            }
-
-        })
-    })
-}
-
-const setplaceableScenePosition = (placeableSceneID, position) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-
-    const updateQuery = "UPDATE arcturus.placeableScene \
-SET \
- placeableScene.placeableSceneX = " + position[0] + ", \
- placeableScene.placeableSceneY = " + position[1] + ", \
- placeableScene.placeableSceneZ = " + position[2] + " \
-WHERE \
- placeableScene.placeableSceneID = " + placeableSceneID;
-
-    console.log(updateQuery)
-
-    mySession.then((mySession) => {
-        mySession.sql(updateQuery).execute().then((result) => {
-
-            if (result.getAffectedItemsCount() > 0) {
-                console.log("placeable updated");
-
-            } else {
-                console.log("failed placeable update");
-
-            }
-
-        })
-    })
-}
-
-const getMaterials = (callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    let selectQuery = "\
-SELECT DISTINCT \
- material.materialID, \
- material.materialName, \
- material.diceID, \
- dice.diceMax, \
- material.materialAC, \
- material.materialDmgThreshold \
-FROM \
- arcturus.material, \
- arcturus.dice \
-WHERE \
- material.diceID = dice.diceID"
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((selectResults) => {
-            if (selectResults.hasData()) {
-                callback(selectResults.fetchAll());
-            } else {
-                callback([]);
-            }
-        })
-    })
-}
-
-const getIntegrity = (callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    let selectQuery = "\
-SELECT DISTINCT \
- integrity.integrityID, \
- integrity.integrityName, \
- integrity.integrityMultiplier \
-FROM \
- arcturus.integrity"
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((selectResults) => {
-            if (selectResults.hasData()) {
-                callback(selectResults.fetchAll());
-            } else {
-                callback([]);
-            }
-        })
-    })
-}
-
-function formatObjectCharacter(character) {
-
-    "character.characterID, 0\
- character.characterName, 1\
- object.objectID, 2\
- object.objectName, 3\
- object.objectUrl, 4\
- object.objectColor, 5\
- object.objectTextureUrl 6"
-
-    return {
-        characterID: character[0],
-        name: character[1],
-        object: {
-            objectID: character[2],
-            name: character[3],
-            url: character[4],
-            color: character[5],
-            textureUrl: character[6]
-        }
-    }
-
-}
-
-function formatCharacterObjectsArray(objectArray) {
-    var arr = [];
-    for (let i = 0; i < objectArray.length; i++) {
-        arr.push(
-            formatObjectCharacter(objectArray[i])
-        )
-    }
-    return arr;
-}
-
-const findCharacters = (searchText, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    searchText = mysql.escape("%" + searchText + "%");
-
-    let selectQuery = "\
-SELECT DISTINCT \
- character.characterID, \
- character.characterName, \
- object.objectID, \
- object.objectName, \
- object.objectUrl, \
- object.objectColor, \
- object.objectTextureUrl \
-FROM \
- arcturus.character, \
- arcturus.object \
- \
-WHERE \
- character.objectID = object.objectID AND \
- object.objectName LIKE " + searchText + " \
-ORDER BY \
- object.objectName ASC"
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((selectResults) => {
-            if (selectResults.hasData()) {
-                console.log("characters found")
-
-                callback(formatCharacterObjectsArray(selectResults.fetchAll()));
-            } else {
-                console.log("no characters found")
-                callback([]);
-            }
-        })
-    })
-}
-
-function format3DObjectArray(objectArray) {
-    var arr = [];
-
-    for (let i = 0; i < objectArray.length; i++) {
-        arr.push(
-            format3DObject(objectArray[i])
-        )
-    }
-
-    return arr;
-}
-
-function format3DObject(array) {
-    " object.objectID, 0\
- object.objectName, 1\
- object.objectUrl, 2\
- object.objectColor, 3\
- object.objectTextureUrl 4"
-
-    return {
-        objectInfo: 1,
-        object: {
-            objectID: array[0],
-            name: array[1],
-            url: array[2],
-            color: array[3],
-            textureUrl: array[4]
-        }
-    }
-}
-
-const find3DObjects = (searchText, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    searchText = mysql.escape("%" + searchText + "%");
-
-    let findQuery = " \
-SELECT DISTINCT \
- object.objectID, \
- object.objectName, \
- object.objectUrl, \
- object.objectColor, \
- object.objectTextureUrl \
-FROM \
- arcturus.object \
-WHERE \
- object.objectName LIKE " + searchText + " \
-ORDER BY \
- object.objectName ASC"
-
-    mySession.then((mySession) => {
-        mySession.sql(findQuery).execute().then((result) => {
-
-            if (result.hasData()) {
-                console.log("found objects");
-                callback(format3DObjectArray(result.fetchAll()));
-            } else {
-                console.log("didn't find placeables");
-                callback([]);
-            }
-
-        })
-    })
-}
-
-const addPlaceableScene = (placeable, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const insertQuery = "\
-INSERT INTO arcturus.placeableScene \
-( \
- placeableScene.placeableSceneName, \
- placeableScene.placeableSceneHP, \
- placeableScene.placeableSceneAC, \
- placeableScene.placeableSceneStealth, \
- placeableScene.sceneID, \
- placeableScene.placeableID, \
- placeableScene.placeableTypeID, \
- placeableScene.integrityID, \
- placeableScene.sizeID, \
- placeableScene.materialID, \
- placeableScene.placeableSceneObjectName, \
- placeableScene.placeableSceneObjectUrl, \
- placeableScene.placeableSceneObjectColor, \
- placeableScene.placeableSceneObjectTextureUrl, \
- placeableScene.placeableSceneRotationX, \
- placeableScene.placeableSceneRotationY, \
- placeableScene.placeableSceneRotationZ, \
- placeableScene.placeableSceneOffsetX, \
- placeableScene.placeableSceneOffsetY, \
- placeableScene.placeableSceneOffsetZ, \
- placeableScene.placeableSceneScaleX, \
- placeableScene.placeableSceneScaleY, \
- placeableScene.placeableSceneScaleZ \
-) \
-VALUES \
-( \
-" + mysql.escape(placeable.name) + ", \
-" + placeable.HP + ", \
-" + placeable.AC + ", \
-" + placeable.stealth + ", \
-" + placeable.sceneID + ", \
-" + placeable.placeableID + ", \
-" + placeable.placeableType.placeableTypeID + ", \
-" + placeable.integrity.integrityID + ", \
-" + placeable.size.sizeID + ", \
-" + placeable.material.materialID + ", \
-" + mysql.escape(placeable.object.name) + ", \
-" + mysql.escape(placeable.object.url) + ", \
-" + mysql.escape(placeable.object.color) + ", \
-" + mysql.escape(placeable.object.textureUrl) + ", \
-" + placeable.object.rotation.x + ", \
-" + placeable.object.rotation.y + ", \
-" + placeable.object.rotation.z + ", \
-" + placeable.object.offset.x + ", \
-" + placeable.object.offset.y + ", \
-" + placeable.object.offset.z + ", \
-" + placeable.object.scale.x + ", \
-" + placeable.object.scale.y + ", \
-" + placeable.object.scale.z + " )"
-
-    console.log(insertQuery)
-
-    mySession.then((mySession) => {
-        mySession.sql(insertQuery).execute().then((result) => {
-
-            if (result.getAffectedItemsCount() > 0) {
-                console.log("placeable inserted");
-                callback(result.getAutoIncrementValue());
-            } else {
-                console.log("failed placeable insert");
-                callback(-1);
-            }
-
-        })
-    })
-}
-function formatPlaceableSceneArray(array) {
-    var placeables = [];
-
-    for (let i = 0; i < array.length; i++) {
-        placeables.push(
-            formatPlaceableScene(array[i])
-        )
-    }
-    return placeables;
-}
-function formatPlaceableScene(array) {
-    const placeable = {
-        placeableSceneID: array[0],
-        name: array[1],
-        HP: array[2],
-        AC: array[3],
-        stealth: array[4],
-        sceneID: array[5],
-        placeable: {
-            placeableID: array[6],
-            name: array[7],
-            placeableType: {
-                placeableTypeID: array[8],
-                name: array[9],
-            },
-            object: {
-                objectID: array[10],
-                name: array[11],
-                url: array[12],
-                color: array[13],
-                textureUrl: array[14]
-            }
-        },
-        integrity: {
-            integrityID: array[15],
-            name: array[16],
-            multiplier: array[17],
-        },
-        material: {
-            materialID: array[18],
-            name: array[19],
-            dice: {
-                diceID: array[20],
-                max: array[21]
-            },
-            AC: array[22],
-            dmgThreshold: array[23],
-        },
-        size: {
-            sizeID: array[24],
-            name: array[25],
-            HPmodifier: array[26],
-            ACmodifier: array[27],
-        },
-        object: {
-            name: array[28],
-            url: array[29],
-            color: array[30],
-            textureUrl: array[31],
-            rotation: {
-                x: array[32],
-                y: array[33],
-                z: array[34]
-            },
-            offset: {
-                x: array[35],
-                y: array[36],
-                z: array[37]
-            },
-            scale: {
-                x: array[38],
-                y: array[39],
-                z: array[40]
-            },
-            position: [
-                array[41],
-                array[42],
-                array[43]
-            ]
-        },
-        placeableType: {
-            placeableTypeID: array[44],
-            name: array[45]
-        }
-    }
-    console.log(placeable)
-    return placeable;
-}
-const getScenePlaceables = (sceneID, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-
-    let selectQuery = " \
-SELECT DISTINCT \
- placeableScene.placeableSceneID, \
- placeableScene.placeableSceneName, \
- placeableScene.placeableSceneHP, \
- placeableScene.placeableSceneAC, \
- placeableScene.placeableSceneStealth, \
- placeableScene.sceneID, \
- placeableScene.placeableID, \
- placeable.placeableName, \
- placeable.placeableTypeID, \
- pt1.placeableTypeName, \
- placeable.objectID, \
- object.objectName, \
- object.objectUrl, \
- object.objectColor, \
- object.objectTextureUrl, \
- placeableScene.integrityID, \
- integrity.integrityName, \
- integrity.integrityMultiplier, \
- placeableScene.materialID, \
- material.materialName, \
- material.diceID, \
- dice.diceMax, \
- material.materialAC, \
- material.materialDmgThreshold, \
- placeableScene.sizeID, \
- size.sizeName, \
- size.sizeHPmodifier, \
- size.sizeACmodifier, \
- placeableScene.placeableSceneObjectName, \
- placeableScene.placeableSceneObjectUrl, \
- placeableScene.placeableSceneObjectColor, \
- placeableScene.placeableSceneObjectTextureUrl, \
- placeableScene.placeableSceneRotationX, \
- placeableScene.placeableSceneRotationY, \
- placeableScene.placeableSceneRotationZ, \
- placeableScene.placeableSceneOffsetX, \
- placeableScene.placeableSceneOffsetY, \
- placeableScene.placeableSceneOffsetZ, \
- placeableScene.placeableSceneScaleX, \
- placeableScene.placeableSceneScaleY, \
- placeableScene.placeableSceneScaleZ, \
- placeableScene.placeableSceneX, \
- placeableScene.placeableSceneY, \
- placeableScene.placeableSceneZ, \
- placeableScene.placeableTypeID, \
- pt2.placeableTypeName \
-FROM \
- arcturus.placeable, \
- arcturus.placeableType as pt1, \
- arcturus.placeableType as pt2, \
- arcturus.placeableScene, \
- arcturus.object, \
- arcturus.material, \
- arcturus.size, \
- arcturus.integrity, \
- arcturus.dice \
-WHERE \
- placeableScene.placeableID = placeable.placeableID AND \
- placeable.placeableTypeID = pt1.placeableTypeID AND \
- placeable.objectID = object.objectID AND \
- placeableScene.sizeID = size.sizeID AND \
- placeableScene.materialID = material.materialID AND \
- material.diceID = dice.diceID AND \
- placeableScene.integrityID = integrity.integrityID AND \
- placeableScene.placeableTypeID = pt2.placeableTypeID AND \
- placeableScene.sceneID = " + sceneID + " \
-ORDER BY \
- pt2.placeableTypeName ASC"
-
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((result) => {
-
-            if (result.hasData()) {
-                console.log("found placeables in scene");
-                callback(formatPlaceableSceneArray(result.fetchAll()));
-            } else {
-                console.log("didn't find placeables in scene");
-                callback([]);
-            }
-
-        })
-    })
-}
-
-const findPlaceables = (searchText, typeID, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    searchText = mysql.escape("%" + searchText + "%");
-
-    let findQuery = " \
-SELECT DISTINCT \
- placeable.placeableID, \
- placeable.placeableName, \
- placeable.placeableHP, \
- placeable.placeableAC, \
- placeable.placeableTypeID, \
- placeableType.placeableTypeName, \
- placeable.materialID, \
- material.materialName, \
- placeable.sizeID, \
- size.sizeName, \
- placeable.objectID, \
- object.objectName, \
- object.objectUrl, \
- object.objectColor, \
- object.objectTextureUrl, \
- placeable.placeableRotationX, \
- placeable.placeableRotationY, \
- placeable.placeableRotationZ, \
- placeable.placeableOffsetX, \
- placeable.placeableOffsetY, \
- placeable.placeableOffsetZ, \
- placeable.placeableScaleX, \
- placeable.placeableScaleY, \
- placeable.placeableScaleZ, \
- placeable.integrityID, \
- integrity.integrityName, \
- placeable.placeableStealth \
-FROM \
- arcturus.placeable, \
- arcturus.placeableType, \
- arcturus.object, \
- arcturus.material, \
- arcturus.size, \
- arcturus.integrity \
-WHERE \
- placeable.placeableTypeID = placeableType.placeableTypeID AND \
- placeable.objectID = object.objectID AND \
- placeable.sizeID = size.sizeID AND \
- placeable.materialID = material.materialID AND \
- placeable.integrityID = integrity.integrityID AND \
- placeable.placeableName LIKE " + searchText
-
-
-    if (typeID > 0) {
-        findQuery = findQuery + " AND \
-placeable.placeableTypeID = " + typeID;
-    }
-    findQuery += " ORDER BY \
-placeable.placeableName ASC"
-
-    mySession.then((mySession) => {
-        mySession.sql(findQuery).execute().then((result) => {
-
-            if (result.hasData()) {
-                console.log("found placeables");
-                callback(formatPlaceablesArray(result.fetchAll()));
-            } else {
-                console.log("didn't find placeables");
-                callback([]);
-            }
-
-        })
-    })
-}
-
-
-
-const updatePlaceable = (placeable, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    console.log(placeable)
-
-    const updateQuery = "UPDATE arcturus.placeable, arcturus.object \
-SET \
- placeable.placeableName = " + mysql.escape(placeable.name) + ", \
- placeable.placeableTypeID = " + placeable.placeableType.placeableTypeID + ", \
- object.objectName = " + mysql.escape(placeable.object.name) + ", \
- object.objectUrl = " + mysql.escape(placeable.object.url) + ", \
- object.objectColor = " + mysql.escape(placeable.object.color) + ", \
- object.objectTextureUrl =" + mysql.escape(placeable.object.textureUrl) + ", \
- placeable.materialID = " + placeable.material.materialID + ", \
- placeable.sizeID = " + placeable.size.sizeID + ", \
- placeable.integrityID = " + placeable.integrity.integrityID + ", \
- placeable.placeableRotationX = " + placeable.object.rotation.x + ", \
- placeable.placeableRotationY = " + placeable.object.rotation.y + ", \
- placeable.placeableRotationZ = " + placeable.object.rotation.z + ", \
- placeable.placeableScaleX = " + placeable.object.scale.x + ", \
- placeable.placeableScaleY = " + placeable.object.scale.y + ", \
- placeable.placeableScaleZ = " + placeable.object.scale.z + ", \
- placeable.placeableOffsetX = " + placeable.object.offset.x + ", \
- placeable.placeableOffsetY = " + placeable.object.offset.y + ", \
- placeable.placeableOffsetZ = " + placeable.object.offset.z + ", \
- placeable.placeableAC = " + placeable.AC + ", \
- placeable.placeableHP = " + placeable.HP + ", \
- placeable.placeableStealth = " + placeable.stealth + " \
-WHERE \
- placeable.placeableID = " + placeable.placeableID + " AND \
- object.objectID = " + placeable.object.objectID;
-
-    console.log(updateQuery)
-
-    mySession.then((mySession) => {
-        mySession.sql(updateQuery).execute().then((result) => {
-
-            if (result.getAffectedItemsCount() > 0) {
-                console.log("placeable updated");
-                callback(true);
-            } else {
-                console.log("failed placeable update");
-                callback(false);
-            }
-
-        })
-    })
-}
-
-const addPlaceable = (placeable, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    const insertQuery = "\
-INSERT INTO arcturus.placeable \
-( \
- placeable.placeableName, \
- placeable.placeableTypeID, \
- placeable.objectID, \
- placeable.materialID, \
- placeable.sizeID, \
- placeable.integrityID, \
- placeable.placeableRotationX, \
- placeable.placeableRotationY, \
- placeable.placeableRotationZ, \
- placeable.placeableScaleX, \
- placeable.placeableScaleY, \
- placeable.placeableScaleZ, \
- placeable.placeableOffsetX, \
- placeable.placeableOffsetY, \
- placeable.placeableOffsetZ, \
- placeable.placeableAC, \
- placeable.placeableHP, \
- placeable.placeableStealth \
-) VALUES \
-( \
-" + mysql.escape(placeable.name) + ", \
-" + placeable.placeableType.placeableTypeID + ", \
-" + placeable.object.objectID + ", \
-" + placeable.material.materialID + ", \
-" + placeable.size.sizeID + ", \
-" + placeable.integrity.integrityID + ", \
-" + placeable.object.rotation.x + ", \
-" + placeable.object.rotation.y + ", \
-" + placeable.object.rotation.z + ", \
-" + placeable.object.scale.x + ", \
-" + placeable.object.scale.y + ", \
-" + placeable.object.scale.z + ", \
-" + placeable.object.offset.x + ", \
-" + placeable.object.offset.y + ", \
-" + placeable.object.offset.z + ", \
-" + placeable.AC + ", \
-" + placeable.HP + ", \
-" + placeable.stealth + " ) "
-    console.log(insertQuery);
-    mySession.then((mySession) => {
-        mySession.sql(insertQuery).execute().then((result) => {
-
-            if (result.getAffectedItemsCount() > 0) {
-                console.log("placeable inserted");
-                callback(result.getAutoIncrementValue());
-            } else {
-                console.log("failed placeable insert");
-                callback(-1);
-            }
-
-        })
-    })
-}
-
-function formatPlaceable(array) {
-
-    const placeable = {
-        placeableID: array[0],
-        name: array[1],
-        HP: array[2],
-        AC: array[3],
-        placeableType: {
-            placeableTypeID: array[4],
-            name: array[5]
-        },
-        material: {
-            materialID: array[6],
-            name: array[7],
-        },
-        size: {
-            sizeID: array[8],
-            name: array[9],
-        },
-        object: {
-            objectID: array[10],
-            name: array[11],
-            url: array[12],
-            color: array[13],
-            textureUrl: array[14],
-            rotation: {
-                x: array[15],
-                y: array[16],
-                z: array[17],
-            },
-            offset: {
-                x: array[18],
-                y: array[19],
-                z: array[20],
-            },
-            scale: {
-                x: array[21],
-                y: array[22],
-                z: array[23],
-            },
-        },
-        integrity: {
-            integrityID: array[24],
-            name: array[25]
-        },
-        stealth: array[26]
-    }
-    if (placeable.placeableID == 5) console.log(placeable)
-    return placeable;
-}
-
-function formatPlaceablesArray(array) {
-    var objectArray = []
-
-    for (let i = 0; i < array.length; i++) {
-        objectArray.push(formatPlaceable(array[i]));
-    }
-
-    return objectArray;
-}
-
-const getPlaceables = (callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    const selectQuery = "\
-SELECT \
- placeable.placeableID, \
- placeable.placeableName, \
- placeable.placeableHP, \
- placeable.placeableAC, \
- placeable.placeableTypeID, \
- placeableType.placeableTypeName, \
- placeable.materialID, \
- material.materialName, \
- placeable.sizeID, \
- size.sizeName, \
- placeable.objectID, \
- object.objectName, \
- object.objectUrl, \
- object.objectColor, \
- object.objectTextureUrl, \
- placeable.placeableRotationX, \
- placeable.placeableRotationY, \
- placeable.placeableRotationZ, \
- placeable.placeableOffsetX, \
- placeable.placeableOffsetY, \
- placeable.placeableOffsetZ, \
- placeable.placeableScaleX, \
- placeable.placeableScaleY, \
- placeable.placeableScaleZ, \
- placeable.integrityID, \
- integrity.integrityName, \
- placeable.placeableStealth \
-FROM \
- arcturus.placeable, \
- arcturus.placeableType, \
- arcturus.object, \
- arcturus.material, \
- arcturus.size, \
- arcturus.integrity \
-WHERE \
- placeable.placeableTypeID = placeableType.placeableTypeID AND \
- placeable.objectID = object.objectID AND \
- placeable.sizeID = size.sizeID AND \
- placeable.materialID = material.materialID AND \
- placeable.integrityID = integrity.integrityID \
-ORDER BY \
- placeable.placeableName ASC";
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((result) => {
-
-            if (result.hasData()) {
-                console.log("got placeables");
-                callback(formatPlaceablesArray(result.fetchAll()));
-            } else {
-                console.log("no placeables");
-                callback([]);
-            }
-
-        })
-    })
-}
-
-const addPlaceableType = (name, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    name = mysql.escape(name);
-
-    const insertQuery = "\
-INSERT INTO arcturus.placeableType \
- ( placeableTypeName ) \
-VALUES (\
- " + name + " \
- )";
-
-    mySession.then((mySession) => {
-        mySession.sql(insertQuery).execute().then((result) => {
-
-            if (result.getAffectedItemsCount()) {
-                console.log("inserted placeableType");
-                callback(result.getAutoIncrementValue());
-            } else {
-                console.log("failed to insert placeableType");
-                callback(-1);
-            }
-
-        })
-    })
-}
-
-const getPlaceableTypes = (callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    const selectQuery = "\
-SELECT \
- placeableType.placeableTypeID, \
- placeableType.placeableTypeName \
-FROM \
- arcturus.placeableType";
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((result) => {
-
-            if (result.hasData()) {
-                console.log("got placeable types");
-                callback(result.fetchAll());
-            } else {
-                console.log("no placeable types");
-                callback([]);
-            }
-
-        })
-    })
-}
-
-const setMonsterScenePosition = (monsterSceneID, position) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const updateQuery = "\
-UPDATE arcturus.monsterScene \
-SET \
- monsterScene.monsterSceneX = " + position[0] + ", \
- monsterScene.monsterSceneY = " + position[1] + ", \
- monsterScene.monsterSceneZ = " + position[2] + " \
-WHERE \
- monsterScene.monsterSceneID = " + monsterSceneID;
-
-    mySession.then((mySession) => {
-        mySession.sql(updateQuery).execute().then((result) => {
-            affected = result.getAffectedItemsCount()
-            if (affected > 0) {
-                console.log("updated monsterScene position")
-
-            } else {
-                console.log("failed monsterScene position update")
-            }
-        })
-    })
-
-}
-
-const getSceneMonsters = (sceneID, callback) => {
-
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    console.log('getting monsters in scene:' + sceneID)
-    const selectQuery = "\
-SELECT \
- monsterScene.monsterSceneID, \
- monsterScene.monsterSceneName, \
- monsterScene.monsterSceneHP, \
- monsterScene.monsterSceneXP, \
- monsterScene.monsterSceneAC, \
- monsterScene.monsterSceneSpeed, \
- monsterScene.monsterSceneSTR, \
- monsterScene.monsterSceneDEX, \
- monsterScene.monsterSceneCON, \
- monsterScene.monsterSceneWIS, \
- monsterScene.monsterSceneINT, \
- monsterScene.monsterSceneCHA, \
- monsterScene.monsterSceneImageUrl, \
- monsterScene.sizeID, \
- object.objectID, \
- monsterScene.monsterSceneObjectName, \
- monsterScene.monsterSceneObjectUrl, \
- monsterScene.monsterSceneObjectColor, \
- monsterScene.monsterSceneObjectTextureUrl, \
- monsterScene.sceneID, \
- monsterScene.monsterSceneX, \
- monsterScene.monsterSceneY, \
- monsterScene.monsterSceneZ, \
- monsterScene.monsterSceneChallenge, \
- monsterScene.monsterSceneLawful, \
- monsterScene.monsterSceneMorality, \
- monsterScene.monsterSceneDiceMultiplier, \
- monsterScene.diceID, \
- monsterScene.monsterSceneDiceModifier, \
- monsterScene.monsterTypeID, \
- monsterType.monsterTypeName, \
- monsterScene.monsterSubTypeID, \
- monsterSubType.monsterSubTypeName, \
- monsterScene.monsterSceneObjectScaleX, \
- monsterScene.monsterSceneObjectScaleY, \
- monsterScene.monsterSceneObjectScaleZ, \
- monsterScene.monsterSceneObjectRotationX, \
- monsterScene.monsterSceneObjectRotationY, \
- monsterScene.monsterSceneObjectRotationZ, \
- monsterScene.monsterSceneObjectOffsetX, \
- monsterScene.monsterSceneObjectOffsetY, \
- monsterScene.monsterSceneObjectOffsetZ \
-FROM \
- arcturus.monsterScene, \
- arcturus.object, \
- arcturus.monsterType, \
- arcturus.monsterSubType \
-WHERE \
- monsterScene.monsterTypeID = monsterType.monsterTypeID AND \
- monsterScene.monsterSubTypeID = monsterSubType.monsterSubTypeID AND \
- monsterScene.objectID = object.objectID AND \
- monsterScene.sceneID = " + sceneID;
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((result) => {
-            if (result.hasData()) {
-                const resultArray = result.fetchAll();
-                console.log("monsters found")
-                callback(formatMonsterSceneArray(resultArray))
-
-            } else {
-                console.log("no monsters found")
-                callback([])
-            }
-        })
-    })
-
-}
-
-const addMonsterScene = (monster, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    console.log("adding monster to scene")
-
-    console.log(monster)
-
-    let insertQuery = "\
-INSERT INTO arcturus.monsterScene (\
- monsterScene.monsterSceneName, \
- monsterScene.monsterSceneHP, \
- monsterScene.monsterSceneXP, \
- monsterScene.monsterSceneAC, \
- monsterScene.monsterSceneSpeed, \
- monsterScene.monsterSceneSTR, \
- monsterScene.monsterSceneDEX, \
- monsterScene.monsterSceneCON, \
- monsterScene.monsterSceneWIS, \
- monsterScene.monsterSceneINT, \
- monsterScene.monsterSceneCHA, \
- monsterScene.monsterSceneImageUrl, \
- monsterScene.sizeID, \
- monsterScene.objectID, \
- monsterScene.sceneID, \
- monsterScene.monsterSceneChallenge, \
- monsterScene.monsterSceneLawful, \
- monsterScene.monsterSceneMorality, \
- monsterScene.monsterSceneDiceMultiplier, \
- monsterScene.diceID, \
- monsterScene.monsterSceneDiceModifier, \
- monsterScene.monsterTypeID, \
- monsterScene.monsterSubTypeID, \
- monsterScene.monsterSceneObjectScaleX, \
- monsterScene.monsterSceneObjectScaleY, \
- monsterScene.monsterSceneObjectScaleZ, \
- monsterScene.monsterSceneObjectRotationX, \
- monsterScene.monsterSceneObjectRotationY, \
- monsterScene.monsterSceneObjectRotationZ, \
- monsterScene.monsterSceneObjectOffsetX, \
- monsterScene.monsterSceneObjectOffsetY, \
- monsterScene.monsterSceneObjectOffsetZ, \
- monsterScene.monsterSceneObjectName, \
- monsterScene.monsterSceneObjectUrl, \
- monsterScene.monsterSceneObjectColor, \
- monsterScene.monsterSceneObjectTextureUrl, \
- monsterScene.monsterID \
-) \
-VALUES \
-( \
-" + mysql.escape(monster.name) + ", \
-" + monster.HP + ", \
-" + monster.XP + ", \
-" + monster.AC + ", \
-" + monster.speed + ", \
-" + monster.STR + ", \
-" + monster.DEX + ", \
-" + monster.CON + ", \
-" + monster.WIS + ", \
-" + monster.INT + ", \
-" + monster.CHA + ", \
-" + mysql.escape(monster.imageUrl) + ", \
-" + monster.size.sizeID + ", \
-" + monster.object.objectID + ", \
-" + monster.sceneID + ", \
-" + monster.challenge + ", \
-" + monster.lawful + ", \
-" + monster.morality + ", \
-" + monster.dice.diceMultiplier + ", \
-" + monster.dice.diceID + ", \
-" + monster.dice.diceModifier + ", \
-" + monster.monsterType.monsterTypeID + ", \
-" + monster.monsterSubType.monsterSubTypeID + ", \
-" + monster.object.scale.x + ", \
-" + monster.object.scale.y + ", \
-" + monster.object.scale.z + ", \
-" + monster.object.rotation.x + ", \
-" + monster.object.rotation.y + ", \
-" + monster.object.rotation.z + ", \
-" + monster.object.offset.x + ", \
-" + monster.object.offset.y + ", \
-" + monster.object.offset.z + ", \
-" + mysql.escape(monster.object.name) + ", \
-" + mysql.escape(monster.object.url) + ", \
-" + mysql.escape(monster.object.color) + ", \
-" + mysql.escape(monster.object.textureUrl) + ", \
-" + monster.monsterID + ")"
-
-    console.log(insertQuery)
-
-    mySession.then((mySession) => {
-
-        mySession.sql(insertQuery).execute().then((result) => {
-
-            const monsterSceneID = result.getAutoIncrementValue();
-
-            if (monsterSceneID > 0) {
-                console.log("monsterScene insert success");
-
-                callback(monsterSceneID);
-
-            } else {
-
-                console.log("monsterScene insert failed")
-                callback(-1);
-            }
-
-        })
-
-    })
-}
-
-const findMonsters = (searchText, monsterTypeID, monsterSubTypeID, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    searchText = mysql.escape("%" + searchText + "%");
-
-    let selectQuery = "\
-SELECT \
- monster.monsterID, \
- monster.monsterName, \
- monster.monsterHP, \
- monster.monsterXP, \
- monster.monsterAC, \
- monster.monsterSpeed, \
- monster.monsterSTR, \
- monster.monsterDEX, \
- monster.monsterCON, \
- monster.monsterWIS, \
- monster.monsterINT, \
- monster.monsterCHA, \
- monster.monsterImageUrl, \
- monster.sizeID, \
- object.objectID, \
- object.objectName, \
- object.objectUrl, \
- object.objectColor, \
- object.objectTextureUrl, \
- monster.monsterChallenge, \
- monster.monsterLawful, \
- monster.monsterMorality, \
- monster.monsterDiceMultiplier, \
- monster.diceID, \
- monster.monsterDiceModifier, \
- monster.monsterTypeID, \
- monsterType.monsterTypeName, \
- monster.monsterSubTypeID, \
- monsterSubType.monsterSubTypeName, \
- monster.monsterObjectScaleX, \
- monster.monsterObjectScaleY, \
- monster.monsterObjectScaleZ, \
- monster.monsterObjectRotationX, \
- monster.monsterObjectRotationY, \
- monster.monsterObjectRotationZ, \
- monster.monsterObjectOffsetX, \
- monster.monsterObjectOffsetY, \
- monster.monsterObjectOffsetZ \
-FROM \
- arcturus.monster, \
- arcturus.object, \
- arcturus.monsterType, \
- arcturus.monsterSubType \
- \
-WHERE \
- monster.monsterTypeID = monsterType.monsterTypeID AND \
- monster.monsterSubTypeID = monsterSubType.monsterSubTypeID AND \
- monster.objectID = object.objectID"
-
-    if (monsterTypeID > 0) {
-
-
-        if (monsterSubTypeID > 0) {
-
-            selectQuery += " AND monster.monsterTypeID = " + monsterTypeID
-
-            selectQuery += " AND monster.monsterSubTypeID = " + monsterSubTypeID;
-        } else {
-            selectQuery += " AND monster.monsterTypeID = " + monsterTypeID
-        }
-        selectQuery += " AND monster.monsterName LIKE " + searchText;
-    } else {
-        selectQuery += " AND monster.monsterName LIKE " + searchText;
-    }
-
-
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((result) => {
-
-            if (result.hasData()) {
-                console.log("found monsters");
-                callback(formatMonsterArray(result.fetchAll()));
-            } else {
-                console.log("no monsters found");
-                callback([]);
-            }
-
-        })
-    })
-}
-
-const getMonsterTypes = (callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    const selectQuery = "\
-SELECT \
- monsterType.monsterTypeID, \
- monsterType.monsterTypeName \
-FROM \
- arcturus.monsterType";
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((result) => {
-
-            if (result.hasData()) {
-                console.log("got monster types");
-                callback(result.fetchAll());
-            } else {
-                console.log("no monster types");
-                callback([]);
-            }
-
-        })
-    })
-}
-
-const getMonsterSubTypes = (monsterTypeID, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    const selectQuery = "\
-SELECT \
- monsterType.monsterSubTypeID, \
- monsterType.monsterSubTypeName \
-FROM \
- arcturus.monsterSubType, \
- arcturus.monsterTypeSubType \
-WHERE \
- monsterSubType.monsterSubTypeID = monsterTypeSubType.monsterSubTypeID AND \
- monsterTypeSubType.monsterTypeID = " + monsterTypeID;
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((result) => {
-
-            if (result.hasData()) {
-                console.log("got monster sub types for type " + monsterTypeID);
-                callback(result.fetchAll());
-            } else {
-                console.log("no monster sub types");
-                callback([]);
-            }
-
-        })
-    })
-}
-
-const leaveScene = (PCID, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    const deleteQuery = "\
-UPDATE \
- arcturus.PC \
-SET \
- PC.sceneID = null, \
- PC.PCx = null, \
- PC.PCy = null, \
- PC.PCz = null \
-WHERE \
- PC.PCID = " + PCID;
-
-    mySession.then((mySession) => {
-        mySession.sql(deleteQuery).execute().then((result) => {
-            const affected = result.getAffectedItemsCount()
-            if (affected > 0) {
-                console.log("left scene PCID: " + PCID);
-            } else {
-                console.log("failed leaving scene PCID: " + PCID);
-            }
-
-        })
-    })
-}
-
-const endScene = (sceneID, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    if (sceneID === undefined || sceneID == null) sceneID = -1;
-    const deleteQuery = "\
-UPDATE \
- arcturus.PC \
-SET \
- PC.sceneID = null \
- PC.PCx = 0.0 \
- PC.PCy = 0.0 \
- PC.PCz = 0.0 \
-WHERE \
- PC.sceneID = " + sceneID;
-
-    mySession.then((mySession) => {
-        mySession.sql(deleteQuery).execute().then((result) => {
-            const affected = result.affectedRows();
-            if (affected > 0) {
-                console.log("ended scene" + sceneID)
-            } else {
-                console.log("failed ending scene" + sceneID)
-            }
-            callback(affected);
-        })
-    })
-}
-
-function setPCscenePosition(PCID, sceneID, position) {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    if (sceneID == null || sceneID === undefined) {
-        console.log("setPCscenePOsition: sceneID = null || undefined")
-        return;
-    }
-    const insertQuery = "\
-UPDATE \
- arcturus.PC \
-SET \
- PC.PCx = " + position[0] + ", \
- PC.PCy = " + position[1] + ", \
- PC.PCz = " + position[2] + ", \
- PC.sceneID = " + sceneID + " \
-WHERE \
- PC.PCID = " + PCID;
-
-    mySession.then((mySession) => {
-        mySession.sql(insertQuery).execute().then((result) => {
-            if (result.getAffectedItemsCount() > 0) {
-                console.log("updated scene PC: " + PCID + " scene: " + sceneID + " position:" + position)
-            } else {
-                console.log("fail update scene PC: " + PCID + " scene: " + sceneID + " position:" + position)
-
-            }
-        })
-    })
-
-
-}
-
-
-const getParty = (userID, campaignID, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    /////////////LINE 18 is SceneID ///19 userID
-    const selectQuery = "\
-SELECT DISTINCT \
- PC.PCID, \
- PC.PCName, \
- PC.PCImageUrl, \
- PC.raceID, \
- race.raceName, \
- race.sizeID, \
- size.sizeName, \
- PC.PCSpeed, \
- PC.classID, \
- class.className, \
- PC.diceID, \
- dice.diceName, \
- dice.diceMax, \
- object.objectID, \
- object.objectName, \
- object.objectUrl, \
- object.objectColor, \
- object.objectTextureUrl, \
- PC.PCx, \
- PC.PCy, \
- PC.PCz, \
- PC.sceneID, \
- campaignUser.userID, \
- user.userName \
- \
- FROM \
- arcturus.user, \
- arcturus.campaign, \
- arcturus.campaignUser, \
- arcturus.PC, \
- arcturus.character, \
- arcturus.object, \
- arcturus.race, \
- arcturus.size, \
- arcturus.class, \
- arcturus.dice \
- \
-WHERE \
- user.userID = campaignUser.userID AND \
- campaignUser.userID <> " + userID + " AND \
- campaignUser.campaignID = "+ campaignID + " AND \
- campaignUser.PCID = PC.PCID AND \
- PC.objectID = object.objectID AND \
- PC.raceID = race.raceID AND \
- PC.sizeID = size.sizeID AND \
- PC.classID = class.classID AND \
- PC.diceID = dice.diceID";
-
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((result) => {
-            if (result.hasData()) {
-                const resultArray = result.fetchAll();
-                let party = [];
-                let i = 0;
-
-
-                resultArray.forEach(PCarray => {
-                    const PC = formatPCasObject(PCarray);
-                    party.push(PC)
-                });
-                callback(party);
-
-            } else {
-
-                callback([])
-            }
-        })
-    })
-
-}
-const removeScene = (sceneID, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const PCQuery = "\
-UPDATE \
- arcturus.PC \
-SET \
- PC.sceneID = null  \
-WHERE \
- PC.sceneID = " + sceneID;
-
-    const sceneMonsterQuery = "\
-DELETE FROM arcturus.monsterScene \
-WHERE monsterScene.sceneID = " + sceneID;
-
-    const placeableSceneQuery = "\
-DELETE FROM arcturus.placeableScene \
-WHERE placeableScene.sceneID = " + sceneID;
-
-    const campaignSceneQusery = "\
-DELETE FROM arcturus.campaignScene \
-WHERE campaignScene.sceneID = " + sceneID;
-
-
-
-    const layerQuery = "\
-DELETE FROM arcturus.terrainLayer \
-WHERE terrainLayer.sceneID = " + sceneID;
-
-    const terrainQuery = "\
-DELETE FROM arcturus.terrain \
-WHERE terrain.sceneID = " + sceneID;
-
-    const sceneQuery = "\
-DELETE FROM arcturus.scene \
-WHERE scene.sceneID = " + sceneID;
-
-
-
-    mySession.then((mySession) => {
-        mySession.sql(PCQuery).execute().then((removedPCs) => {
-            console.log("removed " + removedPCs.getAffectedItemsCount() + " PCs from scene")
-
-            mySession.sql(sceneMonsterQuery).execute().then((removedMonsters) => {
-                console.log("removed " + removedMonsters.getAffectedItemsCount() + " monsters from scene")
-
-                mySession.sql(placeableSceneQuery).execute().then((removedPlaceables) => {
-                    console.log("removed " + removedPlaceables.getAffectedItemsCount() + " placeables from scene")
-
-                    mySession.sql(campaignSceneQusery).execute().then((removedCampaignScenes) => {
-                        console.log("removed " + removedCampaignScenes.getAffectedItemsCount() + " campaignScenes")
-
-                        mySession.sql(layerQuery).execute().then((removedLayers) => {
-                            console.log("removed " + removedLayers.getAffectedItemsCount() + " layers")
-
-                            mySession.sql(terrainQuery).execute().then((removedTerrain) => {
-                                console.log("removed " + removedTerrain.getAffectedItemsCount() + " terrain")
-
-                                mySession.sql(sceneQuery).execute().then((removedScene) => {
-                                    console.log("removed " + removedScene.getAffectedItemsCount() + " scene")
-
-                                    callback(true)
-
-                                })
-
+const createRoom = (roomTable, userRoomTable, userID, roomName) => {
+    return new Promise(resolve => {
+   
+            roomTable.insert(["roomName", "adminID"]).values(roomName, userID).execute().then((roomCreated) => {
+                const roomID = roomCreated.getAutoIncrementValue();
+                if (roomID > -1) {
+                    userRoomTable.insert(["userID", "statusID"]).values(userID, status.Offline).execute().then((userRoomInsert)=>{
+                        
+                            resolve({
+                                success: true,
+                                room:{
+                                    roomID: roomID,
+                                    roomName: roomName,
+                                    adminID: userID 
+                                },
+                                addedUser: userRoomInsert.getAffectedItemsCount() > 0
                             })
-                        })
-
                     })
-
-                })
+                }else {
+                    resolve({success:false})
+                }
             })
 
-        })
     })
 }
 
 
-const setCampaignScene = (campaignID, sceneID, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
 
-    const updateQuery = "\
-UPDATE \
- arcturus.campaign \
-SET \
- campaign.sceneID = " + sceneID + " \
-WHERE \
- campaign.campaignID = " + campaignID;
-
-    mySession.then((mySession) => {
-        mySession.sql(updateQuery).execute().then((set) => {
-            const affected = set.getAffectedItemsCount();
-
-            if (affected > 0) {
-                callback(true);
-            } else {
-                callback(false);
-            }
-        })
-    })
-}
-
-
-const getSceneTerrain = (sceneID, terrainCallback) => {
-
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    // 
-    const allTerrainQuery = "\
-SELECT \
- terrain.terrainID, \
- terrain.terrainWidth, \
- terrain.terrainLength, \
- terrain.terrainImageUrl, \
- terrain.terrainColor, \
- terrain.terrainGeometryUrl, \
- texture.textureID, \
- texture.textureName, \
- texture.textureUrl, \
- terrain.terrainX, \
- terrain.terrainY, \
- terrain.terrainZ, \
- texture.textureEffectEnable, \
- texture.textureEffectUrl \
-FROM \
- arcturus.terrain, \
- arcturus.texture \
-WHERE \
- terrain.textureID = texture.textureID AND \
- terrain.sceneID = " + sceneID;
-
-
-
-
-    mySession.then((mySession) => {
-        mySession.sql(allTerrainQuery).execute().then((terrainResults) => {
-            if (terrainResults.hasData()) {
-                console.log("terrain found");
-                const blocks = terrainResults.fetchAll();
-
-
-                let array = [];
-
-                for (let i = 0; i < blocks.length; i++) {
-                    array.push(formatTerrainResult(blocks[i]))
-
-                }
-                terrainCallback(array);
-
-
-
-
-
-            } else {
-                console.log("no terrain found");
-                terrainCallback([])
-            }
-        })
-    })
-
-}
-
-const getCurrentScene = (campaignID, isAdmin, userID, sceneCallback) => {
-
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    let selectQuery = "";
-    if (isAdmin) {
-        selectQuery = "\
-SELECT \
- campaign.sceneID, \
- scene.sceneName, \
- scene.sceneActive, \
- scene.scenePaused, \
- scene.settingID, \
- setting.settingName, \
- scene.roomID \
-FROM \
- arcturus.campaign, \
- arcturus.setting, \
- arcturus.scene \
-WHERE \
- setting.settingID = scene.settingID AND \
- scene.sceneID = campaign.sceneID AND \
- campaign.campaignID = " + campaignID + " AND \
- campaign.userID = " + userID;
-    } else {
-        selectQuery = "\
-SELECT \
- PC.sceneID, \
- scene.sceneName, \
- scene.sceneActive, \
- scene.scenePaused, \
- scene.settingID, \
- setting.settingName, \
- scene.roomID \
-FROM \
- arcturus.campaignUser, \
- arcturus.PC, \
- arcturus.setting, \
- arcturus.scene \
-WHERE \
- setting.settingID = scene.settingID AND \
- scene.sceneID = PC.sceneID AND \
- PC.PCID = campaignUser.PCID AND \
- campaignUser.userID = " + userID + " AND \
- campaignUser.campaignID = " + campaignID;
-
-    }
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((selectResults) => {
-            if (selectResults.hasData()) {
-                console.log("Scene found")
-                const sceneResult = selectResults.fetchOne();
-                // const sceneID = sceneResult[0];
-
-                const scene = formatResultAsScene(sceneResult);
-
-                //  scene.terrain = terrainArray;
-                console.log("Got current scene")
-                sceneCallback(scene);
-
-
-            } else {
-                console.log("no scene found")
-                sceneCallback({ sceneID: -1, sceneName: "", setting: { settingID: -1 }, placeables: [], terrain: [], monsters: [], characters: [] })
-            }
-        })
-    })
-}
-
-function formatTerrainResult(array) {
-
-
-    console.log("formatting terrain result")
-
-    terrain = {
-        terrainID: array[0],
-        width: array[1],
-        length: array[2],
-        imageUrl: array[3],
-        color: array[4],
-        geometryUrl: array[5],
-        texture: {
-            textureID: array[6],
-            name: array[7],
-            url: array[12] == 1 ? array[13] : array[8],
-            effect: {
-                enable: array[12],
-                url: array[13]
-            }
-        },
-        layers: null,
-        position: {
-            x: array[9],
-            y: array[10],
-            z: array[11]
-        }
-    }
-
-    return terrain;
-
-}
-function formatResultAsScene(array) {
-    console.log("formatting as scene")
-    if ("length" in array) {
-        if (array.length > 4) {
-            return {
-                sceneID: array[0],
-                roomID: array[6],
-                name: array[1],
-                active: array[2],
-                paused: array[3],
-                setting: {
-                    settingID: array[4],
-                    name: array[5]
-                }
-            };
-
-        } else {
-            console.log("formatting error not enough fields")
-            return null;
-        }
-    } else {
-        console.log("formatting error not an arry")
-        return null;
-    }
-}
-
-function formatScenes(scenes) {
-    var array = [];
-    for (let i = 0; i < scenes.length; i++) {
-        array.push(
-            formatResultAsScene(scenes[i])
-        )
-    }
-    return array;
-}
-
-const getCampaignScenes = (campaignID, scenesCallback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const selectQuery = "\
-SELECT \
- scene.sceneID, \
- scene.sceneName, \
- scene.sceneActive, \
- scene.scenePaused, \
- scene.settingID, \
- setting.settingName, \
- scene.roomID \
-FROM \
- arcturus.scene, \
- arcturus.setting, \
- arcturus.campaignScene \
-WHERE \
- scene.settingID = setting.settingID AND \
- scene.sceneID = campaignScene.sceneID AND \
- campaignScene.campaignID = " + campaignID;
-
-    console.log("getting Campaign Scenes")
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((selectResults) => {
-            if (selectResults.hasData()) {
-                console.log("Scene settings found")
-                const sceneResults = selectResults.fetchAll();
-
-
-                const scenes = formatScenes(sceneResults);
-
-                scenesCallback(scenes);
-
-
-
-            } else {
-                console.log("no scenes found")
-                scenesCallback([])
-            }
-        })
-    })
-}
-
-const addSceneTerrain = (sceneID, terrain, insertedCallback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    if (!("length" in terrain) || !("width" in terrain) || !("color" in terrain)) {
-        console.log("attributes not in terrain object")
-        insertedCallback(false);
-        return;
-    }
-
-    const length = Number(terrain.length);
-    const width = Number(terrain.width);
-    const color = mysql.escape(terrain.color);
-    const textureID = terrain.texture.textureID;
-
-    if (length < 1 || width < 1 || sceneID < 1) {
-        console.log("terrain size or scene ID less than 1")
-        insertedCallback(false);
-        return;
-    }
-
-    const insertQuery = "\
-INSERT INTO arcturus.terrain (\
- terrain.terrainWidth, \
- terrain.terrainLength, \
- terrain.terrainColor, \
- terrain.textureID \
-) \
-VALUES (\
-" + length + ", \
-" + width + ", \
-" + color + ", \
-" + textureID + ")";
-
-
-    mySession.then((mySession) => {
-        mySession.sql(insertQuery).execute().then((insertResults) => {
-            if (insertResults.getAffectedItemsCount() > 0) {
-                console.log("terrain inserted.")
-                const terrainID = insertResults.getAutoIncrementValue();
-
-
-                const joinQuery = "\
-UPDATE \
- arcturus.scene \
-SET \
- scene.terrainID = " + terrainID + " \
-WHERE \
- scene.sceneID = " + sceneID;
-                console.log(joinQuery)
-                mySession.sql(joinQuery).execute().then((joinResults) => {
-                    var listAdded = joinResults.getAffectedItemsCount()
-                    if (listAdded > 0) {
-                        console.log("terrain added to scene")
-                        insertedCallback(terrainID);
-                    } else {
-                        //rollback
-                        console.log("terrain not added to scene");
-                    }
-
-
-                })
-                //
-            } else {
-                console.log("Terrain not inserted")
-                insertedCallback(false);
-            }
-        })
-    })
-}
-const createTerrain = (sceneID, textureID, size, array, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    let insertQuery = "\
-INSERT INTO arcturus.terrain \
- (textureID, sceneID,terrainWidth,terrainLength, terrainX, terrainY, terrainZ) \
-VALUES ";
-
-    for (let i = 0; i < array.length; i++) {
-        insertQuery += "\
-( \
-" + textureID + ", \
-" + sceneID + ", \
-" + size.width + ", \
-" + size.length + ", \
-" + array[i].x + ", \
-" + array[i].y + ", \
-" + array[i].z + " )"
-
-        if (i < array.length - 1) insertQuery += " ,"
-    }
-    mySession.then((mySession) => {
-        mySession.sql(insertQuery).execute().then((insertResults) => {
-            const inserted = insertResults.getAffectedItemsCount();
-            callback(inserted + " rows inserted ")
-        })
-
-
-
-    })
-}
-
-const createDefaultTerrain = (sceneID, size, textureID, callback) => {
-    const constants = {
-        SMALL_SCENE: 1,
-        MEDIUM_SCENE: 2,
-        LARGE_SCENE: 3,
-        HUGE_SCENE: 4,
-        SCALE: 1,
-        UNITS: 5
-    }
-    let i = 0;
-
-    let width = 0;
-    let depth = 0;
-
-    let x = 0;
-    let y = 0;
-    let z = 0;
-    let w = 0;
-    let left = 0;
-
-    switch (size) {
-        case constants.SMALL_SCENE:
-
-            width = 9;
-            depth = 9;
-            left = x = -20;
-            z = -20;
-            break;
-        case constants.MEDIUM_SCENE:
-            width = 21;
-            depth = 21;
-
-            left = x = -50;
-            z = -50;
-            break;
-        case constants.LARGE_SCENE:
-            width = 81;
-            depth = 81;
-
-            left = x = -200;
-            z = -200;
-            break;
-        case constants.HUGE_SCENE:
-            width = 161;
-            depth = 161;
-
-            left = x = -400;
-            z = -400;
-            break;
-    }
-    array = []
-
-    while (i < (width * depth)) {
-        array.push({ x: x, y: y, z: z })
-        if (w < width - 1) {
-            x += constants.UNITS;
-            w++;
-        } else {
-            w = 0;
-            z += constants.UNITS;
-            x = left;
-        }
-        i++;
-    }
-
-    createTerrain(sceneID, textureID, { length: constants.UNITS, width: constants.UNITS }, array, (inserted) => {
-        callback(inserted)
-    })
-
-
-}
-
-const addCampaignScene = (campaignID, roomID, scene, insertedCallback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const tableRoomID = Number(roomID);
-
-    console.log("adding campaignScene to campaign:" + campaignID)
-
-    if (tableRoomID < 1) {
-        console.log("roomID < 1")
-        insertedCallback(false);
-        return;
-    }
-
-    if (!("name" in scene) || !("setting" in scene) || !("current" in scene || !("terrain" in scene))) {
-        console.log("attributes not in scene object")
-        insertedCallback(false);
-        return;
-    }
-    if (!("settingID" in scene.setting)) {
-        console.log("setting ID not in scene.setting")
-        insertedCallback(false);
-        return;
-    }
-
-
-
-
-
-    const settingID = Number(scene.setting.settingID);
-
-    if (settingID < 1) {
-        console.log("setting < 1")
-        insertedCallback(false);
-        return;
-    }
-
-
-    const insertQuery = "\
-INSERT INTO arcturus.scene (\
- scene.sceneName, \
- scene.settingID, \
- scene.roomID \
-) \
-VALUES (\
-" + mysql.escape(scene.name) + ", \
-" + settingID + ", \
-" + tableRoomID + " )";
-    mySession.then((mySession) => {
-        mySession.sql(insertQuery).execute().then((insertResults) => {
-            if (insertResults.getAffectedItemsCount() > 0) {
-                console.log("Scene " + scene.name + " inserted.")
-                const sceneID = insertResults.getAutoIncrementValue();
-
-
-                const joinQuery = "\
-INSERT INTO \
- arcturus.campaignScene \
-( \
- campaignScene.campaignID, \
- campaignScene.sceneID \
-) values ( \
-" + campaignID + " , \
-" + sceneID + ")";
-
-                mySession.sql(joinQuery).execute().then((joinResults) => {
-                    var listAdded = joinResults.getAffectedItemsCount()
-                    if (listAdded) {
-                        createDefaultTerrain(sceneID, scene.size, scene.textureID, (created) => {
-                            if (created) console.log("default terrain created")
-                            if (!created) console.log("failed creating terrain")
-                            if (scene.current) {
-                                console.log("current?" + scene.current)
-                                const updateQuery = "\
-UPDATE \
- arcturus.campaign \
-SET \
- campaign.sceneID = " + sceneID + " \
-WHERE \
- campaign.campaignID = " + campaignID;
-                                mySession.sql(updateQuery).execute().then((updateResults) => {
-                                    var campaignUpdated = updateResults.getAffectedItemsCount();
-                                    if (campaignUpdated > 0) {
-                                        console.log("current campaign scene changed")
-                                    } else {
-
-                                        console.log("scene change failed")
-                                    }
-                                    insertedCallback(sceneID);
-                                })
-                            } else {
-                                insertedCallback(sceneID);
-                            }
-                        })
-                    } else {
-                        //rollback
-                        console.log("scene not added to campaign");
-                    }
-
-
-                })
-                //
-            } else {
-                console.log("Scene " + scene.name + " not inserted")
-                insertedCallback(-1,);
-            }
-        })
-    })
-}
-
-const getSceneSettings = (settings) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const selectQuery = "\
-SELECT \
- setting.settingID, \
- setting.settingName \
-FROM \
- arcturus.setting"
-
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((selectResults) => {
-            if (selectResults.hasData()) {
-                console.log("Scene settings found")
-                settings(selectResults.fetchAll());
-            } else {
-                console.log("no scene settings found")
-                settings([]);
-            }
-        })
-    })
-}
-
-function formatTexture(arr) {
-    const texture = {
-        textureID: arr[0],
-        name: arr[1],
-        url: arr[6] == 1 ? arr[7] : arr[2],
-        originalUrl: arr[2],
-        textureType: {
-            textureTypeID: arr[3],
-            name: arr[4],
-            path: arr[5]
-        },
-        effect: {
-            enable: arr[6],
-            url: arr[7],
-        }
-    }
-
-    return texture;
-}
-
-function formatTextureArray(arr) {
-    var objArray = [];
-
-    for (let i = 0; i < arr.length; i++) {
-        objArray.push(
-            formatTexture(arr[i])
-        )
-    }
-
-    return (objArray);
-}
-
-const getTextures = (type, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    let selectQuery = "\
-SELECT \
- texture.textureID, \
- texture.textureName, \
- texture.textureUrl, \
- texture.textureTypeID, \
- textureType.textureTypeName, \
- textureType.textureTypePath, \
- textureEffectEnable, \
- textureEffectUrl \
-FROM \
- arcturus.texture, \
- arcturus.textureType \
-WHERE \
- texture.textureTypeID = textureType.textureTypeID"
-
-    if (type > 0) {
-        selectQuery += " AND texture.textureTypeID = " + type;
-    }
-
-    selectQuery += " ORDER BY texture.textureName ASC"
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((selectResults) => {
-            if (selectResults.hasData()) {
-                console.log("Textures found")
-                const textures = formatTextureArray(selectResults.fetchAll());
-
-                callback(textures);
-            } else {
-                console.log("no textures found")
-                callback([]);
-            }
-        })
-    })
-}
-
-
-const setPC = (userID, campaignID, PC, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const insertQuery = "\
-INSERT INTO arcturus.PC (\
- PC.PCName, \
- PC.PCImageUrl, \
- PC.PCSpeed, \
- PC.diceID, \
- PC.sizeID, \
- PC.raceID, \
- PC.backgroundID, \
- PC.classID, \
- PC.objectID \
- ) \
-VALUES (\
-" + mysql.escape(PC.name) + ", \
-" + mysql.escape(PC.imageUrl) + ", \
-" + PC.speed + ", \
-" + PC.dice.diceID + ", \
-" + PC.size.sizeID + ", \
-" + PC.race.raceID + ", \
-" + PC.background.backgroundID + ", \
-" + PC.class.classID + ", \
-" + PC.object.objectID + " \
-)";
-
-
-
-
-    mySession.then((mySession) => {
-        mySession.sql(insertQuery).execute().then((insertResults) => {
-            if (insertResults.getAffectedItemsCount() > 0) {
-                const PCID = insertResults.getAutoIncrementValue();
-                console.log("PC " + PC.PCName + " inserted, PCID: " + PCID)
-                const updateQuery = "\
-UPDATE \
- arcturus.campaignUser \
-SET \
- campaignUser.PCID = " + PCID + " \
-WHERE \
- campaignUser.userID = " + userID + " AND \
- campaignUser.campaignID = " + campaignID;
-                console.log(updateQuery);
-                if (PCID > 0) {
-                    mySession.sql(updateQuery).execute().then((updateResults) => {
-                        const updateAffected = updateResults.getAffectedItemsCount();
-                        if (updateAffected > 0) {
-                            console.log("Campaign PCID updated")
-
-                        } else {
-                            console.log("Campaign PCID not updated! Rollback ?")
-                        }
-                        console.log("PCID:" + PCID)
-                        callback(PCID);
-                    })
-                } else {
-                    callback(-1)
-                }
-            } else {
-                console.log("PC " + PC.PCName + " not inserted")
-                callback(-1);
-            }
-        })
-    })
-}
-
-function formatPCasObject(PCarray) {
-    console.log("formatting PC as object")
-
-    const PC = {
-        PCID: PCarray[0],
-        name: PCarray[1],
-        imageUrl: PCarray[2],
-        race: {
-            raceID: PCarray[3],
-            name: PCarray[4],
-        },
-        size: {
-            sizeID: PCarray[5],
-            sizeName: PCarray[6]
-        },
-        speed: PCarray[7],
-        class: {
-            classID: PCarray[8],
-            name: PCarray[9]
-        },
-        dice: {
-            diceID: PCarray[10],
-            name: PCarray[11],
-            max: PCarray[12],
-        },
-        object: {
-            objectID: PCarray[13],
-            name: PCarray[14],
-            url: PCarray[15],
-            color: PCarray[16],
-            textureUrl: PCarray[17],
-            position: [PCarray[18], PCarray[19], PCarray[20]]
-        },
-        background: {
-            backgroundID: -1
-        },
-        sceneID: PCarray[21],
-        user: {
-            userID: PCarray[22],
-            name: CapFirstLetter(PCarray[23])
-        }
-    }
-
-    return PC;
-}
-
-const getCampaignUserPC = (userID, campaignID, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const selectQuery = "\
-SELECT \
- PC.PCID, \
- PC.PCName, \
- PC.PCImageUrl, \
- PC.raceID, \
- race.raceName, \
- race.sizeID, \
- size.sizeName, \
- PC.PCSpeed, \
- PC.classID, \
- class.className, \
- PC.diceID, \
- dice.diceName, \
- dice.diceMax, \
- object.objectID, \
- object.objectName, \
- object.objectUrl, \
- object.objectColor, \
- object.objectTextureUrl, \
- PC.PCx, \
- PC.PCy, \
- PC.PCz, \
- PC.sceneID, \
- campaignUser.userID, \
- user.userName \
- \
- FROM \
- arcturus.user, \
- arcturus.campaignUser, \
- arcturus.PC, \
- arcturus.object, \
- arcturus.race, \
- arcturus.size, \
- arcturus.class, \
- arcturus.dice \
- \
-WHERE \
- user.userID = campaignUser.userID AND \
- campaignUser.userID = " + userID + " AND \
- campaignUser.campaignID = "+ campaignID + " AND \
- campaignUser.PCID = PC.PCID AND \
- PC.objectID = object.objectID AND \
- PC.raceID = race.raceID AND \
- PC.sizeID = size.sizeID AND \
- PC.classID = class.classID AND \
- PC.diceID = dice.diceID";
-
-
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((selectResults) => {
-            if (selectResults.hasData()) {
-                console.log("PC found")
-                const PCarray = selectResults.fetchOne();
-                if (PCarray[0] == -1) {
-                    callback({ PCID: -1 })
-                } else {
-
-
-
-                    callback(formatPCasObject(PCarray));
-
-                }
-            } else {
-                console.log("no PC found")
-                callback({ PCID: -1 });
-            }
-        })
-    })
-}
-
-const updateMonster = (monster, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const updateQuery = "\
-UPDATE arcturus.monster, arcturus.object SET \
- monster.monsterName = " + mysql.escape(monster.name) + ", \
- monster.monsterImageUrl = " + mysql.escape(monster.imageUrl) + ", \
- monster.monsterTypeID = " + monster.monsterType.monsterTypeID + ", \
- monster.monsterSubTypeID = " + monster.monsterSubType.monsterSubTypeID + ", \
- monster.sizeID = " + monster.size.sizeID + ", \
- monster.monsterMorality = " + monster.morality + ", \
- monster.monsterLawful = " + monster.lawful + ", \
- monster.monsterSTR = " + monster.STR + ", \
- monster.monsterDEX = " + monster.DEX + ", \
- monster.monsterCON = " + monster.CON + ", \
- monster.monsterWIS = " + monster.WIS + ", \
- monster.monsterINT = " + monster.INT + ", \
- monster.monsterCHA = " + monster.CHA + ", \
- monster.monsterDiceMultiplier = " + monster.diceMultiplier + ", \
- monster.diceID = " + monster.diceID + ", \
- monster.monsterDiceModifier = " + monster.diceModifier + ", \
- monster.monsterChallenge = " + monster.challenge + ", \
- monster.monsterSpeed = " + monster.speed + ", \
- monster.monsterXP = " + monster.XP + ", \
- monster.monsterAC = " + monster.AC + ", \
- monster.monsterHP = " + monster.HP + ", \
- object.objectName = " + mysql.escape(monster.object.name) + ", \
- object.objectUrl = " + mysql.escape(monster.object.url) + ", \
- object.objectColor = " + mysql.escape(monster.object.color) + ", \
- object.objectTextureUrl = " + mysql.escape(monster.object.textureUrl) + ", \
- monster.monsterObjectScaleX = " + monster.object.scale.x + ", \
- monster.monsterObjectScaleY = " + monster.object.scale.y + ", \
- monster.monsterObjectScaleZ = " + monster.object.scale.z + ", \
- monster.monsterObjectRotationX = " + monster.object.rotation.x + ", \
- monster.monsterObjectRotationY = " + monster.object.rotation.y + ", \
- monster.monsterObjectRotationZ = " + monster.object.rotation.z + ", \
- monster.monsterObjectOffsetX = " + monster.object.rotation.x + ", \
- monster.monsterObjectOffsetY = " + monster.object.rotation.y + ", \
- monster.monsterObjectOffsetZ = " + monster.object.rotation.z + " \
-WHERE \
- monster.monsterID = " + monster.monsterID + " AND + \
- object.objectID = " + monster.object.objectID;
-
-
-    mySession.then((mySession) => {
-        mySession.sql(updateQuery).execute().then((results) => {
-            if (results.getAffectedItemsCount() > 0) {
-                console.log("Monster " + monster.name + " updated.")
-                callback(true);
-            } else {
-                console.log("Monster " + monster.name + " not inserted")
-                insertedCallback(false);
-            }
-        })
-    })
-}
-
-
-const addMonster = (monster, insertedCallback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    console.log("adding monster: " + monster.name)
-
-    const insertQuery = "\
-INSERT INTO arcturus.monster (\
- monster.monsterName, \
- monster.monsterHP, \
- monster.monsterXP, \
- monster.monsterAC, \
- monster.monsterSpeed, \
- monster.monsterSTR, \
- monster.monsterDEX, \
- monster.monsterCON, \
- monster.monsterWIS, \
- monster.monsterINT, \
- monster.monsterCHA, \
- monster.monsterImageUrl, \
- monster.sizeID, \
- monster.objectID, \
- monster.monsterChallenge, \
- monster.monsterLawful, \
- monster.monsterMorality, \
- monster.monsterDiceMultiplier, \
- monster.diceID, \
- monster.monsterDiceModifier, \
- monster.monsterTypeID, \
- monster.monsterSubTypeID, \
- monster.monsterObjectScaleX, \
- monster.monsterObjectScaleY, \
- monster.monsterObjectScaleZ, \
- monster.monsterObjectRotationX, \
- monster.monsterObjectRotationY, \
- monster.monsterObjectRotationZ, \
- monster.monsterObjectOffsetX, \
- monster.monsterObjectOffsetY, \
- monster.monsterObjectOffsetZ \
-) \
-VALUES (\
-" + mysql.escape(monster.name) + ", \
-" + monster.HP + " , \
-" + monster.XP + " , \
-" + monster.AC + " , \
-" + monster.speed + " , \
-" + monster.STR + " , \
-" + monster.DEX + " , \
-" + monster.CON + " , \
-" + monster.WIS + " , \
-" + monster.INT + " , \
-" + monster.CHA + " , \
-" + mysql.escape(monster.imageUrl) + ", \
-" + monster.size.sizeID + " , \
-" + monster.object.objectID + ", \
-" + monster.challenge + " , \
-" + monster.lawful + " , \
-" + monster.morality + " , \
-" + monster.diceMultiplier + " , \
-" + monster.diceID + " , \
-" + monster.diceModifier + " , \
-" + monster.monsterType.monsterTypeID + " , \
-" + monster.monsterSubType.monsterSubTypeID + " , \
-" + monster.object.scale.x + ", \
-" + monster.object.scale.y + ", \
-" + monster.object.scale.z + ", \
-" + monster.object.rotation.x + ", \
-" + monster.object.rotation.y + ", \
-" + monster.object.rotation.z + ", \
-" + monster.object.offset.x + ", \
-" + monster.object.offset.y + ", \
-" + monster.object.offset.z + " )";
-
-    mySession.then((mySession) => {
-        mySession.sql(insertQuery).execute().then((insertResults) => {
-            if (insertResults.getAffectedItemsCount() > 0) {
-                console.log("Monster " + monster.name + " inserted.")
-                insertedCallback(insertResults.getAutoIncrementValue());
-            } else {
-                console.log("Monster " + monster.name + " not inserted")
-                insertedCallback(-1);
-            }
-        })
-    })
-}
-
-const addMonsterObject = (monsterID, objectID, insertedCallback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const insertQuery = "\
-INSERT INTO arcturus.monsterObject (\
- monsterObject.monsterID, \
- monsterObject.objectID ) \
-VALUES (\
-" + monsterID + ", \
-" + objectID + ")";
-
-
-    mySession.then((mySession) => {
-        mySession.sql(insertQuery).execute().then((insertResults) => {
-            if (insertResults.getAffectedItemsCount() > 0) {
-                console.log("monsterObject " + monsterID + ":" + objectID + " inserted.")
-                insertedCallback(true);
-            } else {
-                console.log("monsterObject " + monsterID + ":" + objectID + " not inserted")
-                insertedCallback(false);
-            }
-        })
-    })
-}
-
-function formatMonsterSceneArray(monsterArray) {
-    if (monsterArray != null && monsterArray !== undefined) {
-        if ("length" in monsterArray) {
-            var objectArray = [];
-            for (let i = 0; i < monsterArray.length; i++) {
-                objectArray.push(
-                    formatMonsterScene(monsterArray[i])
-                )
-            }
-            return objectArray;
-        } else {
-            return [];
-        }
-    } else {
-        return [];
-    }
-}
-function formatMonsterScene(monster) {
-
-    return {
-        monsterSceneID: monster[0],
-        name: monster[1],
-        HP: monster[2],
-        XP: monster[3],
-        AC: monster[4],
-        speed: monster[5],
-        STR: monster[6],
-        DEX: monster[7],
-        CON: monster[8],
-        WIS: monster[9],
-        INT: monster[10],
-        CHA: monster[11],
-        imageUrl: monster[12],
-        size: {
-            sizeID: monster[13]
-        },
-        objectID: monster[14],
-        object: {
-            name: monster[15],
-            url: monster[16],
-            color: monster[17],
-            textureUrl: monster[18],
-            position: [monster[20], monster[21], monster[22]],
-            scale: {
-                x: monster[33],
-                y: monster[34],
-                z: monster[35],
-            },
-            rotation: {
-                x: monster[36],
-                y: monster[37],
-                z: monster[38],
-            },
-            offset: {
-                x: monster[39],
-                y: monster[40],
-                z: monster[41]
-            }
-        },
-        sceneID: monster[19],
-        challenge: monster[23],
-        lawful: monster[24],
-        morality: monster[25],
-        diceMultiplier: monster[26],
-        diceID: monster[27],
-        diceModifier: monster[28],
-        monsterType: {
-            monsterTypeID: monster[29],
-            name: monster[30]
-        },
-        monsterSubType: {
-            monsterSubTypeID: monster[31],
-            name: monster[32]
-        }
-    }
-}
-
-function formatMonsterArray(monsterArray) {
-    if (monsterArray != null && monsterArray !== undefined) {
-        if ("length" in monsterArray) {
-            var objectArray = [];
-            for (let i = 0; i < monsterArray.length; i++) {
-                objectArray.push(
-                    formatMonster(monsterArray[i])
-                )
-            }
-            return objectArray;
-        } else {
-            return [];
-        }
-    } else {
-        return [];
-    }
-}
-
-function formatMonster(monster) {
-
-
-
-    return {
-        monsterID: monster[0],
-        name: monster[1],
-        HP: monster[2],
-        XP: monster[3],
-        AC: monster[4],
-        speed: monster[5],
-        STR: monster[6],
-        DEX: monster[7],
-        CON: monster[8],
-        WIS: monster[9],
-        INT: monster[10],
-        CHA: monster[11],
-        imageUrl: monster[12],
-        size: {
-            sizeID: monster[13]
-        },
-        object: {
-            objectID: monster[14],
-            name: monster[15],
-            url: monster[16],
-            color: monster[17],
-            textureUrl: monster[18],
-            scale: {
-                x: monster[29],
-                y: monster[30],
-                z: monster[31],
-            },
-            rotation: {
-                x: monster[32],
-                y: monster[33],
-                z: monster[34],
-            },
-            offset: {
-                x: monster[35],
-                y: monster[36],
-                z: monster[37]
-            }
-        },
-        challenge: monster[19],
-        lawful: monster[20],
-        morality: monster[21],
-        diceMultiplier: monster[22],
-        diceID: monster[23],
-        diceModifier: monster[24],
-        monsterType: {
-            monsterTypeID: monster[25],
-            monsterTypeName: monster[26],
-        },
-        monsterSubType: {
-            monsterSubTypeID: monster[27],
-            monsterSubTypeName: monster[28],
-        }
-    }
-}
-
-const getMonsters = (callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const selectQuery = "\
-SELECT \
- monster.monsterID, \
- monster.monsterName, \
- monster.monsterHP, \
- monster.monsterXP, \
- monster.monsterAC, \
- monster.monsterSpeed, \
- monster.monsterSTR, \
- monster.monsterDEX, \
- monster.monsterCON, \
- monster.monsterWIS, \
- monster.monsterINT, \
- monster.monsterCHA, \
- monster.monsterImageUrl, \
- monster.sizeID, \
- object.objectID, \
- object.objectName, \
- object.objectUrl, \
- object.objectColor, \
- object.objectTextureUrl, \
- monster.monsterChallenge, \
- monster.monsterLawful, \
- monster.monsterMorality, \
- monster.monsterDiceMultiplier, \
- monster.diceID, \
- monster.monsterDiceModifier, \
- monster.monsterTypeID, \
- monsterType.monsterTypeName, \
- monster.monsterSubTypeID, \
- monsterSubType.monsterSubTypeName, \
- monster.monsterObjectScaleX, \
- monster.monsterObjectScaleY, \
- monster.monsterObjectScaleZ, \
- monster.monsterObjectRotationX, \
- monster.monsterObjectRotationY, \
- monster.monsterObjectRotationZ, \
- monster.monsterObjectOffsetX, \
- monster.monsterObjectOffsetY, \
- monster.monsterObjectOffsetZ \
-FROM \
- arcturus.monster, \
- arcturus.object, \
- arcturus.monsterType, \
- arcturus.monsterSubType \
- \
-WHERE \
- monster.monsterTypeID = monsterType.monsterTypeID AND \
- monster.monsterSubTypeID = monsterSubType.monsterSubTypeID AND \
- monster.objectID = object.objectID";
-
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((selectResults) => {
-            if (selectResults.hasData()) {
-                console.log("monsters found")
-                callback(formatMonsterArray(selectResults.fetchAll()));
-            } else {
-                console.log("no monsters found")
-                callback([]);
-            }
-        })
-    })
-}
-
-const getSenses = (callback) => {
-
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const selectQuery = "\
-SELECT \
- senses.sensesID, \
- senses.sensesName \
-FROM \
- arcturus.senses"
-
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((selectResults) => {
-            if (selectResults.hasData()) {
-                console.log("senses found")
-                callback(selectResults.fetchAll());
-            } else {
-                console.log("no senses found")
-                callback([]);
-            }
-        })
-    })
-}
-
-const getLanguages = (callback) => {
-
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const selectQuery = "\
-SELECT \
- language.languageID, \
- language.languageName \
-FROM \
- arcturus.language"
-
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((selectResults) => {
-            if (selectResults.hasData()) {
-                console.log("languages found")
-                callback(selectResults.fetchAll());
-            } else {
-                console.log("no languages found")
-                callback([]);
-            }
-        })
-    })
-}
-
-const getTraits = (callback) => {
-
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const selectQuery = "\
-SELECT \
- trait.traitID, \
- trait.traitName \
-FROM \
- arcturus.trait"
-
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((selectResults) => {
-            if (selectResults.hasData()) {
-                console.log("traits found")
-                callback(selectResults.fetchAll());
-            } else {
-                console.log("no traits found")
-                callback([]);
-            }
-        })
-    })
-}
-
-const getMonsterActions = (callback) => {
-
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const selectQuery = "\
-SELECT \
- action.actionID, \
- action.actionName \
-FROM \
- arcturus.action, \
- arcturus.actionType";
-
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((selectResults) => {
-            if (selectResults.hasData()) {
-                console.log("actions found")
-                callback(selectResults.fetchAll());
-            } else {
-                console.log("no actions found")
-                callback([]);
-            }
-        })
-    })
-}
-
-const getSizes = (callback) => {
-
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const selectQuery = "\
-SELECT \
- size.sizeID, \
- size.sizeName, \
- size.sizeHPmodifier, \
- size.sizeACmodifier, \
- size.sizeHideModifier, \
- size.sizeDiameter, \
- size.sizeMinHeight, \
- size.sizeMaxHeight, \
- size.sizeMinWeight, \
- size.sizeMaxWeight \
-FROM \
- arcturus.size"
-
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((selectResults) => {
-            if (selectResults.hasData()) {
-                console.log("sizes found")
-                callback(selectResults.fetchAll());
-            } else {
-                console.log("no sizes found")
-                callback([]);
-            }
-        })
-    })
-}
-
-const getSkills = (callback) => {
-
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const selectQuery = "\
-SELECT \
- skill.skillID, \
- skill.skillName \
-FROM \
- arcturus.skill"
-
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((selectResults) => {
-            if (selectResults.hasData()) {
-                console.log("Skills found")
-                callback(selectResults.fetchAll());
-            } else {
-                console.log("no skills found")
-                callback([]);
-            }
-        })
-    })
-}
-
-
-const getAllMonsterSubTypes = (callback) => {
-
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const selectQuery = "\
-SELECT \
- monsterSubType.monsterSubTypeID, \
- monsterSubType.monsterSubTypeName \
-FROM \
- arcturus.monsterSubType \
-ORDER BY monsterSubType.monsterSubTypeName ASC"
-
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((selectResults) => {
-            if (selectResults.hasData()) {
-                console.log("Monster Sub-Types found")
-
-                callback(selectResults.fetchAll());
-            } else {
-                console.log("No Monster Sub-Types found")
-                callback([]);
-            }
-        })
-    })
-}
-
-const updateCharacter = (characterID, characterName, raceID, classID, characterPlayable, characterImageUrl, objectID, objectName, objectUrl, objectColor, objectTextureUrl, isUpdated) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const updateQuery = "\
-UPDATE \
- arcturus.character, arcturus.object \
-SET \
- character.characterName = "+ mysql.escape(characterName) + ", \
- character.raceID = "+ raceID + ", \
- character.classID = "+ classID + ", \
- character.characterPlayable = "+ mysql.escape(characterPlayable) + ", \
- character.characterImageUrl = " + mysql.escape(characterImageUrl) + ", \
- object.objectName = " + mysql.escape(objectName) + ", \
- object.objectUrl = "+ mysql.escape(objectUrl) + ", \
- object.objectColor = "+ mysql.escape(objectColor) + ", \
- object.objectTextureUrl = " + mysql.escape(objectTextureUrl) + " \
-  \
-WHERE \
-character.characterID = " + characterID + " AND \
-object.objectID = " + objectID;
-
-
-    mySession.then((mySession) => {
-        mySession.sql(updateQuery).execute().then((updateResults) => {
-            if (updateResults.getAffectedItemsCount() > 0) {
-                console.log("character " + characterID + " object:" + objectID + " updated.")
-                isUpdated(true);
-            } else {
-                console.log("character " + characterID + " object:" + objectID + " not updated")
-                isUpdated(false);
-            }
-        })
-    })
-}
-
-const updateCharacterObject = (characterID, objectID, insertedCallback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const insertQuery = "\
-UPDATE arcturus.character SET \
- character.objectID = " + objectID + " \
-WHERE \
- character.characterID = " + characterID;
-
-
-    mySession.then((mySession) => {
-        mySession.sql(insertQuery).execute().then((insertResults) => {
-            if (insertResults.getAffectedItemsCount() > 0) {
-                console.log("characterObject " + characterID + ":" + objectID + " inserted.")
-                insertedCallback(true);
-            } else {
-                console.log("characterObject " + characterID + ":" + objectID + " not inserted")
-                insertedCallback(false);
-            }
-        })
-    })
-}
-
-const addObject = (object = {}, insertedCallback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const insertQuery = "\
-INSERT INTO arcturus.object (\
- object.objectName, \
- object.objectUrl, \
- object.objectColor, \
- object.objectTextureUrl ) \
-VALUES (\
-" + mysql.escape(object.name) + ", \
-" + mysql.escape(object.url) + " , \
-" + mysql.escape(object.color) + " , \
-" + mysql.escape(object.textureUrl) + ")";
-
-
-    mySession.then((mySession) => {
-        mySession.sql(insertQuery).execute().then((insertResults) => {
-            if (insertResults.getAffectedItemsCount() > 0) {
-                const autoID = insertResults.getAutoIncrementValue();
-                console.log("object " + object.name + " inserted.")
-                insertedCallback(autoID);
-            } else {
-                console.log("object " + object.name + " not inserted")
-                insertedCallback(-1);
-            }
-        })
-    })
-}
-
-const addCharacter = (character = {}, insertedCallback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const insertQuery = "\
-INSERT INTO arcturus.character (\
- character.characterName, \
- character.raceID, \
- character.classID, \
- character.objectID, \
- character.characterPlayable, \
- character.characterImageUrl \
- ) \
-VALUES (\
-" + mysql.escape(character.name) + ", \
-" + character.race.raceID + ", \
-" + character.class.classID + ", \
-" + character.object.objectID + ", \
-" + character.playable + " , \
-" + mysql.escape(character.imageUrl) + ")";
-
-
-    mySession.then((mySession) => {
-        mySession.sql(insertQuery).execute().then((insertResults) => {
-            if (insertResults.getAffectedItemsCount() > 0) {
-                const autoID = insertResults.getAutoIncrementValue();
-                console.log("character " + characterName + " inserted.")
-                insertedCallback(autoID);
-            } else {
-                console.log("character " + characterName + " not inserted")
-                insertedCallback(-1);
-            }
-        })
-    })
-}
-
-const getRaceNames = (callback) => {
-
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const selectQuery = "\
-SELECT \
- race.raceID, \
- race.raceName \
-FROM \
- arcturus.race"
-
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((selectResults) => {
-            if (selectResults.hasData()) {
-                console.log("races found")
-                callback(formatRaces(selectResults.fetchAll()));
-            } else {
-                console.log("no races found")
-                callback([]);
-            }
-        })
-    })
-}
-
-function formatRaces(raceArray) {
-    if (raceArray.length > 0) {
-        var array = [];
-        for (let i = 0; i < raceArray.length; i++) {
-            array.push(
-                {
-                    raceID: raceArray[i][0],
-                    name: raceArray[i][1]
-                }
-            )
-        }
-        return array;
-    } else {
-        return [];
-    }
-}
-
-
-const getClassNames = (callback) => {
-
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    const selectQuery = "\
-SELECT \
- class.classID, \
- class.className \
-FROM \
- arcturus.class"
-
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((selectResults) => {
-            if (selectResults.hasData()) {
-                console.log("classes found")
-                callback(formatClasses(selectResults.fetchAll()));
-            } else {
-                console.log("no classes found")
-                callback([]);
-            }
-        })
-    })
-}
-
-function formatClasses(classArray) {
-    if (classArray.length > 0) {
-        var array = [];
-        for (let i = 0; i < classArray.length; i++) {
-            array.push(
-                {
-                    classID: classArray[i][0],
-                    name: classArray[i][1]
-                }
-            )
-        }
-        return array;
-    } else {
-        return [];
-    }
-}
-
-const getCharacters = (playable, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    let selectQuery = "\
-SELECT \
- character.characterID, \
- character.characterName, \
- character.characterImageUrl, \
- character.raceID, \
- race.raceName, \
- race.sizeID, \
- size.sizeName, \
- race.raceSpeed, \
- class.classID, \
- class.className, \
- class.diceID, \
- dice.diceName, \
- dice.diceMax, \
- object.objectID, \
- object.objectName, \
- object.objectUrl, \
- object.objectColor, \
- object.objectTextureUrl, \
- character.characterPlayable \
-FROM \
- arcturus.character, \
- arcturus.object, \
- arcturus.race, \
- arcturus.size, \
- arcturus.class, \
- arcturus.dice \
- \
-WHERE \
- character.objectID = object.objectID AND \
- character.raceID = race.raceID AND \
- race.sizeID = size.sizeID AND \
- character.classID = class.classID AND \
- class.diceID = dice.diceID";
-
-    if (playable != 2) {
-        selectQuery += " AND character.characterPlayable = " + playable;
-    }
-
-
-    mySession.then((mySession) => {
-        mySession.sql(selectQuery).execute().then((selectResults) => {
-            if (selectResults.hasData()) {
-                console.log("characters found")
-                const resultArray = selectResults.fetchAll();
-                let characters = [];
-                resultArray.forEach(character => {
-
-                    characters.push(formatCharacter(character));
-                });
-                callback(characters);
-            } else {
-                console.log("no characters found")
-                callback([]);
-            }
-        })
-    })
-}
-
-function formatCharacter(char) {
-
-    const character = {
-        characterID: char[0],
-        name: char[1],
-        imageUrl: char[2],
-        playable: char[18],
-        race: {
-            raceID: char[3],
-            name: char[4],
-            size: {
-                sizeID: char[5],
-                name: char[6],
-            },
-            speed: char[7],
-        },
-        class: {
-            classID: char[8],
-            className: char[9],
-            dice: {
-                diceID: char[10],
-                diceName: char[11],
-                diceMax: char[12],
-            }
-        },
-        object: {
-            objectID: char[13],
-            name: char[14],
-            url: char[15],
-            color: char[16],
-            textureUrl: char[17],
-            position: null
-        }
-    }
-
-    return character;
-}
-
-const updateUserRoom = (userID = 0, roomID = 0, options = {}, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    const peerID = "peerID" in options ? mysql.escape(options.peerID) : "";
-    const audio = "audio" in options ? options.audio ? 1 : 0 : 0;
-    const video = "video" in options ? options.video ? 1 : 0 : 0;
-    const media = "media" in options ? options.media ? 1 : 0 : 0;
-
-    const updateQuery = "\
-UPDATE arcturus.userRoom \
-SET\
- userRoom.userRoomID = " + peerID + " ,\
- userRoom.userRoomAudio = " + audio + " ,\
- userRoom.userRoomVideo = " + video + " ,\
- userRoom.userRoomMedia = " + media + " \
-WHERE \
- userRoom.userID = " + userID + " AND \
- userRoom.roomID = " + roomID;
-
-    mySession.then((mySession) => {
-        mySession.sql(updateQuery).execute().then((updateResults) => {
-            const affected = updateResults.getAffectedItemsCount();
-            if (affected > 0) {
-                console.log("updated user: " + userID + " stream:" + audio + ":" + video + ":" + media)
-            } else {
-
-            }
-            callback(affected);
-        })
-    })
-}
-
-const createCampaignUser = (userID = -1, campaignID = -1, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    const joinCampaignQuery = "INSERT INTO arcturus.campaignUser (campaignUser.userID, campaignUser.campaignID) values (\
-" + userID + " , " + campaignID + ")";
-
-    mySession.then((mySession) => {
-        mySession.sql(joinCampaignQuery).execute().then((joinResults) => {
-            const affected = joinResults.getAffectedItemsCount();
-            if (affected > 0) {
-                console.log("userID:" + userID + " Joined campaignID: " + campaignID)
-            } else {
-                console.log("user" + userID + " did not join campaign " + campaignID)
-            }
-            callback(affected);
-        })
-    })
-}
-
-const searchCampaigns = (text = "", userID = "-1", callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    text = mysql.escape("%" + text + "%");
-    //
-    /*  const selectCampaigns = "SELECT campaign.campaignID, campaign.campaignName, image.imageString, campaign.roomID, campaign.userID FROM \
-  arcturus.campaign, arcturus.campaignUser, arcturus.image, arcturus.status WHERE campaign.imageID = image.imageID AND campaign.campaignID = campaignUser.campaignID AND \
-  campaignUser.userID <> " + userID + " AND campaign.userID <> " + userID + " AND campaign.statusID = status.statusID AND status.statusName <> 'Closed' \
-  AND campaign.campaignName LIKE " + text;*/
-
-    const selectCampaigns = "SELECT DISTINCT campaign.campaignID, campaign.campaignName, image.imageString, campaign.roomID, campaign.userID FROM \
-arcturus.campaign, arcturus.image, arcturus.userRoom WHERE campaign.campaignName LIKE " + text + " AND campaign.userID <> " + userID + " \
-AND campaign.imageID = image.imageID AND userRoom.roomID = campaign.roomID AND userRoom.userID <> " + userID;
-
-    mySession.then((mySession) => {
-        mySession.sql(selectCampaigns).execute().then((campaignResults) => {
-            const hasCampaigns = campaignResults.hasData();
-            if (hasCampaigns) {
-                var campaigns = campaignResults.fetchAll();
-                console.log(campaigns.length + " campaigns Found")
-
-                callback(campaigns);
-            } else {
-                console.log("no campaigns found")
-                callback([]);
-            }
-        })
-    })
-}
-
-function formatCampaignInformation(array) {
-    const campaignInfo = {
-        campaignID: array[0],
-        name: array[1],
-        imageUrl: array[2],
-        rev: array[3]
-    }
-    return campaignInfo;
-}
-
-const getCampaignSettings = (campaignID, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    //
-    const selectCampaigns = " \
-SELECT \
- campaign.campaignID, \
- campaign.campaignName, \
- campaign.campaignImageUrl, \
- campaign.campaignImageRev \
-FROM \
- arcturus.campaign \
-WHERE \
- campaign.campaignID = " + campaignID;
-
-
-    mySession.then((mySession) => {
-        mySession.sql(selectCampaigns).execute().then((campaignResults) => {
-            const found = campaignResults.hasData()
-            console.log("has campaign information " + found)
-
-            if (found) {
-                callback(formatCampaignInformation(campaignResults.fetchOne()))
-            } else {
-                callback(null)
-            }
-
-        })
-    })
-}
-
-const getCampaigns = (userID = -1, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    //
-    const selectCampaigns = " \
-SELECT \
- campaign.campaignID, \
- campaign.campaignName, \
- campaign.campaignImageUrl, \
- campaign.roomID, \
- campaign.userID, \
- campaign.campaignImageRev \
-FROM \
- arcturus.campaign, \
- arcturus.userRoom \
-WHERE \
- userRoom.roomID = campaign.roomID AND \
- userRoom.userID = " + userID;
-
-
-    mySession.then((mySession) => {
-        mySession.sql(selectCampaigns).execute().then((campaignResults) => {
-            const found = campaignResults.hasData()
-            console.log("has campaigns " + found)
-
-            if (found) {
-                callback(campaignResults.fetchAll())
-            } else {
-                callback([])
-            }
-
-        })
-    })
-}
-
-const getImage = (imageID = -1, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    //
-    const selectImage = "SELECT image.imageString FROM arcturus.image WHERE image.imageID = \
-" + imageID;
-
-    mySession.then((mySession) => {
-
-        mySession.sql(selectImage).execute().then((imgData) => {
-            if (imgData.hasData()) {
-                console.log("returning the image")
-                callback(imgData.fetchOne()[0]);
-            } else {
-                console.log("didn't find the image")
-                callback(false);
-            }
-        })
-    }).catch((reason) => {
-        console.log(reason);
-        callback(false);
-    })
-}
-
-const createCampaign = (userID = -1, campaignName = "", imgFile = "", statusName = "", callback) => {
-    const sqkCampaignName = mysql.escape(campaignName);
-    imgFile = mysql.escape(imgFile);
-    statusName = mysql.escape(statusName);
-
-    const insertImage = "INSERT INTO arcturus.image (image.imageName, image.imageString) VALUES (\
-" + sqkCampaignName + "," + imgFile + " )";
-
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    //
-
-
-    mySession.then((mySession) => {
-
-        mySession.sql(insertImage).execute().then((updatedImage) => {
-            const imageID = updatedImage.getAutoIncrementValue();
-            if (imageID > 0) {
-                const insertCampaign = "INSERT INTO arcturus.campaign (campaign.userID, campaign.campaignName, campaign.imageID, campaign.statusID) VALUES (\
-" + userID + " , " + sqkCampaignName + " , " + imageID + ", (SELECT status.statusID FROM arcturus.status WHERE status.statusName = \
-" + statusName + ") )";
-
-                mySession.sql(insertCampaign).execute().then((updatedCamp) => {
-                    const campID = updatedCamp.getAutoIncrementValue();
-
-                    if (campID > 0) {
-                        console.log("campaign created calling back")
-                        createRoom(userID, campaignName, (roomID = -1, roomName = "") => {
-                            console.log("Adding room to campaign")
-                            addRoomToCampaign(campID, roomID, (affected) => {
-                                callback([campID, campaignName, imageID, roomID, userID])
-                            })
-                        })
-                    } else {
-                        const deleteImg = "DELETE FROM arcturus.image WHERE imageID = " + imageID;
-                        mySession.sql(deleteImg).execute().then((deletedImg) => {
-                            console.log("campaign not created, deleting image and returning")
-                            callback({ notCreated: true });
-                        })
-                    }
-                })
-
-            } else {
-                console.log("Could not create campaign")
-                callback({ notCreated: true })
-            }
-        })
-    }).catch((reason) => {
-        console.log(reason);
-    })
-}
-
-const createRoom = (userID = -1, roomName = "", callback) => {
-    roomName = mysql.escape(roomName)
-    const query = "INSERT INTO arcturus.room (room.roomName) values (" + roomName + ")";
-
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    //
-    console.log("Creating Room: " + roomName);
-    mySession.then((mySession) => {
-        mySession.sql(query).execute().then((roomCreated) => {
-            const roomID = roomCreated.getAutoIncrementValue();
-            if (roomID > 0) {
-                console.log(roomID + " created.")
-                addUserToRoom(userID, roomID, (affected) => {
-                    callback(roomID, roomName);
-                })
-            } else {
-                callback(-1, "");
-            }
-        })
-    })
-}
-
-const addRoomToCampaign = (campID = -1, roomID = -1, callback) => {
-    console.log("adding room " + roomID + " to campaign: " + campID);
-    const userRoomQuery = "UPDATE arcturus.campaign SET campaign.roomID = " + roomID + " WHERE campaign.campaignID = " + campID;
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    //d
-
-
-    mySession.then((mySession) => {
-        mySession.sql(userRoomQuery).execute().then((userAddedToRoom) => {
-            const affected = userAddedToRoom.getAffectedItemsCount();
-            console.log(roomID + " added to: " + campID + "affected: " + affected)
-            callback(affected)
-        })
-    })
-}
-
-const addUserToRoom = (userRoomTable, userID , roomID) => {
+const addUserToRoom = (userTable, userRoomTable, fileTable, userID , roomID) => {
    return new Promise(resolve => {
         userRoomTable.insert(["userID", "roomID"]).values(userID, roomID).execute().then((userAddedToRoom) => {
-                const affected = userAddedToRoom.getAffectedItemsCount();
-                resolve(affected > 0)
+                const affected = userAddedToRoom.getAffectedItemsCount() > 0;
+                if (affected) {
+                    getUserInformation(userTable, fileTable, userID).then((userInformation)=>{
+                        io.to(gatewayRoomID).emit("addedUserRoom", userInformation);
+                    })   
+                }
+                resolve(affected)
         })
    })
 }
@@ -4804,43 +528,61 @@ const getUser = (socketID = "", callback) => {
 }
 
 const cleanRooms = (userID = 0, callback) => {
-    const roomQuery = "\
-UPDATE arcturus.userRoom \
-SET\
- userRoom.userRoomID = '' ,\
- userRoom.userRoomAudio = 0 ,\
- userRoom.userRoomVideo = 0 ,\
- userRoom.userRoomMedia = 0 ,\
- userRoom.statusID = (\
-SELECT status.statusID \
-FROM arcturus.status \
-WHERE status.statusName = 'Offline' \
-) \
-WHERE\
- userRoom.userID = " + userID;
+  
+    if(userID > 0){
+        mySession.then((session) => {
+            const arcDB = session.getSchema("arcturus")
+            const userRoomTable = arcDB.getTable("userRoom")
+            const userTable = arcDB.getTable("user")
 
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    mySession.then((mySession) => {
-        mySession.sql(roomQuery).execute().then((userRooms) => {
-            const roomsAffected = userRooms.getAffectedItemsCount();
-            callback(roomsAffected);
+            userTable.select(["userPeerID"]).where("userID = :userID").bind("userID", userID).execute().then((userTableSelect)=>{
+                const one = userTableSelect.fetchOne()
+                const userPeerID = one[0];
+
+                if(userPeerID != "" || userPeerID != null){
+                    updateUserPeerID(userID, "", (callback)=>{
+                        console.log(callback)
+                    })
+                }
+            })
+            userRoomTable.select(["roomID"]).where("userID = :userID and statusID <> " + status.Offline).bind("userID", userID).execute().then((userRoomSelect) => {
+            
+                const allRooms = userRoomSelect.fetchAll();
+                if (allRooms != undefined){
+                    userRoomTable.update().set("statusID", status.Offline).where("userID = :userID").bind("userID", userID).execute().then((userRooms) => {
+                        const roomsAffected = userRooms.getAffectedItemsCount();
+                        if(roomsAffected > 0){
+                            
+                                allRooms.forEach(room => {
+                                    const roomID = room[0];
+                                    console.log("sending userStatus message to: " + roomID + " user: " + userID + " is: Offline");
+                                    io.to(roomID).emit("userStatus", userID, status.Offline);
+                                });
+                                callback(roomsAffected);
+                        
+                                
+                        }else{
+                            callback(roomsAffected);
+                        }   
+                    })
+                }else{
+                    callback(0)
+                }
+            })
         })
-    }).catch((reason) => {
-        console.log(reason);
-    })
+    }else{
+        callback(0)
+    }
+  
 }
 
 
 
 
-const setUserRoomStatus = (userID , roomID, statusID = 4) => {
+const setUserRoomStatus = (userRoomTable, userID , roomID, statusID = 4) => {
  
 return new Promise(resolve =>{
-    mySession.then((session) => {
-        const arcDB = session.getSchema("arcturus")
-        const userRoomTable = arcDB.getTable("userRoom")
+
 
         userRoomTable.update().set("statusID", statusID).where("userID = :userID AND roomID = :roomID").bind("userID", userID).bind("roomID", roomID).execute().then((results) => {
             affectedRows = results.getAffectedItemsCount();
@@ -4850,71 +592,51 @@ return new Promise(resolve =>{
             } else {
                 resolve({success:false});
             }
-        }).catch((err)=>{
-            console.log(err)
-            resolve({error: new Error("DB error")})
         })
-    })
+
 })
 }
 
-const getRoomUsers = (userID, roomID, callback) => {
-  
-    let query = "\
-SELECT \
-user.userID, \
-user.userName, \
-s1.statusName as userStatus, \
-s2.statusName as roomStatus, \
-userRoom.userRoomAudio, \
-userRoom.userRoomVideo, \
-userRoom.userRoomMedia \
-FROM \
-arcturus.user, \
-arcturus.userRoom, \
-arcturus.status s1, \
-arcturus.status s2 \
-WHERE \
-userRoom.userRoomBanned <> 1 AND \
-s1.statusID = user.statusID AND \
-s2.statusID = userRoom.statusID AND \
-user.userID = userRoom.userID AND \
-userRoom.roomID = " + roomID + " AND \
-userRoom.userID <> " + userID;
+const getRoomUsers = (userRoomTable, userTable, fileTable, roomID) => {
+    return new Promise(resolve => {
+       
+            userRoomTable.select(["userID", "statusID"]).where("roomID = :roomID").bind("roomID", roomID).execute().then((userRoomSelect)=>{
+                const one = userRoomSelect.fetchOne()
+                if(one != undefined){
+                    const all = userRoomSelect.fetchAll()
+                    let roomUsers = []
+                    let i = 0;
 
-    console.log("Getting users in: " + roomID);
+                    const recursiveInformation = () =>{
+                       
+                        if (i < all.length) {
 
+                            const roomUser = all[i]
+                            const userID = roomUser[0]
+                            const statusID = roomUser[1]
 
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    mySession.then((mySession) => {
+                            getUserInformation(userTable, fileTable, userID).then((userInformation)=>{
+                                userInformation.roomStatusID = statusID;
+                                roomUsers.push(userInformation)
+                            })
+                            i++; 
+                            recursiveInformation()
 
-        mySession.sql(query).execute().then((result) => {
-            console.log("room has users: " + result.hasData());
-            if (result.hasData()) {
-                const array = result.fetchAll();
-                let users = []
-                array.forEach(user => {
-                    users.push({
-                        userID: user[0],
-                        userName: user[1],
-                        userStatus: user[2],
-                        roomStatus: user[3],
-                        audio:user[4],
-                        video:user[5],
-                        media:user[6]
-                    })
-                });
-                callback({success:true, users});
-            } else {
-                callback({success:false});
-            }
-        }).catch((err)=>{
-            console.log(err)
-            callback({error:new Error("DB error")})
-        })
+                       } else {
+                            resolve({ success: true, users: roomUsers })
+                        }
+                    }
+
+                    recursiveInformation()
+                
+              
+                }else{
+                    resolve({ success: false, users: [] })
+                }
+            })
+       
     })
+   
 }
 
 const storeMessage = (room = 0, userID = 0, type = 0, msg = "", callback) => {
@@ -4947,29 +669,34 @@ const storeMessage = (room = 0, userID = 0, type = 0, msg = "", callback) => {
     })
 }
 
-const getStoredMessages = (room = "", callback) => {
-    room = mysql.escape(room);
-    let query = "SELECT user.userName, message.messageType, message.messageText FROM arcturus.message, arcturus.user WHERE \
-user.userID = message.userID AND message.roomID = " + room + " ORDER BY message.messageID";
+const getStoredMessages = (messageTable, roomID) => {
 
-    console.log("Getting stored messages in: " + room);
+    return new Promise(resolve =>{
+        messageTable.select(["messageID", "userID", "messageType", "messageText", "messageTime"]).where("roomID = :roomID").orderBy(["messageTime DESC"]).limit(30).bind("roomID", roomID).execute().then((result) => {
+          
+            
+            const all = result.fetchAll()
 
-
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    mySession.then((mySession) => {
-
-        mySession.sql(query).execute().then((result) => {
-            console.log("has messages: " + result.hasData());
-            if (result.hasData()) {
-                const messages = result.fetchAll();
-                console.log(messages[0])
-                callback(messages);
+            if (all != undefined) {
+                let messages = []
+                for(let i = all.length -1 ; i > -1 ; i--)
+                {
+                    messages.push({
+                        messageID: all[i][0],
+                        userID: all[i][1],
+                        messageType: all[i][2],
+                        messageText: all[i][3],
+                        messageTime: all[i][4],
+                    })
+                }
+                
+                resolve({success:true, messages:messages});
             } else {
-                callback([]);
+                callback({success:false, messages:[]});
             }
+
         })
+
     })
 }
 
@@ -5701,18 +1428,79 @@ WHERE userContact.userID = " + user.userID + " AND user.userID = userContact.con
     })
 }
 
-const getUserInformation = (loginUser, callback) => {
+const getUserInformation = (userTable,fileTable, userID) => {
+    return new Promise(resolve =>{
+        userTable.select(["userID", "userName", "userHandle", "userSocket", "statusID", "imageID"]).where("userID = :userID").bind("userID", userID).execute().then((userSelect)=>{
+            const one = userSelect.fetchOne()
 
+            if(one != undefined)
+            {
+                const imageID = one[5];
+                if(imageID == -1){
+                    resolve({
+                        userID: one[0],
+                        userName: one[1],
+                        userHandle: one[2],
+                        userSocket: one[3],
+                        statusID: one[4],
+                        image: {
+                            fileID: -1,
+                            fileName: null,
+                            fileType: null,
+                            fileCRC: null,
+                            fileMimeType: null,
+                            fileSize: null,
+                            fileLastModified: null
+                        }
+                    })
+                }else{
+                    fileTable.select(["fileID", "fileName", "fileType", "fileCRC", "fileMimeType", "fileSize", "fileLastModified"]).where("fileID = :fileID and fileMimeType = 'image'").bind("fileID", imageID).execute().then((fileResult) => {
+                        const oneFile = fileResult.fetchOne()
 
-    if (loginUser != null) {
-
-        getCampaigns(loginUser.userID, (campaigns) => {
-            callback(true, {
-                campaigns: campaigns
-            })
+                        if(oneFile != undefined){
+                            const image = {
+                                fileID: oneFile[0],
+                                fileName: oneFile[1],
+                                fileType: oneFile[2],
+                                fileCRC: oneFile[3],
+                                fileMimeType: oneFile[4],
+                                fileSize: oneFile[5],
+                                fileLastModified: oneFile[6]
+                            }
+                            resolve({
+                                userID: one[0],
+                                userName: one[1],
+                                userHandle: one[2],
+                                userSocket: one[3],
+                                statusID: one[4],
+                                image: image
+                            })
+                        }else{
+                            resolve({
+                                userID: one[0],
+                                userName: one[1],
+                                userHandle: one[2],
+                                userSocket: one[3],
+                                statusID: one[4],
+                                image: {
+                                    fileID: -1,
+                                    fileName: null,
+                                    fileType: null,
+                                    fileCRC: null,
+                                    fileMimeType: null,
+                                    fileSize: null,
+                                    fileLastModified: null
+                                }
+                            })
+                        }
+                    })
+                }  
+            }else{
+                throw new Error("Not a user")
+            }
         })
 
-    } else { callback(false, null) }
+    })
 }
 
 function formatedTime(mySqlTime) {
@@ -6041,37 +1829,6 @@ AND storage.storageKey = " + engineKey;
 }
 
 
-const deleteUserFiles = (userID, callback) => {
-    mySession.then((session) => {
-
-        var arcDB = session.getSchema('arcturus');
-        var storageTable = arcDB.getTable("storage");
-        var fileTable = arcDB.getTable("file");
-
-        storageTable.select(["storageID"]).where("userID = :userID").bind("userID", userID).execute().then((res) => {
-            const all = res.fetchAll()
-
-            if (all != undefined) {
-             
-                try {
-                all.forEach(row => {
-                    const storageID = row[0];
-                   
-                    fileTable.delete().where("storageID = :storageID").bind("storageID", storageID).execute().then((res) => {
-                       
-                        
-                    })
-                
-                })
-                callback(true)
-                }catch{
-                    callback(false)
-                }
-            }
-        })
-    })
-}
-
 
 
 
@@ -6389,10 +2146,11 @@ const insertFile = (fileTable, fileInfo) =>{
 const createRealm = (userID, realmName, imageFile, page, index, callback) => {
     mySession.then((session) => {
 
-        var arcDB = session.getSchema('arcturus');
-        var realmTable = arcDB.getTable("realm");
-        var roomTable = arcDB.getTable("room");
+        const arcDB = session.getSchema('arcturus');
+        const realmTable = arcDB.getTable("realm");
+        const roomTable = arcDB.getTable("room");
         const fileTable = arcDB.getTable("file")
+        const userRoomTable = arcDB.getTable("userRoom");
       
         const insertRealm = (innerRealmTable, realmName, userID,imageID, page, index, roomID, gatewayRoomID) =>{
             return new Promise(resolve =>{
@@ -6438,64 +2196,69 @@ const createRealm = (userID, realmName, imageFile, page, index, callback) => {
         try{
              session.startTransaction()
            
-                roomTable.insert(["roomName"]).values([realmName]).execute().then((roomResult)=>{
-                    const roomID = roomResult.getAutoIncrementValue()
-                    roomTable.insert(["roomName"]).values([realmName+"Gateway"]).execute().then((gatewayRoomResult) => {
-                        const gatewayRoomID = gatewayRoomResult.getAutoIncrementValue()
-                    if(roomID != undefined && gatewayRoomID != undefined){
-                        let realm = {
-                                userID: userID,
-                                realmName: realmName,
-                                roomID: roomID,
-                                gatewayRoomID: gatewayRoomID,
-                                config: { fileID: -1, value: null, handle: null },
-                                realmPage: page,
-                                realmIndex: index,
-                                realmDescription: null,
-                                statusID: status.Offline,
-                                advisoryID: advisory.none,
-                                accessID: access.private,
-                                realmType: "",
-                            }
-                        checkFileCRC(imageFile.crc,(crcResult) =>{
-                            if("error" in crcResult){
-                                session.rollback()
-                                callback({error:"Error in crc result"})
-                            }else{
-                                if(crcResult.fileID == null)
-                                {
-                                    insertFile(fileTable, imageFile).then((imageFileInfo)=>{
-                                        const imageID = imageFileInfo.fileID;
+                createRoom(roomTable,userRoomTable, userID, realmName).then((roomResult)=>{
+                    if(!roomResult.success) throw new Error("room not created")
 
-                                        insertRealm(realmTable, realmName, userID, imageID, page, index, roomID, gatewayRoomID).then((realmID) => {
-                                            
-                                            realm.image = imageFileInfo;
-                                            realm.realmID = realmID;
-                                            session.commit()
-                                            callback({success:true, realm:realm})
-                                        })
-                                    })
-                                   
-                                 
-                                }else{
-                                    insertRealm(realmTable, realmName, userID, crcResult.fileID, page, index, roomID, gatewayRoomID).then((realmID) => {
-                                        if (realmID != undefined) {
-                                            imageFile.fileID = crcResult.fileID;
-                                            realm.image = imageFile;
-                                            realm.realmID = realmID;
-                                            session.commit()
-                                            callback({ success: true, realm: realm })
-                                        }
-                                    })
+                    const roomID = roomResult.room.roomID
+                    createRoom(roomTable,userRoomTable, userID, realmName).then((gatewayRoomResult) => {
+                        if (!gatewayRoomResult.success) throw new Error("gateway room not created")
+
+                        const gatewayRoomID = gatewayRoomResult.room.roomID
+                        
+                        if(roomID != undefined && gatewayRoomID != undefined){
+                            let realm = {
+                                    userID: userID,
+                                    realmName: realmName,
+                                    roomID: roomID,
+                                    gatewayRoomID: gatewayRoomID,
+                                    config: { fileID: -1, value: null, handle: null },
+                                    realmPage: page,
+                                    realmIndex: index,
+                                    realmDescription: null,
+                                    statusID: status.Offline,
+                                    advisoryID: advisory.none,
+                                    accessID: access.private,
+                                    realmType: "",
                                 }
-                            }
-                         
-                        })
+                            checkFileCRC(imageFile.crc,(crcResult) =>{
+                                if("error" in crcResult){
+                                    session.rollback()
+                                    callback({error:"Error in crc result"})
+                                }else{
+                                    if(crcResult.fileID == null)
+                                    {
+                                        insertFile(fileTable, imageFile).then((imageFileInfo)=>{
+                                            const imageID = imageFileInfo.fileID;
 
-                    }else{
-                        session.rollback()
-                        callback({ error: new Error("Error adding room.") })
-                    }
+                                            insertRealm(realmTable, realmName, userID, imageID, page, index, roomID, gatewayRoomID).then((realmID) => {
+                                                
+                                                realm.image = imageFileInfo;
+                                                realm.realmID = realmID;
+                                                session.commit()
+                                                callback({success:true, realm:realm})
+                                            })
+                                        })
+                                    
+                                    
+                                    }else{
+                                        insertRealm(realmTable, realmName, userID, crcResult.fileID, page, index, roomID, gatewayRoomID).then((realmID) => {
+                                            if (realmID != undefined) {
+                                                imageFile.fileID = crcResult.fileID;
+                                                realm.image = imageFile;
+                                                realm.realmID = realmID;
+                                                session.commit()
+                                                callback({ success: true, realm: realm })
+                                            }
+                                        })
+                                    }
+                                }
+                            
+                            })
+
+                        }else{
+                            session.rollback()
+                            callback({ error: new Error("Error adding room.") })
+                        }
                 })
             })    
              
@@ -6659,7 +2422,7 @@ const deleteRealm = (userID, realmID, callback) =>{
                         rusrs.forEach(realmUser => {
                             const realmUserID = realmUser[0];
                             realmUsers.push({userID:realmUserID})
-                            quickBarRealmRemove(realmUserID, realmID)
+                           
                         });
                         
                         realmFile.delete().where("realmID = :realmID").bind("realmID", realmID).execute();
@@ -6693,110 +2456,6 @@ const deleteRealm = (userID, realmID, callback) =>{
 
 }
 
-const quickBarRealmRemove = (userID, realmID) =>{
-    return new Promise(resolve =>{
-
-    
-    mySession.then((session) =>{
-        const arcDB = session.getSchema("arcturus")
-        const userTable = arcDB.getTable("user")
-
-        userTable.select(["userQuickBar"]).where("userID = :userID").bind("userID", userID).execute().then((qbResult) => {
-            const one = qbResult.fetchOne()
-            if (one != undefined && one[0] != null) {
-                const uQB = one[0];
-                if (uQB.length > 0) {
-                    const qbArray = JSON.parse(uQB)
-                    if (Array.isArray(qbArray)) {
-                        const index = qbArray.findIndex(qb => qb.realmID == realmID)
-
-                        if (index > -1) {
-                            if (qbArray.length == 1) {
-                                qbArray.pop()
-                            } else {
-                                qbArray.splice(index, 1)
-                            }
-
-                            const str = JSON.stringify(qbArray)
-                            userTable.update().set("userQuickBar", str).where("userID = :userID").bind("userID", userID).execute().then((qbUpdate) => {
-                                const affectedUser = qbUpdate.getAffectedItemsCount()
-
-                                resolve({ quickBarUpdate: affectedUser > 0})
-
-
-                            }).catch((err) => {
-                                console.log(err)
-                                throw new Error("userTable update failed.");
-                            })
-
-                        } else {
-                            resolve({ quickBarUpdate: false })
-                        }
-                    } else {
-                        resolve({ quickBarUpdate: false })
-                    }
-                } else {
-                    resolve({ quickBarUpdate: false })
-                }
-            } else {
-                resolve({ quickBarUpdate: false})
-            }
-
-        }).catch((err) => {
-            console.log(err)
-            throw new Error("quickBar select error")
-        })
-    })
-    })
-}
-
-const getQuickBar = (userID, callback) =>{
-    mySession.then((session) => {
-
-        var arcDB = session.getSchema('arcturus');
-        var userTable = arcDB.getTable("user");
-
-        userTable.select(["userQuickBar"]).where("userID = :userID").bind("userID", userID).execute().then((uqbResult)=>{
-            const one = uqbResult.fetchOne()
-            if(one != undefined)
-            {
-                const qBar = one[0];
-                if(qBar != "" && qBar != null){
-                    callback({ success: true, quickBar: qBar })
-                }else{
-                    callback({ success: false })
-                }
-            }else{
-                callback({success:false})
-            }
-        }).catch((err)=>{
-            callback({error: new Error("DB error")})
-        })
-    
-    })
-}
-
-const setQuickBar = (userID, qBarJSON, callback) => {
-    mySession.then((session) => {
-
-        var arcDB = session.getSchema('arcturus');
-        var userTable = arcDB.getTable("user");
-
-
-        userTable.update().set("userQuickBar", qBarJSON).where("userID = :userID").bind("userID", userID).execute().then((uqbResult) => {
-            const affected = uqbResult.getAffectedItemsCount()
-            if (affected > 0) {
-                callback({ success: true })
-            } else {
-                callback({ success: false })
-            }
-        }).catch((err) => {
-            console.log(err)
-            callback({ error: new Error("DB error") })
-        })
-
-    })
-}
 
 const updateRealmInformation = (information, callback) =>{
     const realmID = information.realmID
@@ -6839,8 +2498,9 @@ const updateRealmInformation = (information, callback) =>{
 
 
 
-const enterRealmGateway = (user, realmID, callback)=>{
+const enterRealmGateway = (user, realmID,socket, callback)=>{
 
+    
 
     mySession.then((session) => {
 
@@ -6848,8 +2508,40 @@ const enterRealmGateway = (user, realmID, callback)=>{
         const realmTable = arcDB.getTable("realm");
         const userRoomTable = arcDB.getTable("userRoom");
         const userContactTable = arcDB.getTable("userContact")
+        const fileTable = arcDB.getTable("file")
+        const messageTable = arcDB.getTable("message")
+        const userTable = arcDB.getTable("user")
+
+        const finalize = (admin, userRoomTable, userTable, fileTable, userID, gatewayRoomID, roomID) => {
+            return new Promise(resolve => {
+                    getRoomUsers(userRoomTable, userTable, fileTable, gatewayRoomID).then((gatewayRoomResult) => {
+                        if(!("success" in gatewayRoomResult)) throw new Error("getgatewayRoomUsers not successfull")
+                        
+                        const gatewayUsers = gatewayRoomResult.users
+
+                        getRoomUsers(userRoomTable, userTable, fileTable, roomID).then((realmRoomResult) => {
+                            if (!("success" in gatewayRoomResult)) throw new Error("getRoomUsers not successfull")
+
+                            const realmUsers = realmRoomResult.users 
+
+                            getStoredMessages(messageTable, gatewayRoomID).then((messagesResult) => {
+                            
+                                setUserRoomStatus(userRoomTable, userID, gatewayRoomID, status.Online).then((statusUpdated) => {
+
+                                    io.to(gatewayRoomID).emit("userRoomStatus", userID, status.Online);
+                                    socket.join(gatewayRoomID)
+
+                                    resolve({ admin: admin, success: true, gatewayUsers: gatewayUsers, realmUsers: realmUsers, gatewayMessages: messagesResult.messages });
+                            })
+                        })
+                    })
+
+                })
+            
+            })
+        }
     
-        realmTable.select(["userID", "accessID", "gatewayRoomID", "roomID"]).where("realmID = :realmID").bind("realmID", realmID).then((realmSelect)=>{
+        realmTable.select(["userID", "accessID", "gatewayRoomID", "roomID"]).where("realmID = :realmID").bind("realmID", realmID).execute().then((realmSelect)=>{
             const oneRealm = realmSelect.fetchOne()
 
             if(oneRealm == undefined){
@@ -6878,20 +2570,13 @@ const enterRealmGateway = (user, realmID, callback)=>{
                                         {
                                             callback({ success: "false" })
                                         }else{
-                                            addUserToRoom(userRoomTable, user.userID,gatewayRoomID).then((added)=>{
+                                            addUserToRoom(userTable, userRoomTable, fileTable, user.userID, gatewayRoomID).then((added)=>{
                                                 if(added){
-                                                    setUserRoomStatus(gatewayRoomID, user.userID, status.Online).then((statusUpdated) => {
-
-                                                        io.to(gatewayRoomID).emit("userRoomStatus", user.userID, user.userName, status.Online);
-                                                        getRoomUsers(user.userID, gatewayRoomID, (gatewayUsers) => {
-                                                            getRoomUsers(user.userID, roomID, (realmUsers) => {
-                                                                getStoredMessages(gatewayRoomID, (messages) => {
-                                                                    socket.join(gatewayRoomID)
-                                                                    callback({ admin: admin, success: true, gatewayUsers: gatewayUsers, realmUsers: realmUsers, gatewayMessages: messages });
-                                                                })
-                                                            })
-                                                        })
+                                        
+                                                    finalize(admin, userRoomTable, userTable, fileTable, user.userID,gatewayRoomID,roomID).then(result  =>{
+                                                        callback(result)
                                                     })
+                                                  
                                                 }else{
                                                     callback({ success: "false" })
                                                 }
@@ -6900,20 +2585,15 @@ const enterRealmGateway = (user, realmID, callback)=>{
                                     })
                                     break;
                                 case access.public:
-                                    addUserToRoom(userRoomTable, user.userID, gatewayRoomID).then((added) => {
-                                        if(added){
-                                            setUserRoomStatus(gatewayRoomID, user.userID, status.Online).then((statusUpdated) => {
+                                    addUserToRoom(userTable, userRoomTable, fileTable, user.userID, gatewayRoomID).then((added) => {
+                                        if (added) {
 
-                                                io.to(gatewayRoomID).emit("userRoomStatus", user.userID, user.userName, status.Online);
-                                                getRoomUsers(user.userID, gatewayRoomID, (gatewayUsers) => {
-                                                    getRoomUsers(user.userID, roomID, (realmUsers) => {
-                                                        getStoredMessages(gatewayRoomID, (messages) => {
-                                                            socket.join(gatewayRoomID)
-                                                            callback({ admin: admin, success: true, gatewayUsers: gatewayUsers, realmUsers: realmUsers, gatewayMessages: messages });
-                                                        })
-                                                    })
-                                                })
+                                            finalize(admin, userRoomTable, userTable, fileTable, user.userID, gatewayRoomID, roomID).then(result => {
+                                                callback(result)
                                             })
+
+                                        } else {
+                                            callback({ success: "false" })
                                         }
                                     })
                                     break;
@@ -6921,17 +2601,8 @@ const enterRealmGateway = (user, realmID, callback)=>{
                         }else{
                             const banned = oneUserRoom[0]
                             if(banned == 0){
-                                setUserRoomStatus(gatewayRoomID, user.userID, status.Online).then((statusUpdated) => {
-
-                                    io.to(gatewayRoomID).emit("userRoomStatus", user.userID, user.userName, status.Online);
-                                    getRoomUsers(user.userID, gatewayRoomID, (gatewayUsers) => {
-                                        getRoomUsers(user.userID, roomID, (realmUsers) => {
-                                            getStoredMessages(gatewayRoomID, (messages) => {
-                                                socket.join(gatewayRoomID)
-                                                callback({ admin: admin, success: true, gatewayUsers: gatewayUsers, realmUsers: realmUsers, gatewayMessages: messages });
-                                            })
-                                        })
-                                    })
+                                finalize(admin, userRoomTable, userTable, fileTable, user.userID, gatewayRoomID, roomID).then(result => {
+                                    callback(result)
                                 })
                             }else[
                                 callback({ success: "false" })
@@ -6941,23 +2612,10 @@ const enterRealmGateway = (user, realmID, callback)=>{
                     }else{
                         if(oneUserRoom == undefined)
                         {
-                            addUserToRoom(userRoomTable, user.userID, gatewayRoomID).then((added) => {
+                            addUserToRoom(userTable, userRoomTable, fileTable, user.userID, gatewayRoomID).then((added) => {
                                 if(added){
-                                    setUserRoomStatus(gatewayRoomID, user.userID, status.Online).then((statusUpdated) => {
-
-                                        io.to(gatewayRoomID).emit("userRoomStatus", user.userID, user.userName, status.Online);
-
-                                        getRoomUsers(user.userID, gatewayRoomID, (gatewayUsers) => {
-                                            getRoomUsers(user.userID, roomID, (realmUsers) => {
-                                                getStoredMessages(gatewayRoomID, (messages) => {
-                                                    socket.join(gatewayRoomID)
-                                                    callback({ admin: admin, success: true, gatewayUsers: gatewayUsers, realmUsers: realmUsers, gatewayMessages: messages });
-                                                });
-                                            });
-                                        });
-
-                                    }).catch((err) => {
-                                        callback({ error: new Error("settingUserRoomStatus") })
+                                    finalize(admin, userRoomTable, userTable, fileTable, user.userID, gatewayRoomID, roomID).then(result => {
+                                        callback(result)
                                     })
                                 }else{
                                     console.log("admin couldn't be added to gateway room")
@@ -6965,21 +2623,8 @@ const enterRealmGateway = (user, realmID, callback)=>{
                                 }
                             })
                         }else{
-                            setUserRoomStatus(gatewayRoomID, user.userID, status.Online).then((statusUpdated) => {
-
-                                io.to(gatewayRoomID).emit("userRoomStatus", user.userID, user.userName, status.Online);
-
-                                getRoomUsers(user.userID, gatewayRoomID, (gatewayUsers) => {
-                                    getRoomUsers(user.userID, roomID, (realmUsers) => {
-                                        getStoredMessages(gatewayRoomID, (messages) => {
-                                            socket.join(gatewayRoomID)
-                                            callback({ admin: admin, success: true, gatewayUsers: gatewayUsers, realmUsers: realmUsers, gatewayMessages: messages });
-                                        });
-                                    });
-                                });
-
-                            }).catch((err) => {
-                                resolve({ error: new Error("settingUserRoomStatus") })
+                            finalize(admin, userRoomTable, userTable, fileTable, user.userID, gatewayRoomID, roomID).then(result => {
+                                callback(result)
                             })
                         }
 
@@ -6989,22 +2634,36 @@ const enterRealmGateway = (user, realmID, callback)=>{
             }
         })
     })
-
-    addUserToRoom(userID, roomID, (insertedIntoRoom) => {
-        if (insertedIntoRoom) {
-            const campaignUser = [userID, userName, "Online", "Offline", "", 0, 0, 0]
-            io.to(roomID).emit("newCampaignUser", campaignUser);
-          
-        } else {
-            console.log("Couldn't add campaign user " + userID + " to room " + roomID + " cleanup required");
-            callback(0);
-        }
-
-    });
-
     
 }
 
+const updateUserPeerID = (userID, peerID, callback) =>{
+
+    mySession.then((session) => {
+
+        const arcDB = session.getSchema('arcturus');
+        const userTable = arcDB.getTable("user")
+        const userRoom = arcDB.getTable("userRoom")
+
+        userTable.update().set("userPeerID", peerID).where("userID = :userID").bind("userID", userID).execute().then((userUpdate)=>{
+            const updated = userUpdate.getAffectedItemsCount() > 0
+            
+            if(updated){
+                userRoom.select(["roomID"]).where("userID = :userID and statusID = :statusID").bind("userID", userID).bind("statusID", status.Online).execute().then((userRoomSelect) =>{
+                   
+                    const allRooms = userRoomSelect.fetchAll();
+                    allRooms.forEach(room => {
+                        const roomID = room[0]
+                        io.to(roomID).emit("updateUserPeerID", peerID)
+                    });
+                   
+                })
+            }
+            callback(updated)
+        })
+        
+    })
+}
 
         
 
