@@ -4,7 +4,7 @@ const mysqlx = require('@mysql/xdevapi');
 const fs = require('fs');
 const cryptojs = require('crypto-js');
 const util = require('util');
-const { homeURL, socketURL, wwwURL, server, dbURL, dbPort, sqlCred, emailUser, emailPassword, authToken } = require('./httpVars');
+const { homeURL, socketURL, wwwURL, server, dbURL, dbPort, sqlCred, emailUser, emailPassword, authToken, loginToken } = require('./httpVars');
 
 
 const adminAddress = emailUser;
@@ -144,14 +144,8 @@ const access = {
 
 io.on('connection', (socket) => {
     const id = socket.id;
-    let user = null;
-    if (socket.handshake.auth.token != authToken) {
-        console.log("wrong token")
-
-        socket.disconnect(true);
-
-    } else {
-        if (socket.handshake.auth.user.nameEmail == 'anonymous') {
+    if (socket.handshake.auth.token == authToken) {
+        
             console.log("anonymous")
             socket.on('createUser', (user, userCreated) => {
                 createUser(user, (results) => {
@@ -197,32 +191,43 @@ io.on('connection', (socket) => {
                     callback(result)
                 })
             })
-        } else {
-            checkUser(socket.handshake.auth.user, (success, loginUser) => {
+        } else if(socket.handshake.auth.token == loginToken) {
+            socket.on("login", (params, callback)=>{
+             
+                console.log(params)
+                checkUser(params, (success, loginUser) => {
+                    console.log("logged in " + success)
+                    if (!success) {
+                        callback({success:false})
+                        socket.disconnect()
+                    }else if(success){
+                       
+                        const user = loginUser;
+                       
+
+                        updateUserStatus(user.userID, status.Online, id, (isRooms, rooms) => {
+                            if (isRooms) {
+                                for (let i = 0; i < rooms.length; i++) {
+
+                                    console.log("sending userStatus message to: " + rooms[i][0] + " user: " + user.userID + " is: Online");
+
+                                    io.to(rooms[i][0]).emit("userStatus", user.userID, user.userName, "Online");
+
+                                }
+                            }
+
+                        })
+                    
+                        getContacts(user, (contacts) => {
+                            getContactRequests(user, (requests => {
+                                callback({ success: true, user:loginUser, contacts:contacts, requests:requests })
+                            }))
+                        })
+              
+               
                 /* //////////////SUCCESS///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
 
-                if (success) {
-                    user = loginUser;
-                    user["loggedIn"] = true;
-                    console.log(user)
-                    getContacts(user, (contacts) => {
-                        getContactRequests(user, (requests => {
-                            io.to(id).emit("loggedIn", loginUser, contacts, requests)
-                        }))
-                    })
-                    updateUserStatus(user.userID, status.Online, id, (isRooms, rooms) => {
-                        if (isRooms) {
-                            for (let i = 0; i < rooms.length; i++) {
-
-                                console.log("sending userStatus message to: " + rooms[i][0] + " user: " + user.userID + " is: Online");
-
-                                io.to(rooms[i][0]).emit("userStatus", user.userID, user.userName, "Online");
-
-                            }
-                        }
-
-                    })
-
+              
                     socket.on("enterRealmGateway", (realmID, callback)=>{
                         enterRealmGateway(user, realmID,socket, (enteredGateway)=>{
                             callback(enteredGateway)
@@ -282,30 +287,9 @@ io.on('connection', (socket) => {
 
                     socket.on("acknowledgeContact", (response, contactID, callback) => {
                         const userID = user.userID;
-                        const socketID = id;
 
                         acknowledgeContact(userID, response, contactID, (result) => {
-                            const success = result.success;
-
-                            if (success) {
-                                const contactSocket = result.contactSocket;
-                                const contactOnline = (result.contactStatusID == status.Online);
-
-                                if (contactOnline && contactSocket != "") {
-
-                                    if (response) {
-                                        io.to(contactSocket).emit("acknowledgeContact", { accepted: response, socket: socketID, userID: userID })
-                                        callback({ success: true, socket: contactSocket, online: contactOnline })
-                                    } else {
-                                        io.to(contactSocket).emit("acknowledgeContact", { accepted: response, userID: userID })
-                                        callback({ success: true })
-                                    }
-                                } else {
-                                    callback({ success: true, contactOnline: false, socket: "" })
-                                }
-                            } else {
-                                callback(result)
-                            }
+                            callback(result)
                         })
                     })
 
@@ -396,18 +380,19 @@ io.on('connection', (socket) => {
                     });
 
 
-                } else {
-                    console.log("disconnected")
-                    socket.disconnect();
-                }
+                } 
             });
-        }
-    }
-    console.log(id);
+    })
+    
+      
+}else{
+    socket.disconnect()
+}
+
+})
 
     /* */
 
-});
 
 
 function CapFirstLetter(string) {
@@ -420,22 +405,22 @@ const createRoom = (roomTable, userRoomTable, userID, roomName) => {
    
             roomTable.insert(["roomName", "adminID"]).values(roomName, userID).execute().then((roomCreated) => {
                 const roomID = roomCreated.getAutoIncrementValue();
-                if (roomID > -1) {
-                    userRoomTable.insert(["userID", "statusID"]).values(userID, status.Offline).execute().then((userRoomInsert)=>{
-                        
-                            resolve({
-                                success: true,
-                                room:{
-                                    roomID: roomID,
-                                    roomName: roomName,
-                                    adminID: userID 
-                                },
-                                addedUser: userRoomInsert.getAffectedItemsCount() > 0
-                            })
-                    })
-                }else {
-                    resolve({success:false})
-                }
+
+                userRoomTable.insert(["userID","roomID", "statusID"]).values(userID,roomID, status.Offline).execute().then((userRoomInsert)=>{
+                        resolve(
+                            {
+                            success: true,
+                            room:{
+                                roomID: roomID,
+                                roomName: roomName,
+                                adminID: userID 
+                            },
+                            addedUser: userRoomInsert.getAffectedItemsCount() > 0
+                        }
+                        )
+                })
+
+               
             })
 
     })
@@ -768,7 +753,7 @@ const acknowledgeContact = (userID, acknowledgement, contactID, callback) => {
         var arcDB = session.getSchema('arcturus');
         var userContactTable = arcDB.getTable("userContact");
         var userTable = arcDB.getTable("user");
-
+        const fileTable = arcDB.getFile("file");
         try {
 
             userContactTable.update().set(
@@ -778,55 +763,56 @@ const acknowledgeContact = (userID, acknowledgement, contactID, callback) => {
             ).bind("userID", contactID).bind("contactID", userID).execute().then((response) => {
                 console.log(response)
                 const affected = response.getAffectedItemsCount();
-                if (affected > 0) {
-                    userTable.select(['userID', 'statusID', 'userSocket']).where('userID = :userID').bind('userID', contactID).execute().then((contactInfo) => {
-                        const infoArr = contactInfo.fetchOne();
-                        const contactStatusID = infoArr[1];
-                        const contactSocket = infoArr[2];
 
+                userContactTable.insert(
+                    ['userID', 'contactID', 'statusID']
+                ).values(
+                    [userID, contactID, acknowledgement ? status.accepted : status.rejected]
+                ).execute().then((res) => {
+                    const affected2 = res.getAffectedItemsCount()
+                if (affected > 0 && affected2 > 0) {
+                    getUserInformation(userTable, fileTable, contactID).then((contact) => {
+                    
                         if (acknowledgement) {
-                            userContactTable.insert(
-                                ['userID', 'contactID', 'statusID']
-                            ).values(
-                                [userID, contactID, status.accepted]
-                            ).execute().then((res) => {
-                                console.log(res)
-                                const insertAffected = res.getAffectedItemsCount();
+                 
+                            getUserInformation(userTable, fileTable, userID).then((user) => {
 
-                                if (insertAffected) {
-                                    callback({ success: true, request: acknowledgement, contactStatusID: contactStatusID, contactSocket: contactSocket })
-                                    session.commit();
-                                } else {
-                                    callback({ success: false, error: null })
-                                    session.rollback()
-                                }
-
+                                io.to(contact.userSocket).emit("acknowledgeContact", {acknowledgement:acknowledgement, contact:user})
+                            
                             })
-                        } else {
-                            callback({ success: true, request: acknowledgement, contactStatusID: contactStatusID, contactSocket: contactSocket })
+                                
+                            callback({ 
+                                acknowledgement: acknowledgement, 
+                                success:true,
+                                contact: contact,
+                            })
+
                             session.commit();
-                        }
+                         } else {
 
+                            io.to(contact.userSocket).emit("acknowledgeContact", { acknowledgement: false })
 
+                            callback({ success: true, acknowledgement: false })
+                            session.commit();
+                        }  
                     })
-
-
+                      
+              
                 } else {
-                    callback({ success: false, error: null })
+                    console.log("userContact tables could not insert / update")
+                    callback({ success: false })
                     session.rollback()
                 }
+                })
             })
-
         } catch (error) {
 
             session.rollback()
             console.log(error)
-            callback({ success: false, error: error })
+            callback({ error: error })
         }
-
-
-
-    })
+                
+     })
 }
 
 const requestContact = (userID, contactID, msg, callback) => {
