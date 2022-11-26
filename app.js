@@ -194,7 +194,6 @@ io.on('connection', (socket) => {
         } else if(socket.handshake.auth.token == loginToken) {
             socket.on("login", (params, callback)=>{
              
-                console.log(params)
                 checkUser(params, (success, loginUser) => {
                     console.log("logged in " + success)
                     if (!success) {
@@ -229,7 +228,8 @@ io.on('connection', (socket) => {
 
               
                     socket.on("enterRealmGateway", (realmID, callback)=>{
-                        enterRealmGateway(user, realmID,socket, (enteredGateway)=>{
+                        console.log(realmID)
+                        enterRealmGateway(user, realmID, socket, (enteredGateway)=>{
                             callback(enteredGateway)
                         })
                     })
@@ -294,8 +294,8 @@ io.on('connection', (socket) => {
                     })
 
                     socket.on('createRefCode', (code, callback) => {
-                        createRefCode(user, code, (created, result) => {
-                            callback(created, result)
+                        createRefCode(user, code, (result) => {
+                            callback(result)
                         })
                     })
 
@@ -346,15 +346,21 @@ io.on('connection', (socket) => {
                         })
                     })
 
+                    socket.on("checkUserFiles", (crcs, callback) => {
+                        checkUserFiles(user.userID, crcs, (result) => {
+                            callback(result)
+                        })
+                    })
+
 
                     socket.on("updateSocketID", (userID) => {
                         updateSocketID(userID, id);
                     })
 
 
-                    socket.on('searchPeople', (text, userID, returnPeople) => {
-                        console.log('searchPeople:' + text);
-                        findPeople(text, userID, (results) => {
+                    socket.on('searchPeople', (text, returnPeople) => {
+
+                        findPeople(text, user.userID, (results) => {
                             returnPeople(results)
                         });
                     });
@@ -1261,16 +1267,16 @@ const createRefCode = (user, code, callback) => {
 
             console.log("Created code: " + code + " at: " + now)
 
-            callback(true, { refCode: code, refCreated: now })
+            callback({success:true, code:{refCode: code, refCreated: now} })
         } catch (error) {
             console.log(error)
             session.rollback();
-            callback(false, null);
+            callback({success:false});
         }
-        emailpassrest
+
     }).catch((error) => {
         console.log(error)
-        callback(false, null);
+        callback({success:false})
     })
 }
 
@@ -1701,6 +1707,40 @@ const updateUserPassword = (info, callback) => {
     })
 }
 
+const checkUserFiles = (userID, crcs, callback) =>{
+    mySession.then((session) => {
+
+
+        let i = 0;
+        let passedCrcs = []
+        const checkFileRecursive = () =>
+        {
+            const crc = crcs[i]
+            const query = "SELECT DISTINCT file.fileID from arcturus.file, arcturus.userFile where file.fileID = userFile.fileID AND userFile.userID = " + userID + " \
+ AND file.fileCRC = " + crc;
+            session.sql(query).execute.then((sqlResult)=>{
+                if(sqlResult.hasData()){
+                    const one = sqlResult.fetchOne()
+                    const fileID = one[0]
+
+                    passedCrcs.push({fileID:fileID, crc:crc, index: i}) 
+                
+                }
+                i++;
+                if(i < crcs.length){ 
+                    checkFileRecursive()
+                }else{
+                    callback({success:true, userFiles:passedCrcs})
+                }
+            })
+        }
+        if(Array.isArray(crcs) && crcs.length > 0) checkFileRecursive()
+    }).catch((err)=>{
+        console.log(err)
+        callback({error: new Error("DB error")})
+    })
+}
+
 const updateStorageConfig = (fileID, fileInfo, callback) =>{
     mySession.then((session) => {
 
@@ -1846,52 +1886,53 @@ function formatedNow(now = new Date(), small = false) {
     
 }
 
-const checkStorageCRC = (userID, crc, callback) =>{
+
+const checkStorageCRC = (userID, crc, callback) => {
 
     mySession.then((session) => {
-      
+
         const arcDB = session.getSchema("arcturus");
         const fileTable = arcDB.getTable("file");
         const storageTable = arcDB.getTable("storage");
 
 
-        fileTable.select(["fileID"]).where("fileCRC = :fileCRC").bind("fileCRC", crc).execute().then((fileResult)=>{
+        fileTable.select(["fileID"]).where("fileCRC = :fileCRC").bind("fileCRC", crc).execute().then((fileResult) => {
 
             const one = fileResult.fetchOne()
-            if(one != undefined)
-            {
+            if (one != undefined) {
                 const fileID = one[0];
-                
-                storageTable.select(["storageID"]).where("fileID = :fileID AND userID = :userID").bind("fileID", fileID).bind("userID",userID).execute().then((storageResult)=>{
-                    
+
+                storageTable.select(["storageID"]).where("fileID = :fileID AND userID = :userID").bind("fileID", fileID).bind("userID", userID).execute().then((storageResult) => {
+
                     const row = storageResult.fetchOne()
 
-                    if(row != undefined){
+                    if (row != undefined) {
                         const storageID = row[0];
                         console.log("storageCRC passed")
                         callback({ success: true, fileID: fileID, storageID: storageID })
-                    }else{
+                    } else {
                         console.log("no storage ID for file")
                         callback({ success: false, fileID: fileID, storageID: null })
-                    }    
-                
-                }).catch((err)=>{
+                    }
+
+                }).catch((err) => {
                     console.log(err)
                     callback({ error: new Error("DB error") })
                 })
 
 
-            }else{
-                callback({error:new Error("File CRC failed.")})
+            } else {
+                callback({ error: new Error("File CRC failed.") })
             }
 
-        }).catch((err)=>{
+        }).catch((err) => {
             console.log(err)
-            callback({error: new Error("DB error")})
+            callback({ error: new Error("DB error") })
         })
 
     })
 }
+
 
 const useConfig = (userID, fileID, storageKey, callback) =>{
     mySession.then((session) => {
