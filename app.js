@@ -345,12 +345,12 @@ io.on('connection', (socket) => {
                             callback(result)
                         })
                     })
-
+                    /*
                     socket.on("checkUserFiles", (crcs, callback) => {
                         checkUserFiles(user.userID, crcs, (result) => {
                             callback(result)
                         })
-                    })
+                    })*/
 
 
                     socket.on("updateSocketID", (userID) => {
@@ -372,7 +372,11 @@ io.on('connection', (socket) => {
                         })
                     })
 
-                  
+                    socket.on("updateUserImage", (imageInfo, callback) => {
+                        updateUserImage(user.userID, imageInfo, (updated) =>{
+                            callback(updated)
+                        })
+                    })
 
 
                     socket.on('disconnect', () => {
@@ -1706,7 +1710,7 @@ const updateUserPassword = (info, callback) => {
         }
     })
 }
-
+/*
 const checkUserFiles = (userID, crcs, callback) =>{
     mySession.then((session) => {
 
@@ -1739,7 +1743,7 @@ const checkUserFiles = (userID, crcs, callback) =>{
         console.log(err)
         callback({error: new Error("DB error")})
     })
-}
+}*/
 
 const updateStorageConfig = (fileID, fileInfo, callback) =>{
     mySession.then((session) => {
@@ -1888,7 +1892,7 @@ function formatedNow(now = new Date(), small = false) {
 
 
 const checkStorageCRC = (userID, crc, callback) => {
-
+    console.log("checking storageCRC " + crc)
     mySession.then((session) => {
 
         const arcDB = session.getSchema("arcturus");
@@ -1961,31 +1965,38 @@ const useConfig = (userID, fileID, storageKey, callback) =>{
     })
 }
 
-const checkFileCRC = (crc, callback) =>{
+const selectFileTableCRC = (fileTable, crc) =>{
+    return new Promise(resolve =>{
+
+        fileTable.select(["fileID"]).where("fileCRC = :fileCRC").bind("fileCRC", crc).execute().then((selectRes) => {
+            const one = selectRes.fetchOne()
+            if (one != undefined) {
+                resolve({ fileID: one[0] })
+            } else {
+                resolve({ fileID: null })
+            }
+        })
+    })
     
+}
+
+const checkFileCRC = (crc, callback) => {
     mySession.then((session) => {
 
         var arcDB = session.getSchema('arcturus');
         var fileTable = arcDB.getTable("file");
-        
-        fileTable.select(["fileID"]).where("fileCRC = :fileCRC").bind("fileCRC", crc).execute().then((selectRes)=>{
-            const one = selectRes.fetchOne()
-            if(one != undefined)
-            {
-                callback({fileID: one[0]})
-            }else{
-                callback({fileID: null})
-            }
-        }).catch((err) => {
-            console.log(err)
-            callback({ error: new Error("DB error") })
+
+        selectFileTableCRC(fileTable, crc).then((result) => {
+            callback(result)
         })
 
     }).catch((err) => {
         console.log(err)
-        callback({error:new Error("DB error")})
+        callback({ error: new Error("DB error") })
     })
 }
+
+
 
 
 const checkRealmName = (name, callback) => {
@@ -2011,14 +2022,10 @@ const checkRealmName = (name, callback) => {
     })
 }
 
-const checkUserFile = (userID, fileID, callback) => {
-    mySession.then((session) => {
+const checkUserFileTable = (userFileTable, userID, fileID) => {
 
-        var arcDB = session.getSchema('arcturus');
-        var userFileTable = arcDB.getTable("userFile");
-
-
-        userFileTable.select(["userFilePermissions"]).where(
+    return new Promise(resolve => {
+        userFileTable.select(["accessID"]).where(
             "userID = :userID AND fileID = :fileID"
         ).bind(
             "userID", userID
@@ -2027,15 +2034,13 @@ const checkUserFile = (userID, fileID, callback) => {
         ).execute().then((result) => {
             const one = result.fetchOne();
             if (one == undefined) {
-                callback({userFilePermissions:null})
+                resolve({success:"false"})
             } else {
-                callback({userFilePermissions:one[0]})
+                resolve({success:"true", accessID:one[0]})
             }
-        }).catch((err) => {
-            console.log(err)
-            callback(false)
         })
     })
+
 }
 
 const addFileToRealm = (userID, realmID, fileInfo, callback) =>{
@@ -2695,6 +2700,88 @@ const updateUserPeerID = (userID, peerID, callback) =>{
         })
         
     })
+}
+
+const insertUserFile = (userFileTable, userID, fileID, accessID) => {
+  
+    return new Promise(resolve => {
+        userFileTable.insert(["userID", "fileID", "accessID"]).values([
+            userID, fileID, accessID
+        ]).execute().then((result) => {
+            
+            resolve(result.getAffectedItemsCount() > 0)
+            
+        })
+    })
+}
+
+const userTableImageUpdate = (uTable, userID, fileID) => {
+    return new Promise(resolve => {
+        uTable.update().set("imageID", fileID).where("userID = :userID").bind("userID", userID).execute().then((userImageUpdated) => {
+            resolve(userImageUpdated.getAffectedItemsCount() > 0)
+        })
+    })
+}
+const updateUserImage = (userID, imageInfo, callback) =>{
+    console.log("updating user Image" + imageInfo.name)
+    if((imageInfo.crc != null && imageInfo.crc != "")){
+        mySession.then((session) => {
+
+            const arcDB = session.getSchema('arcturus');
+            const userTable = arcDB.getTable("user")
+            const fileTable = arcDB.getTable("file")
+            const userFileTable = arcDB.getTable("userFile")
+
+         
+
+            selectFileTableCRC(fileTable, imageInfo.crc).then((crcResult)=>{
+                const fileID = crcResult.fileID != undefined ? crcResult.fileID : null;
+
+                if(fileID != null){
+                    checkUserFileTable(userFileTable, userID, fileID, (result)=>{
+                        const accessID = result.accessID != undefined ? result.accessID : null
+                        
+                        if(accessID != null)
+                        {
+                            userImageUpdate(userTable, userID, fileID).then((updated)=>{
+                                
+                                imageInfo.fileID = fileID
+                                imageInfo.accessID = accessID
+                                callback({success:true, file:fileInfo, updated:updated})
+                            })
+                        }else{
+                            insertUserFile(userFileTable, userID, fileID, access.private).then(( inserted) =>{
+                                userTableImageUpdate(userTable, userID, fileID).then((updated) => {
+
+                                    imageInfo.fileID = fileID
+                                    fileInfo.accessID = inserted ? access.private : null 
+                                    callback({ success: true, file: fileInfo, updated: updated })
+                                })
+                            })
+                        }
+                    })
+                }else{
+                    insertFile(fileTable, imageInfo).then((iFile)=>{
+                        const fileID = iFile.fileID;
+                        insertUserFile(userFileTable, userID, fileID, access.private).then((inserted) => {
+                            userTableImageUpdate(userTable, userID, fileID).then((updated) => {
+
+                                imageInfo.fileID = fileID
+                                imageInfo.accessID = inserted ? access.private : null
+                                callback({ success: true, file: fileInfo, updated: updated })
+                            })
+                        })
+                            
+                     
+                    })
+                }
+            })
+        
+        })
+    }else{
+        console.log("invalid crc")
+        callback({error:"Crc invalid."})
+    }
 }
 
         
