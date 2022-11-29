@@ -194,15 +194,26 @@ io.on('connection', (socket) => {
         } else if(socket.handshake.auth.token == loginToken) {
             socket.on("login", (params, callback)=>{
              
-                checkUser(params, (success, loginUser) => {
-                    console.log("logged in " + success)
-                    if (!success) {
+                checkUser(params, (checkResult) => {
+
+                    if (!"success" in checkResult && checkResult.success != true) {
                         callback({success:false})
                         socket.disconnect()
-                    }else if(success){
+                    }else{
                        
-                        const user = loginUser;
+                        
+                        const user = checkResult.user;
                        
+                        const userSocket = checkResult.userSocket
+
+                        if(userSocket != ""){
+                            io.sockets.sockets.forEach((socket) => {
+                               
+                                if (socket.id == userSocket)
+                                    socket.disconnect(true);
+                            });
+                        }
+                        
 
                         updateUserStatus(user.userID, status.Online, id, (isRooms, rooms) => {
                             if (isRooms) {
@@ -219,7 +230,7 @@ io.on('connection', (socket) => {
                     
                         getContacts(user, (contacts) => {
                             getContactRequests(user, (requests => {
-                                callback({ success: true, user:loginUser, contacts:contacts, requests:requests })
+                                callback({ success: true, user:user, contacts:contacts, requests:requests })
                             }))
                         })
               
@@ -377,6 +388,12 @@ io.on('connection', (socket) => {
                             callback(updated)
                         })
                     })
+
+                        socket.on("updateRealmImage", (realmID, imageInfo, callback)=>{
+                            updateRealmImage(user.userID, realmID, imageInfo, (result)=>{
+                                callback(result)
+                            })
+                        })
 
 
                     socket.on('disconnect', () => {
@@ -1561,7 +1578,7 @@ const checkUser = (user, callback) => {
     var name_email = (mysql.escape(user.nameEmail));
     var pass = (mysql.escape(user.password));
 
-    var query = `SELECT DISTINCT userID, userName, userEmail, userHandle, imageID, fileName, fileType, fileCRC, fileMimeType, fileSize, fileLastModified \
+    var query = `SELECT DISTINCT userID, userName, userEmail, userHandle, imageID, fileName, fileType, fileCRC, fileMimeType, fileSize, fileLastModified, userSocket \
 FROM arcturus.user, arcturus.file \
 WHERE \
  ( LOWER(userName) = LOWER( ${name_email}) OR LOWER(userEmail) = LOWER(${name_email})) AND userPassword = ${pass} AND \
@@ -1593,6 +1610,7 @@ WHERE \
                     userName: userArr[1],
                     userEmail: userArr[2],
                     userHandle: userArr[3],
+                   
                     image:{
                         imageID:userArr[4],
                         name: userArr[5], 
@@ -1604,9 +1622,11 @@ WHERE \
                     }
                 }
 
+                const userSocket = userArr[11]
 
 
-                callback(true, loginUser);
+
+                callback({ success: true, user: loginUser, userSocket: userSocket });
 
                 //   })
 
@@ -2726,63 +2746,35 @@ const userTableImageUpdate = (uTable, userID, fileID) => {
 }
 const updateUserImage = (userID, imageInfo, callback) =>{
     console.log("updating user Image" + imageInfo.name)
-    if((imageInfo.crc != null && imageInfo.crc != "")){
+    if((imageInfo.crc != undefined && imageInfo.crc != null && imageInfo.crc != "" && crc.length > 5)){
         mySession.then((session) => {
 
             const arcDB = session.getSchema('arcturus');
             const userTable = arcDB.getTable("user")
             const fileTable = arcDB.getTable("file")
-            const userFileTable = arcDB.getTable("userFile")
-
-         
 
             selectFileTableCRC(fileTable, imageInfo.crc).then((crcResult)=>{
                 const fileID = crcResult.fileID != undefined ? crcResult.fileID : null;
                
                 if(fileID != null){
-                    checkUserFileTable(userFileTable, userID, fileID).then((result)=>{
-                        console.log(result)
-                        const accessID = result.accessID != undefined ? result.accessID : null
+                
+                    userTableImageUpdate(userTable, userID, fileID).then((updated)=>{
                         
-                        if(accessID != null)
-                        {
-                            console.log("found user File")
-                            userTableImageUpdate(userTable, userID, fileID).then((updated)=>{
-                               
-                                imageInfo.fileID = fileID
-                                imageInfo.accessID = accessID
-                                console.log(imageInfo)
-                                callback({success:true, file:imageInfo, updated:updated})
-                            })
-                        }else{
-                            console.log("didn't find user file")
-                            insertUserFile(userFileTable, userID, fileID, access.private).then(( inserted) =>{
-                                userTableImageUpdate(userTable, userID, fileID).then((updated) => {
-                                    
-                                    imageInfo.fileID = fileID
-                                    imageInfo.accessID = inserted ? access.private : null 
-                                    console.log(imageInfo)
-                                    callback({ success: true, file: imageInfo, updated: updated })
-                                })
-                            })
-                        }
+                        imageInfo.fileID = fileID
+                        console.log(imageInfo)
+                        callback({success:true, file:imageInfo, updated:updated})
                     })
+               
                 }else{
                     insertFile(fileTable, imageInfo).then((iFile)=>{
                         const fileID = iFile.fileID;
-                        console.log(fileID)
-                        insertUserFile(userFileTable, userID, fileID, access.private).then((inserted) => {
-                            console.log(inserted)
-                            userTableImageUpdate(userTable, userID, fileID).then((updated) => {
+                      
+                        userTableImageUpdate(userTable, userID, fileID).then((updated) => {
 
-                                imageInfo.fileID = fileID
-                                imageInfo.accessID = inserted ? access.private : null
-                                console.log(imageInfo)
-                                callback({ success: true, file: imageInfo, updated: updated })
-                            })
+                            imageInfo.fileID = fileID
+         
+                            callback({ success: true, file: imageInfo, updated: updated })
                         })
-                            
-                     
                     })
                 }
             })
@@ -2794,6 +2786,62 @@ const updateUserImage = (userID, imageInfo, callback) =>{
     }
 }
 
-        
+const realmTableImageUpdate = (realmTable, userID, realmID, fileID) =>{
+    return new Promise(resolve => {
+        realmTable.select(["accessID"]).where("userID = :userID AND realmID = :realmID").bind("userID", userID).bind("realmID", realmID).execute().then((realmSelect)=>{
+            const accessID = realmSelect.fetchOne()
+            if(accessID != undefined)
+            {
+                realmTable.update().set("imageID", fileID).where("userID = :userID AND realmID = :realmID").bind("userID", userID).bind("realmID", realmID).execute().then((realmUpdate)=>{
+                    resolve({success:realmUpdate.getAffectedItemsCount() > 0})
+                })
+            }
+        })
+    })
+}
+
+const updateRealmImage = (userID,realmID, imageInfo, callback) => {
+    console.log("updating realm Image" + imageInfo.name)
+    if ((imageInfo.crc != null && imageInfo.crc != "")) {
+        mySession.then((session) => {
+
+            const arcDB = session.getSchema('arcturus');
+            const fileTable = arcDB.getTable("file")
+            const realmTable = arcDB.getTable("realm")
+
+            selectFileTableCRC(fileTable, imageInfo.crc).then((crcResult) => {
+                const fileID = crcResult.fileID != undefined ? crcResult.fileID : null;
+
+                if (fileID != null) {
+                    
+                            realmTableImageUpdate(realmTable, userID, realmID, fileID).then((updated) => {
+
+                                imageInfo.fileID = fileID
+                                console.log(imageInfo)
+                                callback({ success: true, file: imageInfo, updated: updated })
+                            })
+                
+                } else {
+                    insertFile(fileTable, imageInfo).then((iFile) => {
+                        const fileID = iFile.fileID;
+                       
+                        realmTableImageUpdate(realmTable, userID, realmID, fileID).then((updated) => {
+
+                            imageInfo.fileID = fileID
+                            console.log(imageInfo)
+                            callback({ success: true, file: imageInfo, updated: updated })
+                        })
+
+
+                    })
+                }
+            })
+
+        })
+    } else {
+        console.log("invalid crc")
+        callback({ error: "Crc invalid." })
+    }
+}       
 
 // getCurrentScene(campaignID, isAdmin, userID, (scene) => { });
