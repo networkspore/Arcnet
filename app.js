@@ -195,7 +195,7 @@ io.on('connection', (socket) => {
             socket.on("login", (params, callback)=>{
              
                 checkUser(params, (checkResult) => {
-
+                    console.log(checkResult)
                     if (!"success" in checkResult && checkResult.success != true) {
                         callback({success:false})
                         socket.disconnect()
@@ -207,10 +207,12 @@ io.on('connection', (socket) => {
                         const userSocket = checkResult.userSocket
 
                         if(userSocket != ""){
-                            io.sockets.sockets.forEach((socket) => {
-                               
-                                if (socket.id == userSocket)
+                            io.sockets.sockets.forEach((connectedSocket) => {
+                               console.log(connectedSocket.id)
+                                if (connectedSocket.id == userSocket){
+                                    console.log("disconnecting old socket: " + userSocket)
                                     socket.disconnect(true);
+                                }
                             });
                         }
                         
@@ -230,7 +232,9 @@ io.on('connection', (socket) => {
                     
                         getContacts(user, (contacts) => {
                             getContactRequests(user, (requests => {
-                                callback({ success: true, user:user, contacts:contacts, requests:requests })
+                                const result = { success: true, user: user, contacts: contacts, requests: requests }
+                                console.log("sending result")
+                                callback(result)
                             }))
                         })
               
@@ -2746,7 +2750,7 @@ const userTableImageUpdate = (uTable, userID, fileID) => {
 }
 const updateUserImage = (userID, imageInfo, callback) =>{
     console.log("updating user Image" + imageInfo.name)
-    if((imageInfo.crc != undefined && imageInfo.crc != null && imageInfo.crc != "" && crc.length > 5)){
+    if((imageInfo.crc != undefined && imageInfo.crc != null && imageInfo.crc != "" && imageInfo.crc.length > 5)){
         mySession.then((session) => {
 
             const arcDB = session.getSchema('arcturus');
