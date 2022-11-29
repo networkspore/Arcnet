@@ -1746,6 +1746,7 @@ const checkUserFiles = (userID, crcs, callback) =>{
 }*/
 
 const updateStorageConfig = (fileID, fileInfo, callback) =>{
+    console.log("updating storage config: " + fileID + "crc: " + fileInfo.crc)
     mySession.then((session) => {
 
         var arcDB = session.getSchema('arcturus');
@@ -2033,10 +2034,11 @@ const checkUserFileTable = (userFileTable, userID, fileID) => {
             "fileID", fileID
         ).execute().then((result) => {
             const one = result.fetchOne();
+            console.log(one)
             if (one == undefined) {
-                resolve({success:"false"})
+                resolve({success:false})
             } else {
-                resolve({success:"true", accessID:one[0]})
+                resolve({success:true, accessID:one[0]})
             }
         })
     })
@@ -2736,26 +2738,31 @@ const updateUserImage = (userID, imageInfo, callback) =>{
 
             selectFileTableCRC(fileTable, imageInfo.crc).then((crcResult)=>{
                 const fileID = crcResult.fileID != undefined ? crcResult.fileID : null;
-
+               
                 if(fileID != null){
-                    checkUserFileTable(userFileTable, userID, fileID, (result)=>{
+                    checkUserFileTable(userFileTable, userID, fileID).then((result)=>{
+                        console.log(result)
                         const accessID = result.accessID != undefined ? result.accessID : null
                         
                         if(accessID != null)
                         {
-                            userImageUpdate(userTable, userID, fileID).then((updated)=>{
-                                
+                            console.log("found user File")
+                            userTableImageUpdate(userTable, userID, fileID).then((updated)=>{
+                               
                                 imageInfo.fileID = fileID
                                 imageInfo.accessID = accessID
-                                callback({success:true, file:fileInfo, updated:updated})
+                                console.log(imageInfo)
+                                callback({success:true, file:imageInfo, updated:updated})
                             })
                         }else{
+                            console.log("didn't find user file")
                             insertUserFile(userFileTable, userID, fileID, access.private).then(( inserted) =>{
                                 userTableImageUpdate(userTable, userID, fileID).then((updated) => {
-
+                                    
                                     imageInfo.fileID = fileID
-                                    fileInfo.accessID = inserted ? access.private : null 
-                                    callback({ success: true, file: fileInfo, updated: updated })
+                                    imageInfo.accessID = inserted ? access.private : null 
+                                    console.log(imageInfo)
+                                    callback({ success: true, file: imageInfo, updated: updated })
                                 })
                             })
                         }
@@ -2763,12 +2770,15 @@ const updateUserImage = (userID, imageInfo, callback) =>{
                 }else{
                     insertFile(fileTable, imageInfo).then((iFile)=>{
                         const fileID = iFile.fileID;
+                        console.log(fileID)
                         insertUserFile(userFileTable, userID, fileID, access.private).then((inserted) => {
+                            console.log(inserted)
                             userTableImageUpdate(userTable, userID, fileID).then((updated) => {
 
                                 imageInfo.fileID = fileID
                                 imageInfo.accessID = inserted ? access.private : null
-                                callback({ success: true, file: fileInfo, updated: updated })
+                                console.log(imageInfo)
+                                callback({ success: true, file: imageInfo, updated: updated })
                             })
                         })
                             
