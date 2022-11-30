@@ -196,7 +196,8 @@ io.on('connection', (socket) => {
              
                 checkUser(params, (checkResult) => {
                     console.log(checkResult)
-                    if (!"success" in checkResult && checkResult.success != true) {
+                    if (("success" in checkResult && checkResult.success == false) || ("error" in checkResult)) {
+                      
                         callback({success:false})
                         socket.disconnect()
                     }else{
@@ -1202,9 +1203,9 @@ function createUser(user, callback) {
         session.startTransaction();
         try {
             var res = userTable.insert(
-                ['userName', 'userPassword', "userEmail", 'refID', 'userCode', 'statusID', "imageID"]
+                ['userName', 'userPassword', "userEmail", 'refID', 'userCode', 'statusID', "imageID", "accessID"]
             ).values(
-                [user.userName, user.userPass, user.userEmail, user.userRefID, veriCode, 3, -1]
+                [user.userName, user.userPass, user.userEmail, user.userRefID, veriCode, 3, -1, access.contacts]
             ).execute();
             res.then((value) => {
                 var id = value.getAutoIncrementValue();
@@ -1409,9 +1410,24 @@ const getContacts = (user, callback) => {
         mySession = mysqlx.getSession(sqlCredentials)
     }
 
-    var query = "SELECT DISTINCT userContact.contactID, userContact.statusID, user.userName, user.userHandle, status.statusName \
-FROM arcturus.userContact, arcturus.user, arcturus.status \
-WHERE userContact.userID = " + user.userID + " AND user.userID = userContact.contactID AND userContact.statusID = status.statusID"
+    var query = "SELECT DISTINCT \
+ userContact.contactID, \
+ userContact.statusID, \
+ user.userName, \
+ user.userHandle, \
+ user.accessID, \
+ user.userPeerID, \
+ user.userSocket, \
+ user.imageID, \
+ file.fileName, \
+ file.fileType, \
+ file.fileCRC, \
+ file.fileMimeType, \
+ file.fileSize, \
+ file.fileLastModified, \
+ status.statusName \
+FROM arcturus.userContact, arcturus.user, arcturus.file, arcturus.status \
+WHERE userContact.userID = " + user.userID + " AND user.userID = userContact.contactID AND user.imageID = file.fileID AND status.statusID = userContact.statusID"
 
     console.log("getting contacts")
 
@@ -1423,16 +1439,30 @@ WHERE userContact.userID = " + user.userID + " AND user.userID = userContact.con
             if (found) {
                 var contactsArray = results.fetchAll();
                 var contacts = new Array();
-                for (var i = 0; i < contactsArray.length; i++) {
+               contactsArray.forEach(contact => {
                     contacts.push(
                         {
-                            userID: contactsArray[i][0],
-                            status: { statusID: contactsArray[i][1], statusName: contactsArray[i][4] },
-                            userName: contactsArray[i][2],
-                            userHandle: contactsArray[i][3]
+                            userID: contact[0],
+                            status: { statusID: contact[1], statusName: contact[14] },
+                            userName: contact[2],
+                            userHandle: contact[3],
+                            accessID: contact[4],
+                            userPeerID: contact[5],
+                            userSocket: contact[6],
+                            image: {
+                                fileID: contact[7],
+                                name: contact[8],
+                                type: contact[9],
+                                crc: contact[10],
+                                mimeType: contact[11],
+                                size: contact[12],
+                                lastModified: contact[13]
+                            },
+
                         }
                     )
-                }
+                
+                 });
                 console.log("Contacts: ")
                 console.log(contacts)
                 callback(contacts)
@@ -1601,7 +1631,7 @@ WHERE \
 
                 console.log("login try failed for: " + name_email)
 
-                callback(false, null)
+                callback({success:false})
             } else {
 
 
@@ -1616,7 +1646,7 @@ WHERE \
                     userHandle: userArr[3],
                    
                     image:{
-                        imageID:userArr[4],
+                        fileID:userArr[4],
                         name: userArr[5], 
                         type: userArr[6], 
                         crc: userArr[7], 
@@ -1638,7 +1668,7 @@ WHERE \
         })
     }).catch((reason) => {
         console.log(reason);
-        callback(false, null)
+        callback({ error: new Error("DB error") })
     })
 }
 
