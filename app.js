@@ -5,6 +5,7 @@ const fs = require('fs');
 const cryptojs = require('crypto-js');
 const util = require('util');
 const { homeURL, socketURL, wwwURL, server, dbURL, dbPort, sqlCred, emailUser, emailPassword, authToken, loginToken } = require('./httpVars');
+const e = require('express');
 
 
 const adminAddress = emailUser;
@@ -140,6 +141,7 @@ const access = {
     private: 0,
     contacts: 1,
     public: 2,
+    user: 3,
 }
 
 io.on('connection', (socket) => {
@@ -212,7 +214,7 @@ io.on('connection', (socket) => {
                                console.log(connectedSocket.id)
                                 if (connectedSocket.id == userSocket){
                                     console.log("disconnecting old socket: " + userSocket)
-                                    socket.disconnect(true);
+                                    connectedSocket.disconnect()
                                 }
                             });
                         }
@@ -241,8 +243,13 @@ io.on('connection', (socket) => {
               
                
                 /* //////////////SUCCESS///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
-
-              
+                    socket.on("getImagePeers", (fileID, callback)=>{
+                        getImagePeers(user.userID, fileID, (result)=>{
+                            callback(result)
+                        })
+                    })
+                    
+                    
                     socket.on("enterRealmGateway", (realmID, callback)=>{
                         console.log(realmID)
                         enterRealmGateway(user, realmID, socket, (enteredGateway)=>{
@@ -475,7 +482,7 @@ const addUserToRoom = (userTable, userRoomTable, fileTable, userID , roomID) => 
 }
 
 const updateUserStatus = (userID = -1, statusID = 5, socketID = "", callback) => {
-    let query = "UPDATE arcturus.user SET user.userSocket = " + mysql.escape(socketID) + "\
+    let query = "UPDATE arcturus.user SET user.userSocket = " + mysql.escape() + "\
 , user.statusID = " + statusID + " WHERE userID =" + userID;
 
 
@@ -485,9 +492,12 @@ const updateUserStatus = (userID = -1, statusID = 5, socketID = "", callback) =>
     }
     //
 
-    mySession.then((mySession) => {
+    mySession.then((session) => {
+        const arcDB = session.getSchema("arcturus");
+        const userTable = arcDB.getTable("user")
+        const now = formatedNow();
 
-        mySession.sql(query).execute().then((updated) => {
+        userTable.update().set("userSocket", socketID).set("statusID", statusID).set("userLastOnline", now).where("userID = :userID").bind("userID", userID).then((updated) => {
             const affected = updated.getAffectedItemsCount();
             console.log("updated status affected: " + affected)
             if (affected > 0) {
@@ -2876,6 +2886,187 @@ const updateRealmImage = (userID,realmID, imageInfo, callback) => {
         console.log("invalid crc")
         callback({ error: "Crc invalid." })
     }
-}       
+}
 
-// getCurrentScene(campaignID, isAdmin, userID, (scene) => { });
+const selectUserContactTableUserIDs = (userContactTable, userID) =>{
+    return new Promise(resolve => {
+        userContactTable.select(["userID"]).where("contactID = :userID").bind("userID", userID).execute().then((contactsSelect) => {
+            const contactsArray = contactsSelect.fetchAll()
+
+            if(contactsArray != undefined){
+                let userIDs = []
+                contactsArray.forEach(user => {
+                    userIDs.push(user[0])
+                });
+                resolve(userIDs)
+            }else{
+                resolve([])
+            }
+
+        })
+    })
+}
+
+const getImagePeers = (userID, fileID, callback) =>{
+
+    console.log("looking for fileID: " + fileID)
+    if (fileID != undefined && fileID != null && fileID > -1) {
+       /*
+ (user.userID <> " + userID + " AND user.accessID > 0 AND user.userID = userFile.userID AND userFile.fileID = " + fileID + ") OR \
+ (user.userID <> " + userID + " AND realm.accessID > 0 AND realm.userID = user.userID AND realm.imageID = " + fileID + ") OR \
+ (user.userID <> " + userID + " AND realm.accessID > 0 AND realm.userID = user.userID AND realm.reamID = realmFile.realmID AND realmFile.fileID =" + fileID + ") "*/
+
+        mySession.then((session) => {
+            const arcDB = session.getSchema("arcturus")
+            const userTable = arcDB.getTable("user")
+            const userFileTable = arcDB.getTable("userFile")
+            const realmTable = arcDB.getTable("realm")
+            const userContactTable = arcDB.getTable("userContact")
+           
+            selectUserContactTableUserIDs(userContactTable, userID).then((accessableContactIDs)=>{
+                
+                userTable.select(["userID", "accessID", "userPeerID", "userSocket", "statusID", "userLastOnline"]).where(
+                    "userID <> :userID AND accessID > 0 AND imageID = :fileID AND ((userLastOnline \
+BETWEEN DATE(DATE_SUB(NOW(), INTERVAL 1 DAY)) \
+AND DATE(NOW())) OR (user.statusID = 5 ))"
+                ).orderBy(["statusID DESC", "userLastOnline ASC"]).bind("userID", userID).bind("fileID", fileID).execute().then((userTableIconSelect) => {
+                    const userIcons = userTableIconSelect.fetchAll()
+                    let foundPeers = []
+                    
+                    if(userIcons != undefined){
+                        userIcons.forEach(user => {
+                            const peerUserID = user[0]
+                            const userAccessID = user[1]
+
+                            if (userAccessID == access.contacts && accessableContactIDs.length > 0)
+                            {
+                                const contactIDsindex = accessableContactIDs.findIndex(cid => cid == peerUserID)
+                                
+                                if(contactIDsindex > -1) {
+                                    foundPeers.push({
+                                        userPeerID:user[2],
+                                        userSocket:user[3],
+                                        statusID: user[4],
+                                        userLastOnline: user[5]
+                                    })
+                                }
+                                    
+                            }else{
+                                foundPeers.push({
+                                    userPeerID: user[2],
+                                    userSocket: user[3],
+                                    statusID: user[4],
+                                    userLastOnline: user[5]
+                                })
+                            }
+                        });
+                    }
+                    realmTable.select(["userID","accessID"]).where("userID <> :userID AND accessID > 0 AND imageID = :fileID").bind(
+                        "userID", userID
+                    ).bind(
+                        "fileID", fileID
+                    ).execute().then((realmTableSelect) => {
+                        const realmIcons = realmTableSelect.fetchAll()
+
+                        let peerUserIDs = []
+                        if(realmIcons != undefined)
+                        {
+                            realmIcons.forEach(realmUsers => {
+                                const realmUserID = realmUsers[0]
+                                const realmAccessID = realmUsers[1]
+
+                                if (realmAccessID == access.contacts && accessableContactIDs.length > 0) {
+                                    peerUserIDs.push(realmUserID)
+                                }else{
+                                    peerUserIDs.push(realmUserID)
+                                }
+                            });
+                        }
+
+                        userFileTable.select(["userID", "accessID", "userFileUserAccess"]).where("userID <> :userID AND accessID > 0 AND fileID = :fileID").bind(
+                            "userID", userID
+                        ).bind(
+                            "fileID", fileID
+                        ).execute().then((userFileTableSelect)=>{
+                            const userFiles = userFileTableSelect.fetchAll()
+
+                            if(userFiles != undefined)
+                            {
+                                userFiles.forEach(userFileUser => {
+                                    const userFileUserID = userFileUser[0]
+                                    const userFileAccessID = userFileUser[1]
+                                    
+                                    if (userFileAccessID == access.public) {
+                                        peerUserIDs.push(userFileUserID)
+                                    
+                                    } else if (userFileAccessID == access.contacts && accessableContactIDs.length > 0) {
+                                        peerUserIDs.push(userFileUserID)
+                                    } else if (userFileAccessID == access.user && userFileUser[2] != null){
+                                        const userFileUserAccess = userFileUser[2] + ""
+                                       
+                                        const userAccess = userFileUserAccess.split(":")
+                                        
+                                        const index = userAccess.findIndex(uaID => uaID == userID)
+
+                                        if(index != -1)
+                                        {
+                                            peerUserIDs.push(userFileUserID)
+                                        }
+                                        
+                                    }
+                                });
+                            }
+                            
+                            let userIDString = ""
+                            
+                            if (peerUserIDs.length > 0)
+                            {
+                                for(let i = 0; i < peerUserIDs.length -1 ; i++){
+                                    userIDString.concat(peerUserIDs[i] + ", ")
+                                }
+                                userIDString.concat(peerUserIDs[i])
+                                const selectPeerQuery = "\
+SELECT \
+ user.userPeerID, \
+ user.userSocket, \
+ user.statusID, \
+ user.userLastOnline \
+FROM arcturus.user WHERE \
+ userID IN("+ userIDString + ") AND ((\
+ userLastOnline \
+BETWEEN DATE(DATE_SUB(NOW(), INTERVAL 1 DAY)) \
+AND DATE(NOW())) OR (user.statusID = " + status.Online + ")) \
+ORDER BY statusID DESC, userLastOnline ASC"
+
+                                session.sql(selectPeerQuery).execute().then((peerSelect)=>{
+                                    if(peerSelect.hasData())
+                                    {
+                                        const peerArray = peerSelect.fetchAll()
+
+                                        peerArray.forEach(user => {
+                                            foundPeers.push({
+                                                userPeerID: user[0],
+                                                userSocket: user[1],
+                                                statusID: user[2],
+                                                userLastOnline: user[3]
+                                            })
+                                        });
+                                    }
+
+                                    callback({success: peerArray > 0, peers:peerArray})
+                                })
+                            }
+                        })
+
+                        })
+
+                        
+                })
+            })
+
+            
+        })
+    }else{
+        callback({ error: new Error("fileID invalid") })
+    }
+}
