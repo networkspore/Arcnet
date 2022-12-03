@@ -20,7 +20,15 @@ const io = require('socket.io')(server, {
 
 
 server.listen(54944);
-
+const nullFile = {
+    fileID: -1,
+    fileName: null,
+    fileType: null,
+    fileCRC: null,
+    fileMimeType: null,
+    fileSize: null,
+    fileLastModified: null
+}
 const dice = [
     { diceID: 1, diceMax: 4 },
     { diceID: 2, diceMax: 6 },
@@ -122,13 +130,13 @@ pingAlive();
 io.on("connect_error", (err) => {
     console.log(`connect_error due to ${err.message}`);
 });
-const advisory = {
+const advisory = Object.freeze({
     none: -1,
     general: 0,
     mature: 1,
     adult: 2
-}
-const status = {
+})
+const status = Object.freeze({
     valid: 1,
     invalid: 2,
     confirming: 3,
@@ -136,13 +144,12 @@ const status = {
     Online: 5,
     rejected: 6,
     accepted: 7
-}
-const access = {
+})
+const access = Object.freeze({
     private: 0,
     contacts: 1,
     public: 2,
-    user: 3,
-}
+})
 
 io.on('connection', (socket) => {
     const id = socket.id;
@@ -207,6 +214,7 @@ io.on('connection', (socket) => {
                         
                         const user = checkResult.user;
                        
+                        console.log(user)
                         const userSocket = checkResult.userSocket
 
                         if(userSocket != ""){
@@ -230,17 +238,17 @@ io.on('connection', (socket) => {
 
                                 }
                             }
+                            getContacts(user, (contacts) => {
+
+                                const result = { success: true, user: user, contacts: contacts, }
+
+                                callback(result)
+
+                            })
 
                         })
                     
-                        getContacts(user, (contacts) => {
-                            getContactRequests(user, (requests => {
-                                const result = { success: true, user: user, contacts: contacts, requests: requests }
-                                console.log("sending result")
-                                callback(result)
-                            }))
-                        })
-              
+                      
                
                 /* //////////////SUCCESS///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
                     socket.on("getImagePeers", (fileID, callback)=>{
@@ -251,7 +259,7 @@ io.on('connection', (socket) => {
                     
                     
                     socket.on("enterRealmGateway", (realmID, callback)=>{
-                        console.log(realmID)
+                      
                         enterRealmGateway(user, realmID, socket, (enteredGateway)=>{
                             callback(enteredGateway)
                         })
@@ -395,8 +403,8 @@ io.on('connection', (socket) => {
                         })
                     })
 
-                    socket.on("updateUserImage", (imageInfo, callback) => {
-                        updateUserImage(user.userID, imageInfo, (updated) =>{
+                    socket.on("updateUserImage", (imageInfo, accessID, userAccess, callback) => {
+                        updateUserImage(user.userID, imageInfo,accessID, userAccess, (updated) =>{
                             callback(updated)
                         })
                     })
@@ -485,25 +493,18 @@ const updateUserStatus = (userID = -1, statusID = 5, socketID = "", callback) =>
     let query = "UPDATE arcturus.user SET user.userSocket = " + mysql.escape() + "\
 , user.statusID = " + statusID + " WHERE userID =" + userID;
 
-
-
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    //
-
     mySession.then((session) => {
         const arcDB = session.getSchema("arcturus");
         const userTable = arcDB.getTable("user")
         const now = formatedNow();
 
-        userTable.update().set("userSocket", socketID).set("statusID", statusID).set("userLastOnline", now).where("userID = :userID").bind("userID", userID).then((updated) => {
+        userTable.update().set("userSocket", socketID).set("statusID", statusID).set("userLastOnline", now).where("userID = :userID").bind("userID", userID).execute().then((updated) => {
             const affected = updated.getAffectedItemsCount();
             console.log("updated status affected: " + affected)
             if (affected > 0) {
                 query = "select userRoom.roomID, status.statusName from arcturus.userRoom, arcturus.status WHERE userRoom.userID = \
  " + userID + " AND status.statusID = userRoom.statusID";
-                mySession.sql(query).execute().then((found) => {
+                session.sql(query).execute().then((found) => {
                     const inRooms = found.hasData()
                     const rooms = inRooms ? found.fetchAll() : [];
 
@@ -532,12 +533,6 @@ const getUser = (socketID = "", callback) => {
     console.log("getting userID for: " + socketID);
 
     const query = "SELECT user.userID, user.userName FROM arcturus.user WHERE user.userSocket = " + mysql.escape(socketID);
-
-
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    //
 
     mySession.then((mySession) => {
 
@@ -795,7 +790,7 @@ const acknowledgeContact = (userID, acknowledgement, contactID, callback) => {
         var arcDB = session.getSchema('arcturus');
         var userContactTable = arcDB.getTable("userContact");
         var userTable = arcDB.getTable("user");
-        const fileTable = arcDB.getFile("file");
+        const fileTable = arcDB.getTable("file");
         try {
 
             userContactTable.update().set(
@@ -1376,106 +1371,97 @@ function email(emailAddress, subject, emailHtml, callback) {
 
 }
 
-const getContactRequests = (user, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-    console.log("Getting contact requests")
-    var query = "SELECT DISTINCT userContact.userID, userContact.statusID, user.userName, user.userHandle, userContact.userContactMsg, status.statusName \
-FROM arcturus.userContact, arcturus.user, arcturus.status \
-WHERE userContact.userID = user.userID AND userContact.contactID = " + user.userID + " AND userContact.statusID = " + status.confirming + " AND userContact.statusID = status.statusID";
-
-    mySession.then((session) => {
-
-        session.sql(query).execute().then((results) => {
-            const found = results.hasData();
-
-            if (found) {
-                var contactsArray = results.fetchAll();
-                var contacts = new Array();
-                for (var i = 0; i < contactsArray.length; i++) {
-                    contacts.push(
-                        {
-                            userID: contactsArray[i][0],
-                            statusID: { statusID: contactsArray[i][1], statusName: contactsArray[i][5] },
-                            userName: contactsArray[i][2],
-                            userHandle: contactsArray[i][3],
-                            userContactMsg: contactsArray[i][4],
-                        }
-                    )
-                }
-                console.log("Requests: " + contacts)
-                callback(contacts)
-            }
-            else {
-                console.log("No contact requests found")
-                callback([])
-            }
-        })
-    })
-}
-
 const getContacts = (user, callback) => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    var query = "SELECT DISTINCT \
- userContact.contactID, \
- userContact.statusID, \
- user.userName, \
- user.userHandle, \
- user.accessID, \
- user.userPeerID, \
- user.userSocket, \
- user.imageID, \
- file.fileName, \
- file.fileType, \
- file.fileCRC, \
- file.fileMimeType, \
- file.fileSize, \
- file.fileLastModified, \
- status.statusName \
-FROM arcturus.userContact, arcturus.user, arcturus.file, arcturus.status \
-WHERE userContact.userID = " + user.userID + " AND user.userID = userContact.contactID AND user.imageID = file.fileID AND status.statusID = userContact.statusID"
+  
 
     console.log("getting contacts")
 
     mySession.then((session) => {
+        const arcDB = session.getSchema("arcturus")
+        const userTable = arcDB.getTable("user")
+        const userContactTable = arcDB.getTable("userContact")
+        
+        
+        userContactTable.select(["contactID", "statusID", "userContactMsg", "userID"]).where("userID = :userID OR (contactID =:userID and statusID = 3)").bind("userID", user.userID).execute().then((results) => {
+            const contactsArray = results.fetchAll();
+        
 
-        session.sql(query).execute().then((results) => {
-            const found = results.hasData();
+            if (contactsArray != undefined) {
 
-            if (found) {
-                var contactsArray = results.fetchAll();
-                var contacts = new Array();
-               contactsArray.forEach(contact => {
-                    contacts.push(
-                        {
-                            userID: contact[0],
-                            status: { statusID: contact[1], statusName: contact[14] },
-                            userName: contact[2],
-                            userHandle: contact[3],
-                            accessID: contact[4],
-                            userPeerID: contact[5],
-                            userSocket: contact[6],
-                            image: {
-                                fileID: contact[7],
-                                name: contact[8],
-                                type: contact[9],
-                                crc: contact[10],
-                                mimeType: contact[11],
-                                size: contact[12],
-                                lastModified: contact[13]
-                            },
-
-                        }
-                    )
+                var contacts =[];
+                var i = 0;
                 
-                 });
-                console.log("Contacts: ")
-                console.log(contacts)
-                callback(contacts)
+
+                const getContactInfoRecursive = () =>
+                {
+                    console.log(i)
+                    const contact = contactsArray[i]
+      
+                    const contactID = contact[0]
+                    const statusID = contact[1]
+                    const userContactMsg = contact[2]
+                    const userContactUserID = contact[3]
+
+                    const isContact = user.userID == userContactUserID && statusID == status.accepted
+                    
+            
+
+                    getContactInformation(userTable, contactID, isContact).then((contactInfo)=>{
+                     
+
+                        contactInfo.accepted = isContact
+                        contactInfo.requested = contactID == user.userID
+                        contactInfo.userContactMsg = userContactMsg
+
+                        if("success" in contactInfo && contactInfo.success)
+                        {
+                     
+                            const contactFileID = contactInfo.userFileID
+
+                           
+                            if(contactFileID == null)
+                            {
+                                console.log("null image")
+                                contactInfo.user.image = nullFile
+                                contacts.push(
+                                    contactInfo
+                                )
+                                i = i + 1;
+                                if (i < contactsArray.length) {
+                      
+                                    getContactInfoRecursive()
+                                } else {
+                          
+                                    callback(contacts)
+                                }
+                            }else{
+                                getFileUserFileID(contactFileID, user.userID, isContact, session).then((userFile) => {
+                                    console.log(userFile)
+                                    contactInfo.user.image = userFile
+
+                                    contacts.push(
+                                        contactInfo
+                                    )
+
+                                    i = i + 1;
+                                    if(i < contactsArray.length){
+                       
+                                        getContactInfoRecursive()
+                                    }else{
+                         
+                                        callback(contacts)
+                                    }
+                                })  
+                            }
+                        }
+                        
+                    })
+                }
+
+                if(contactsArray.length > 0){ 
+                    console.log("calling recursive function")
+                    getContactInfoRecursive()
+                }
             }
             else {
                 callback([])
@@ -1486,75 +1472,58 @@ WHERE userContact.userID = " + user.userID + " AND user.userID = userContact.con
     })
 }
 
-const getUserInformation = (userTable,fileTable, userID) => {
-    return new Promise(resolve =>{
-        userTable.select(["userID", "userName", "userHandle", "userSocket", "statusID", "imageID"]).where("userID = :userID").bind("userID", userID).execute().then((userSelect)=>{
-            const one = userSelect.fetchOne()
+const getContactInformation = (userTable, userID, isContact) => {
+    console.log('getting Contact information')
 
+    return new Promise(resolve =>{
+        userTable.select(["userID", "userName", "userHandle", "userSocket", "statusID", "userFileID", "accessID"]).where("userID = :userID").bind("userID", userID).execute().then((userSelect)=>{
+            const one = userSelect.fetchOne()
+         
             if(one != undefined)
             {
-                const imageID = one[5];
-                if(imageID == -1){
-                    resolve({
-                        userID: one[0],
-                        userName: one[1],
-                        userHandle: one[2],
-                        userSocket: one[3],
-                        statusID: one[4],
-                        image: {
-                            fileID: -1,
-                            fileName: null,
-                            fileType: null,
-                            fileCRC: null,
-                            fileMimeType: null,
-                            fileSize: null,
-                            fileLastModified: null
-                        }
-                    })
-                }else{
-                    fileTable.select(["fileID", "fileName", "fileType", "fileCRC", "fileMimeType", "fileSize", "fileLastModified"]).where("fileID = :fileID and fileMimeType = 'image'").bind("fileID", imageID).execute().then((fileResult) => {
-                        const oneFile = fileResult.fetchOne()
+                const contactID = one[0];
+                const userName = one[1];
+                const userHandle = one[2];
+                const userSocket = one[3];
+                const statusID = one[4];
+                const userFileID = one[5]
+                const accessID = one[6]
+               
+                let user = {
+                    userID: contactID,
+                    userName: userName,
+                    userHandle: "",
+                    userSocket: "",
+                    statusID:  status.Offline,
+                    accessID: accessID,
+                    image: null
+                }
 
-                        if(oneFile != undefined){
-                            const image = {
-                                fileID: oneFile[0],
-                                fileName: oneFile[1],
-                                fileType: oneFile[2],
-                                fileCRC: oneFile[3],
-                                fileMimeType: oneFile[4],
-                                fileSize: oneFile[5],
-                                fileLastModified: oneFile[6]
-                            }
-                            resolve({
-                                userID: one[0],
-                                userName: one[1],
-                                userHandle: one[2],
-                                userSocket: one[3],
-                                statusID: one[4],
-                                image: image
-                            })
+                switch(accessID){
+                    case access.private:
+                        resolve({ success: true, user: user, userFileID: null })
+                        break;
+                    case access.contacts:
+                        if(!isContact){
+                            resolve({ success: true, user: user, userFileID: null })
                         }else{
-                            resolve({
-                                userID: one[0],
-                                userName: one[1],
-                                userHandle: one[2],
-                                userSocket: one[3],
-                                statusID: one[4],
-                                image: {
-                                    fileID: -1,
-                                    fileName: null,
-                                    fileType: null,
-                                    fileCRC: null,
-                                    fileMimeType: null,
-                                    fileSize: null,
-                                    fileLastModified: null
-                                }
-                            })
+                            user.userHandle = userHandle;
+                            user.userSocket = userSocket;
+                            user.statusID = statusID;
+                            resolve({ success: true, user: user, userFileID: userFileID })
                         }
-                    })
-                }  
+                        break;
+                    case access.public:
+                        user.userHandle = userHandle;
+                        user.userSocket = userSocket;
+                        user.statusID = statusID;
+                        resolve({ success: true, user: user, userFileID: userFileID })
+                        break;
+                }
+
+               
             }else{
-                throw new Error("Not a user")
+                resolve({error: new Error("not a user")})
             }
         })
 
@@ -1618,26 +1587,126 @@ const getUserReferalCodes = (user, callback) => {
     })
 }
 
+const getOwnUserFile = (userFileID, session) => {
+    return new Promise(resolve =>{
+        const userFileQuery = "SELECT DISTINCT file.fileID, file.fileName, file.fileCRC, file.fileMimeType, file.fileType, file.fileSize, file.fileLastModified \
+FROM arcturus.userFile, arcturus.file WHERE userFile.userFileID = " + userFileID + " AND file.fileID = userFile.fileID"
+
+        session.sql(userFileQuery).execute().then((userFileSelect)=>{
+
+        if (userFileSelect.hasData())
+        {
+            const value = userFileSelect.fetchOne()
+            file = {
+                fileID: value[0],
+                name: value[1],
+                crc: value[2],
+                mimeType: value[3],
+                type:value[4],
+                size: value[5],
+                lastModified: value[6],
+            }
+            resolve(file)
+        }else{
+            resolve(null)
+        }
+    })
+})
+}
+const getFileUserFileID = (userFileID, userID, isContact, session) => {
+    console.log("getting user file")
+    return new Promise(resolve => {
+        
+        const userFileQuery = `
+SELECT DISTINCT 
+ file.fileID, 
+ file.fileName, 
+ file.fileCRC, 
+ file.fileMimeType, 
+ file.fileType, 
+ file.fileSize, 
+ file.fileLastModified,
+ userFile.accessID, 
+ userFile.userFileUserAccess,
+ userFile.userFileID
+FROM 
+ arcturus.userFile, 
+ arcturus.file, 
+ arcturus.userContact,
+ arcturus.user
+WHERE 
+ (
+    userFile.accessID = ${access.public} AND userFile.userFileID = ${userFileID} AND file.fileID = userFile.fileID
+ )
+ OR
+ (
+    ( userFile.accessID = ${access.contacts} AND userFile.userFileID = ${userFileID} AND file.fileID = userFile.fileID)
+  AND
+    ( userFile.userID = user.userID AND user.userID = userContact.userID AND userContact.contactID = ${userID})
+ )
+ OR 
+  ( userFile.userFileID = ${userFileID} AND file.fileID = userFile.fileID AND userFile.userFileUserAccess LIKE "%'${userID}'%")`
+
+        session.sql(userFileQuery).execute().then((userFileSelect) => {
+
+            if (userFileSelect.hasData()) {
+                const value = userFileSelect.fetchOne()
+
+                const accessID = value[7];
+                const userAccess = value[8];
+               
+                console.log(userAccess)
+                file = {
+                    fileID: value[0],
+                    name: value[1],
+                    crc: value[2],
+                    mimeType: value[3],
+                    type: value[4],
+                    size: value[5],
+                    lastModified: value[6],
+                }
+
+               
+                switch (accessID) {
+                    case 1:
+                        if (isContact) {
+                            resolve(file)
+                        } else {
+                            resolve(nullFile)
+                        }
+                        break;
+                    case 2:
+                        resolve(file)
+                        break;
+                    default:
+                        resolve(nullFile)
+                }
+                
+                
+
+            } else {
+                resolve(nullFile)
+            }
+        })
+    })
+}
+
 const checkUser = (user, callback) => {
-    var name_email = (mysql.escape(user.nameEmail));
-    var pass = (mysql.escape(user.password));
+  
 
-    var query = `SELECT DISTINCT userID, userName, userEmail, userHandle, imageID, fileName, fileType, fileCRC, fileMimeType, fileSize, fileLastModified, userSocket \
-FROM arcturus.user, arcturus.file \
-WHERE \
- ( LOWER(userName) = LOWER( ${name_email}) OR LOWER(userEmail) = LOWER(${name_email})) AND userPassword = ${pass} AND \
- fileID = imageID`;
-
-
-
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
 
     mySession.then((session) => {
 
-        session.sql(query).execute().then((results) => {
-            if (!results.hasData()) {
+        const arctDB = session.getSchema("arcturus")
+        const userTable = arctDB.getTable("user")
+        
+
+        userTable.select(["userID", "userName", "userEmail", "userHandle", "userFileID", "userSocket"]).where(
+            "( LOWER(userName) = LOWER(:nameEmail) OR LOWER(userEmail) = LOWER(:nameEmail)) AND userPassword = :password"
+        ).bind("nameEmail", user.nameEmail + "").bind("password",user.password + "").execute().then((results) => {
+            const userArr = results.fetchOne()
+
+            if (userArr == undefined) {
 
                 console.log("login try failed for: " + name_email)
 
@@ -1645,34 +1714,36 @@ WHERE \
             } else {
 
 
-                const userArr = results.fetchOne()
-
                 const userID = userArr[0];
+                const userFileID = userArr[4];
+                const userSocket = userArr[5]; 
 
-                const loginUser = {
+                let loginUser = {
                     userID: userID,
                     userName: userArr[1],
                     userEmail: userArr[2],
                     userHandle: userArr[3],
-                   
-                    image:{
-                        fileID:userArr[4],
-                        name: userArr[5], 
-                        type: userArr[6], 
-                        crc: userArr[7], 
-                        mimeType: userArr[8], 
-                        size: userArr[9], 
-                        lastModified: userArr[10]
+                    image: {
+                        fileID: -1,
+                        name: null,
+                        crc: null,
+                        mimeType: null,
+                        type: null,
+                        size: null,
+                        lastModified: null,
                     }
                 }
 
-                const userSocket = userArr[11]
+                if(userFileID == null){
+                    callback({ success: true, user: loginUser, userSocket: userSocket });
+                }else{
+                    getOwnUserFile(userFileID, session).then((imageFile) =>{
+                        loginUser.image = imageFile
 
-
-
-                callback({ success: true, user: loginUser, userSocket: userSocket });
-
-                //   })
+                        callback({ success: true, user: loginUser, userSocket: userSocket });
+                    })
+                }
+                
 
             }
         })
@@ -2431,8 +2502,7 @@ WHERE \
                             mimeType: value[10],
                             size: value[11],
                             lastModified: value[12],
-                            handle: null,
-                            value: null
+
                         },
                         config: {
                             fileID: value[13],
@@ -2768,56 +2838,106 @@ const updateUserPeerID = (userID, peerID, callback) =>{
     })
 }
 
-const insertUserFile = (userFileTable, userID, fileID, accessID) => {
+const insertUserFile = (userFileTable, userID, fileID, accessID, userAccess) => {
   
     return new Promise(resolve => {
-        userFileTable.insert(["userID", "fileID", "accessID"]).values([
-            userID, fileID, accessID
+        userFileTable.insert(["userID", "fileID", "accessID", "userFileUserAccess"]).values([
+            userID, fileID, accessID, userAccess
         ]).execute().then((result) => {
             
-            resolve(result.getAffectedItemsCount() > 0)
+            resolve(result.getAutoIncrementValue())
             
+        })
+    })
+}
+const updateUserFile = (userFileTable, userFileID, accessID, userAccess) => {
+
+    return new Promise(resolve => {
+        userFileTable.update().set("accessID", accessID).set("userFileUserAccess", userAccess).where("userFileID = :userFileID").bind("userFileID", userFileID).execute().then((result) => {
+
+            resolve(result.getAffectedItemsCount() > 0)
+
         })
     })
 }
 
-const userTableImageUpdate = (uTable, userID, fileID) => {
+const addUpdateUserFile = (userFileTable,userID, imageInfo, accessID, userAccess) =>{
     return new Promise(resolve => {
-        uTable.update().set("imageID", fileID).where("userID = :userID").bind("userID", userID).execute().then((userImageUpdated) => {
+        userFileTable.select(["userFileID"]).where("userID = :userID AND fileID = :fileID").bind("userID", userID).bind("fileID", imageInfo.fileID).execute().then((userFileSelectResult)=>{
+            const userFileIDSelect = userFileSelectResult.fetchOne()
+
+            if(userFileIDSelect == undefined)
+            {
+                insertUserFile(userFileTable, userID, imageInfo.fileID, accessID, userAccess).then((insertID)=>{
+                    imageInfo.accessID = accessID;
+                    imageInfo.userFileID = insertID;
+                    imageInfo.userAccess = userAccess
+
+                    resolve({file: imageInfo, userFileID: insertID, update:false})
+                })
+            }else{
+                const userFileID = userFileIDSelect[0]
+                updateUserFile(userFileTable, userFileID, accessID, userAccess).then((updated)=>{
+                    fileInfo.accessID = accessID;
+                    fileInfo.userFileID = userFileID;
+                    fileInfo.userAccess = userAccess;
+
+                    resolve({file: fileInfo, userFileID: userFileID, update: updated})
+                })
+            }
+        })
+    })
+}
+
+const userTableImageUpdate = (userTable, userID, userFileID) => {
+    return new Promise(resolve => {
+        userTable.update().set("userFileID", userFileID).where("userID = :userID").bind("userID", userID).execute().then((userImageUpdated) => {
             resolve(userImageUpdated.getAffectedItemsCount() > 0)
         })
     })
 }
-const updateUserImage = (userID, imageInfo, callback) =>{
-    console.log("updating user Image" + imageInfo.name)
+const updateUserImage = (userID, imageInfo, accessID, userAccess, callback) =>{
+    console.log("updating user Image " + imageInfo.name)
     if((imageInfo.crc != undefined && imageInfo.crc != null && imageInfo.crc != "" && imageInfo.crc.length > 5)){
         mySession.then((session) => {
 
             const arcDB = session.getSchema('arcturus');
             const userTable = arcDB.getTable("user")
             const fileTable = arcDB.getTable("file")
+            const userFileTable = arcDB.getTable("userFile")
 
             selectFileTableCRC(fileTable, imageInfo.crc).then((crcResult)=>{
                 const fileID = crcResult.fileID != undefined ? crcResult.fileID : null;
                
                 if(fileID != null){
-                
-                    userTableImageUpdate(userTable, userID, fileID).then((updated)=>{
-                        
-                        imageInfo.fileID = fileID
-                        console.log(imageInfo)
-                        callback({success:true, file:imageInfo, updated:updated})
+                    imageInfo.fileID = fileID
+
+                    addUpdateUserFile(userFileTable,userID, imageInfo, accessID, userAccess).then((userFileUpdate)=>{
+
+                        const userFileID = userFileUpdate.userFileID
+
+                        userTableImageUpdate(userTable, userID, userFileID).then((updated) => {
+
+
+                            callback({ success: true, file: userFileUpdate.file, updated: updated })
+                        })
                     })
+                    
                
                 }else{
                     insertFile(fileTable, imageInfo).then((iFile)=>{
                         const fileID = iFile.fileID;
-                      
-                        userTableImageUpdate(userTable, userID, fileID).then((updated) => {
+                        imageInfo.fileID = fileID
+                        addUpdateUserFile(userFileTable,userID, imageInfo, accessID, userAccess).then((userFileUpdate) => {
+                        
+                                const userFileID = userFileUpdate.userFileID
 
-                            imageInfo.fileID = fileID
-         
-                            callback({ success: true, file: imageInfo, updated: updated })
+                                userTableImageUpdate(userTable, userID, userFileID).then((updated) => {
+
+                                    
+                                    callback({ success: true, file: userFileUpdate.file, updated: updated })
+                                })
+                            
                         })
                     })
                 }
@@ -2918,155 +3038,80 @@ const getImagePeers = (userID, fileID, callback) =>{
 
         mySession.then((session) => {
             const arcDB = session.getSchema("arcturus")
-            const userTable = arcDB.getTable("user")
-            const userFileTable = arcDB.getTable("userFile")
-            const realmTable = arcDB.getTable("realm")
             const userContactTable = arcDB.getTable("userContact")
            
             selectUserContactTableUserIDs(userContactTable, userID).then((accessableContactIDs)=>{
                 
-                userTable.select(["userID", "accessID", "userPeerID", "userSocket", "statusID", "userLastOnline"]).where(
-                    "userID <> :userID AND accessID > 0 AND imageID = :fileID AND ((userLastOnline \
-BETWEEN DATE(DATE_SUB(NOW(), INTERVAL 1 DAY)) \
-AND DATE(NOW())) OR (user.statusID = 5 ))"
-                ).orderBy(["statusID DESC", "userLastOnline ASC"]).bind("userID", userID).bind("fileID", fileID).execute().then((userTableIconSelect) => {
-                    const userIcons = userTableIconSelect.fetchAll()
-                    let foundPeers = []
-                    
-                    if(userIcons != undefined){
-                        userIcons.forEach(user => {
-                            const peerUserID = user[0]
-                            const userAccessID = user[1]
 
-                            if (userAccessID == access.contacts && accessableContactIDs.length > 0)
-                            {
-                                const contactIDsindex = accessableContactIDs.findIndex(cid => cid == peerUserID)
-                                
-                                if(contactIDsindex > -1) {
-                                    foundPeers.push({
-                                        userPeerID:user[2],
-                                        userSocket:user[3],
-                                        statusID: user[4],
-                                        userLastOnline: user[5]
-                                    })
-                                }
-                                    
-                            }else{
-                                foundPeers.push({
-                                    userPeerID: user[2],
-                                    userSocket: user[3],
-                                    statusID: user[4],
-                                    userLastOnline: user[5]
-                                })
-                            }
+                                const selectPeerQuery = `
+SELECT DISTINCT
+ userFile.userFileID,
+ user.userPeerID, 
+ user.userSocket, 
+ user.statusID, 
+ user.userLastOnline 
+FROM 
+ arcturus.user, 
+ arcturus.userFile 
+WHERE 
+   userFile.fileID = ${fileID} AND userFile.userID = user.userID AND user.userID <> ${userID} AND userFile.accessID = ${access.public} 
+   AND 
+  ( 
+    ( user.userLastOnline BETWEEN DATE(DATE_SUB(NOW(), INTERVAL 1 DAY)) AND DATE(NOW()) ) 
+  OR 
+    ( user.statusID = 5 )
+  )
+ OR 
+(
+ userFile.fileID = ${fileID} AND userFile.userID = user.userID AND user.userID <> ${userID} AND userFile.accessID = ${access.contacts} 
+ AND
+ user.userID IN (SELECT userContact.userID FROM arcturus.userContact WHERE userContact.contactID = ${userID}) 
+ AND 
+ ( 
+  ( userLastOnline BETWEEN DATE(DATE_SUB(NOW(), INTERVAL 1 DAY)) AND DATE(NOW()) ) 
+  OR 
+  ( user.statusID = 5 )
+))
+ OR 
+(
+ userFile.fileID = ${fileID} AND userFile.userID = user.userID AND user.userID <> ${userID} 
+ AND
+ userFile.userFileUserAccess LIKE "%'${userID}'%"
+ AND 
+ ( 
+  ( userLastOnline BETWEEN DATE(DATE_SUB(NOW(), INTERVAL 1 DAY)) AND DATE(NOW()) ) 
+  OR 
+  (user.statusID = 5 )
+))`
+
+                session.sql(selectPeerQuery).execute().then((peerSelect)=>{
+                    const foundPeers = []
+                    
+                    if(peerSelect.hasData())
+                    {
+                       
+                        const peerArray = peerSelect.fetchAll()
+                        peerArray.forEach(user => {
+                            foundPeers.push({
+                                userPeerID: user[0],
+                                userSocket: user[1],
+                                statusID: user[2],
+                                userLastOnline: user[3]
+                            })
                         });
                     }
-                    realmTable.select(["userID","accessID"]).where("userID <> :userID AND accessID > 0 AND imageID = :fileID").bind(
-                        "userID", userID
-                    ).bind(
-                        "fileID", fileID
-                    ).execute().then((realmTableSelect) => {
-                        const realmIcons = realmTableSelect.fetchAll()
 
-                        let peerUserIDs = []
-                        if(realmIcons != undefined)
-                        {
-                            realmIcons.forEach(realmUsers => {
-                                const realmUserID = realmUsers[0]
-                                const realmAccessID = realmUsers[1]
-
-                                if (realmAccessID == access.contacts && accessableContactIDs.length > 0) {
-                                    peerUserIDs.push(realmUserID)
-                                }else{
-                                    peerUserIDs.push(realmUserID)
-                                }
-                            });
-                        }
-
-                        userFileTable.select(["userID", "accessID", "userFileUserAccess"]).where("userID <> :userID AND accessID > 0 AND fileID = :fileID").bind(
-                            "userID", userID
-                        ).bind(
-                            "fileID", fileID
-                        ).execute().then((userFileTableSelect)=>{
-                            const userFiles = userFileTableSelect.fetchAll()
-
-                            if(userFiles != undefined)
-                            {
-                                userFiles.forEach(userFileUser => {
-                                    const userFileUserID = userFileUser[0]
-                                    const userFileAccessID = userFileUser[1]
-                                    
-                                    if (userFileAccessID == access.public) {
-                                        peerUserIDs.push(userFileUserID)
-                                    
-                                    } else if (userFileAccessID == access.contacts && accessableContactIDs.length > 0) {
-                                        peerUserIDs.push(userFileUserID)
-                                    } else if (userFileAccessID == access.user && userFileUser[2] != null){
-                                        const userFileUserAccess = userFileUser[2] + ""
-                                       
-                                        const userAccess = userFileUserAccess.split(":")
-                                        
-                                        const index = userAccess.findIndex(uaID => uaID == userID)
-
-                                        if(index != -1)
-                                        {
-                                            peerUserIDs.push(userFileUserID)
-                                        }
-                                        
-                                    }
-                                });
-                            }
-                            
-                            let userIDString = ""
-                            
-                            if (peerUserIDs.length > 0)
-                            {
-                                for(let i = 0; i < peerUserIDs.length -1 ; i++){
-                                    userIDString.concat(peerUserIDs[i] + ", ")
-                                }
-                                userIDString.concat(peerUserIDs[i])
-                                const selectPeerQuery = "\
-SELECT \
- user.userPeerID, \
- user.userSocket, \
- user.statusID, \
- user.userLastOnline \
-FROM arcturus.user WHERE \
- userID IN("+ userIDString + ") AND ((\
- userLastOnline \
-BETWEEN DATE(DATE_SUB(NOW(), INTERVAL 1 DAY)) \
-AND DATE(NOW())) OR (user.statusID = " + status.Online + ")) \
-ORDER BY statusID DESC, userLastOnline ASC"
-
-                                session.sql(selectPeerQuery).execute().then((peerSelect)=>{
-                                    if(peerSelect.hasData())
-                                    {
-                                        const peerArray = peerSelect.fetchAll()
-
-                                        peerArray.forEach(user => {
-                                            foundPeers.push({
-                                                userPeerID: user[0],
-                                                userSocket: user[1],
-                                                statusID: user[2],
-                                                userLastOnline: user[3]
-                                            })
-                                        });
-                                    }
-
-                                    callback({success: peerArray > 0, peers:peerArray})
-                                })
-                            }
-                        })
-
-                        })
-
-                        
+                    callback({ success: foundPeers.length > 0, peers:foundPeers})
                 })
+                
+            
+
             })
 
-            
         })
-    }else{
+
+    } else {
         callback({ error: new Error("fileID invalid") })
-    }
+    }                       
+ 
 }
