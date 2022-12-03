@@ -497,7 +497,8 @@ const updateUserStatus = (userID = -1, statusID = 5, socketID = "", callback) =>
         const arcDB = session.getSchema("arcturus");
         const userTable = arcDB.getTable("user")
         const now = formatedNow();
-
+        console.log(statusID)
+        console.log(socketID)
         userTable.update().set("userSocket", socketID).set("statusID", statusID).set("userLastOnline", now).where("userID = :userID").bind("userID", userID).execute().then((updated) => {
             const affected = updated.getAffectedItemsCount();
             console.log("updated status affected: " + affected)
@@ -556,41 +557,38 @@ const cleanRooms = (userID = 0, callback) => {
             const arcDB = session.getSchema("arcturus")
             const userRoomTable = arcDB.getTable("userRoom")
             const userTable = arcDB.getTable("user")
-
-            userTable.select(["userPeerID"]).where("userID = :userID").bind("userID", userID).execute().then((userTableSelect)=>{
-                const one = userTableSelect.fetchOne()
-                const userPeerID = one[0];
-
-                if(userPeerID != "" || userPeerID != null){
-                    updateUserPeerID(userID, "", (callback)=>{
-                        console.log(callback)
-                    })
-                }
+           
+            updateUserPeerID(userID, "", (callback)=>{
+                console.log(callback)
             })
-            userRoomTable.select(["roomID"]).where("userID = :userID and statusID <> " + status.Offline).bind("userID", userID).execute().then((userRoomSelect) => {
-            
-                const allRooms = userRoomSelect.fetchAll();
-                if (allRooms != undefined){
-                    userRoomTable.update().set("statusID", status.Offline).where("userID = :userID").bind("userID", userID).execute().then((userRooms) => {
-                        const roomsAffected = userRooms.getAffectedItemsCount();
-                        if(roomsAffected > 0){
-                            
-                                allRooms.forEach(room => {
-                                    const roomID = room[0];
-                                    console.log("sending userStatus message to: " + roomID + " user: " + userID + " is: Offline");
-                                    io.to(roomID).emit("userStatus", userID, status.Offline);
-                                });
-                                callback(roomsAffected);
-                        
+
+            userTable.update().set("userSocket", "").where("userID = :userID").bind("userID", userID).execute().then((updatedUserSocket) =>{
+                userRoomTable.select(["roomID"]).where("userID = :userID and statusID <> " + status.Offline).bind("userID", userID).execute().then((userRoomSelect) => {
+                
+                    const allRooms = userRoomSelect.fetchAll();
+                    if (allRooms != undefined){
+                        userRoomTable.update().set("statusID", status.Offline).where("userID = :userID").bind("userID", userID).execute().then((userRooms) => {
+                            const roomsAffected = userRooms.getAffectedItemsCount();
+                            if(roomsAffected > 0){
                                 
-                        }else{
-                            callback(roomsAffected);
-                        }   
-                    })
-                }else{
-                    callback(0)
-                }
+                                    allRooms.forEach(room => {
+                                        const roomID = room[0];
+                                        console.log("sending userStatus message to: " + roomID + " user: " + userID + " is: Offline");
+                                        io.to(roomID).emit("userStatus", userID, status.Offline);
+                                    });
+                                    callback(roomsAffected);
+                            
+                                    
+                            }else{
+                                callback(roomsAffected);
+                            }   
+                        })
+                    }else{
+                        callback(0)
+                    }
+                })
             })
+
         })
     }else{
         callback(0)
@@ -3049,7 +3047,8 @@ SELECT DISTINCT
  user.userPeerID, 
  user.userSocket, 
  user.statusID, 
- user.userLastOnline 
+ user.userLastOnline,
+ user.userID
 FROM 
  arcturus.user, 
  arcturus.userFile 
@@ -3082,25 +3081,28 @@ WHERE
   ( userLastOnline BETWEEN DATE(DATE_SUB(NOW(), INTERVAL 1 DAY)) AND DATE(NOW()) ) 
   OR 
   (user.statusID = 5 )
-))`
+))
+ ORDER BY user.statusID DESC, user.userLastOnline ASC`
 
                 session.sql(selectPeerQuery).execute().then((peerSelect)=>{
                     const foundPeers = []
                     
                     if(peerSelect.hasData())
                     {
-                       
                         const peerArray = peerSelect.fetchAll()
-                        peerArray.forEach(user => {
+                        peerArray.forEach(peer => {
                             foundPeers.push({
-                                userPeerID: user[0],
-                                userSocket: user[1],
-                                statusID: user[2],
-                                userLastOnline: user[3]
+                                userFileID: peer[0],
+                                userPeerID: peer[1],
+                                userSocket: peer[2],
+                                statusID: peer[3],
+                                userLastOnline: peer[4],
+                                userID: peer[5]
                             })
                         });
                     }
-
+                    console.log("foundPeers")
+                    console.log(foundPeers)
                     callback({ success: foundPeers.length > 0, peers:foundPeers})
                 })
                 
