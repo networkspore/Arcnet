@@ -475,14 +475,14 @@ const createRoom = (roomTable, userRoomTable, userID, roomName) => {
 
 
 
-const addUserToRoom = (userTable, userRoomTable, fileTable, userID , roomID) => {
+const addUserToRoom = (userRoomTable, userID, roomID) => {
    return new Promise(resolve => {
-        userRoomTable.insert(["userID", "roomID"]).values(userID, roomID).execute().then((userAddedToRoom) => {
+        userRoomTable.insert(["userID", "roomID", "statusID"]).values(userID, roomID, status.Offline).execute().then((userAddedToRoom) => {
                 const affected = userAddedToRoom.getAffectedItemsCount() > 0;
                 if (affected) {
-                    getUserInformation(userTable, fileTable, userID).then((userInformation)=>{
-                        io.to(gatewayRoomID).emit("addedUserRoom", userInformation);
-                    })   
+                    
+                    io.to(roomID).emit("addedUserIDtoRoom", userID);
+                     
                 }
                 resolve(affected)
         })
@@ -561,8 +561,9 @@ const cleanRooms = (userID = 0, callback) => {
             updateUserPeerID(userID, "", (callback)=>{
                 console.log(callback)
             })
+            const now = formatedNow()
 
-            userTable.update().set("userSocket", "").where("userID = :userID").bind("userID", userID).execute().then((updatedUserSocket) =>{
+            userTable.update().set("userLastOnline", now).set("statusID",status.Offline).set("userSocket", "").where("userID = :userID").bind("userID", userID).execute().then((updatedUserSocket) =>{
                 userRoomTable.select(["roomID"]).where("userID = :userID and statusID <> " + status.Offline).bind("userID", userID).execute().then((userRoomSelect) => {
                 
                     const allRooms = userRoomSelect.fetchAll();
@@ -617,7 +618,7 @@ return new Promise(resolve =>{
 })
 }
 
-const getRoomUsers = (userRoomTable, userTable, fileTable, roomID) => {
+const getRoomUsers = (userRoomTable, userTable, contactIDList, roomID) => {
     return new Promise(resolve => {
        
             userRoomTable.select(["userID", "statusID"]).where("roomID = :roomID").bind("roomID", roomID).execute().then((userRoomSelect)=>{
@@ -636,7 +637,9 @@ const getRoomUsers = (userRoomTable, userTable, fileTable, roomID) => {
                                 const userID = roomUser[0]
                                 const statusID = roomUser[1]
 
-                                getUserInformation(userTable, fileTable, userID).then((userInformation)=>{
+                                const isContact = contactIDList.findIndex(list => list == userID)
+                               
+                                getContactInformation(userTable, userID, isContact).then((userInformation)=>{
                                     userInformation.roomStatusID = statusID;
                                     roomUsers.push(userInformation)
                                 })
@@ -922,37 +925,55 @@ const findPeople = (text = "", userID = 0, callback) => {
  SELECT contactID from arcturus.userContact where userID = " + userID + " ) LIMIT 50";
 
 
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    mySession.then((mySession) => {
-
-        mySession.sql(query).execute().then((results) => {
-            if (!results.hasData()) {
-
-                console.log("no users for" + text);
-                callback([]);
-            } else {
-
-                const people = results.fetchAll();
-                console.log(people)
-                let tmpArray = [];
-
-                for (let i = 0; i < people.length; i++) {
-                    const person = {
-                        userName: people[i][0],
-                        userEmail: people[i][1],
-                        userID: people[i][2],
-                    }
-                    console.log(person)
-                    tmpArray.push(
-                        person
-                    )
+    mySession.then((session) => {
+        const arcDB = session.getSchema("arcturus")
+        const userContactTable = arcDB.getTable("userContact")
+        const userTable = arcDB.getTable("user")
+        
+        userContactTable.select(["contactID"]).where("userID = :userID").bind("userID",userID).execute().then((contactResults) => {
+            const contactsArray = contactResults.fetchAll()
+            let contactList = ""
+            if(contactsArray != undefined)
+            {
+                const contactsLength = contactsArray.length
+                for(let i = 0; i < contactsLength -1 ; i++)
+                {
+                    const contactID = contactsArray[i][0]
+                    contactList.concat(`'${contactID}',`)
                 }
-
-                callback(tmpArray)
+                const contactID = contactsArray[contactsLength -1][0]
+                contactList.concat(`'${contactID}'`)
             }
+            userTable.select(["userID", "userName"]).where("LOWER(userName) LIKE :text AND userID <> :userID AND userID NOT IN (:contactList)")
+                .bind("text", text)
+                .bind("userID", userID)
+                .bind("contactList", contactList)
+                .execute().then((selectResults) =>{
+                
+                    const people = selectResults.fetchAll()
+                if (people == undefined) {
+                    callback([]);
+                } else {
+
+                    
+              
+                    let searchResults = [];
+
+                    for (let i = 0; i < people.length; i++) {
+                        const person = {
+                            userID:     people[i][0],
+                            userName:   people[i][1],
+                            
+                        }
+                       
+                        searchResults.push(
+                            person
+                        )
+                    }
+
+                    callback(searchResults)
+            }
+            })
         })
 
     }, (reason) => {
@@ -2567,7 +2588,7 @@ const deleteRealm = (userID, realmID, callback) =>{
         //to get more complicated?
 
         var arcDB = session.getSchema("arcturus")
-        const realmFile = arcDB.getTable("realmFile")
+        const realmUserFile = arcDB.getTable("realmUserFile")
         var realmTable = arcDB.getTable("realm")
         const roomTable = arcDB.getTable("room")
         const userRoomTable = arcDB.getTable("userRoom")
@@ -2592,7 +2613,7 @@ const deleteRealm = (userID, realmID, callback) =>{
                            
                         });
                         
-                        realmFile.delete().where("realmID = :realmID").bind("realmID", realmID).execute();
+                        realmUserFile.delete().where("realmID = :realmID").bind("realmID", realmID).execute();
                         realmUserTable.delete().where("realmID = :realmID").bind("realmID", realmID).execute()
 
                         realmTable.delete().where("userID = :userID AND realmID = :realmID").bind("userID", userID).bind("realmID", realmID).execute().then((deleted) => {
@@ -2679,14 +2700,14 @@ const enterRealmGateway = (user, realmID,socket, callback)=>{
         const messageTable = arcDB.getTable("message")
         const userTable = arcDB.getTable("user")
 
-        const finalize = (admin, userRoomTable, userTable, fileTable, userID, gatewayRoomID, roomID) => {
+        const finalize = (admin, userRoomTable, userTable, contactList, userID, gatewayRoomID, roomID) => {
             return new Promise(resolve => {
-                    getRoomUsers(userRoomTable, userTable, fileTable, gatewayRoomID).then((gatewayRoomResult) => {
+                getRoomUsers(userRoomTable, userTable, contactList, gatewayRoomID).then((gatewayRoomResult) => {
                         if(!("success" in gatewayRoomResult)) throw new Error("getgatewayRoomUsers not successfull")
                         
                         const gatewayUsers = gatewayRoomResult.users
 
-                        getRoomUsers(userRoomTable, userTable, fileTable, roomID).then((realmRoomResult) => {
+                    getRoomUsers(userRoomTable, userTable, contactList, roomID).then((realmRoomResult) => {
                             if (!("success" in gatewayRoomResult)) throw new Error("getRoomUsers not successfull")
 
                             const realmUsers = realmRoomResult.users
@@ -2718,12 +2739,20 @@ const enterRealmGateway = (user, realmID,socket, callback)=>{
             if(oneRealm == undefined){
                 callback({success:false})
             }else{
-                const realmAdminID = oneRealm[0];
-                const accessID = oneRealm[1];
-                const gatewayRoomID = oneRealm[2]
-                const roomID = oneRealm[3]
+                userContactTable.select(["userID"]).where("contactID = :userID").bind("userID", user.userID).execute().then((contactResult)=>{
+                    const contactArray = contactResult.fetchAll()
+                    const contactIDList = []
+                    contactArray.forEach(contact => {
+                        const contactID = contact[0];
+                        contactIDList.push(contactID)
+                    });
+                
+                    const realmAdminID = oneRealm[0];
+                    const accessID = oneRealm[1];
+                    const gatewayRoomID = oneRealm[2]
+                    const roomID = oneRealm[3]
+                    const admin = realmAdminID == user.userID;
 
-                const admin = realmAdminID == user.userID;
                 userRoomTable.select(["userRoomBanned"]).where("userID =:userID and roomID = :roomID").bind("userID", user.userID).bind("roomID", gatewayRoomID).execute().then((userRoomSelect)=>{
                     const oneUserRoom = userRoomSelect.fetchOne()
                     if(!admin)
@@ -2741,10 +2770,10 @@ const enterRealmGateway = (user, realmID,socket, callback)=>{
                                         {
                                             callback({ success: "false" })
                                         }else{
-                                            addUserToRoom(userTable, userRoomTable, fileTable, user.userID, gatewayRoomID).then((added)=>{
+                                            addUserToRoom(userRoomTable, user.userID, gatewayRoomID).then((added)=>{
                                                 if(added){
                                         
-                                                    finalize(admin, userRoomTable, userTable, fileTable, user.userID,gatewayRoomID,roomID).then(result  =>{
+                                                    finalize(admin, userRoomTable, userTable, contactIDList, user.userID, gatewayRoomID, roomID).then(result => {
                                                         callback(result)
                                                     })
                                                   
@@ -2756,10 +2785,10 @@ const enterRealmGateway = (user, realmID,socket, callback)=>{
                                     })
                                     break;
                                 case access.public:
-                                    addUserToRoom(userTable, userRoomTable, fileTable, user.userID, gatewayRoomID).then((added) => {
+                                    addUserToRoom( userRoomTable, user.userID, gatewayRoomID).then((added) => {
                                         if (added) {
 
-                                            finalize(admin, userRoomTable, userTable, fileTable, user.userID, gatewayRoomID, roomID).then(result => {
+                                            finalize(admin, userRoomTable, userTable, contactIDList, user.userID, gatewayRoomID, roomID).then(result => {
                                                 callback(result)
                                             })
 
@@ -2772,7 +2801,7 @@ const enterRealmGateway = (user, realmID,socket, callback)=>{
                         }else{
                             const banned = oneUserRoom[0]
                             if(banned == 0){
-                                finalize(admin, userRoomTable, userTable, fileTable, user.userID, gatewayRoomID, roomID).then(result => {
+                                finalize(admin, userRoomTable, userTable, contactIDList, user.userID, gatewayRoomID, roomID).then(result => {
                                     callback(result)
                                 })
                             }else[
@@ -2802,8 +2831,10 @@ const enterRealmGateway = (user, realmID,socket, callback)=>{
                     
                     }
                 })
-            }
+            })
+        }
         })
+    
     })
     
 }
@@ -3091,6 +3122,7 @@ WHERE
                     {
                         const peerArray = peerSelect.fetchAll()
                         peerArray.forEach(peer => {
+                            console.log(peer)
                             foundPeers.push({
                                 userFileID: peer[0],
                                 userPeerID: peer[1],
