@@ -251,8 +251,8 @@ io.on('connection', (socket) => {
                       
                
                 /* //////////////SUCCESS///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
-                    socket.on("getImagePeers", (fileID, callback)=>{
-                        getImagePeers(user.userID, fileID, (result)=>{
+                    socket.on("getFilePeers", (fileID, callback)=>{
+                        getFilePeers(user.userID, fileID, (result)=>{
                             callback(result)
                         })
                     })
@@ -409,13 +409,19 @@ io.on('connection', (socket) => {
                         })
                     })
 
-                        socket.on("updateRealmImage", (realmID, imageInfo, callback)=>{
-                            updateRealmImage(user.userID, realmID, imageInfo, (result)=>{
-                                callback(result)
-                            })
+                    socket.on("updateRealmImage", (realmID, imageInfo, callback)=>{
+                        updateRealmImage(user.userID, realmID, imageInfo, (result)=>{
+                            callback(result)
                         })
+                    })
 
-
+                    socket.on("peerFileRequest", (params, callback) =>{
+                        console.log("peer file request")
+                        console.log(params)
+                        peerFileRequest(user.userID, params).then((response)=>{
+                            callback(response)
+                        })
+                    })
                     socket.on('disconnect', () => {
                         const userName = user.userName;
                         const userID = user.userID;
@@ -637,7 +643,7 @@ const getRoomUsers = (userRoomTable, userTable, contactIDList, roomID) => {
                                 const userID = roomUser[0]
                                 const statusID = roomUser[1]
 
-                                const isContact = contactIDList.findIndex(list => list == userID)
+                                const isContact = Array.isArray(contactIDList) ?  contactIDList.findIndex(list => list == userID)  != -1 : false
                                
                                 getContactInformation(userTable, userID, isContact).then((userInformation)=>{
                                     userInformation.roomStatusID = statusID;
@@ -3056,7 +3062,7 @@ const selectUserContactTableUserIDs = (userContactTable, userID) =>{
     })
 }
 
-const getImagePeers = (userID, fileID, callback) =>{
+const getFilePeers = (userID, fileID, callback) =>{
 
     console.log("looking for fileID: " + fileID)
     if (fileID != undefined && fileID != null && fileID > -1) {
@@ -3075,8 +3081,6 @@ const getImagePeers = (userID, fileID, callback) =>{
                                 const selectPeerQuery = `
 SELECT DISTINCT
  userFile.userFileID,
- user.userPeerID, 
- user.userSocket, 
  user.statusID, 
  user.userLastOnline,
  user.userID
@@ -3125,11 +3129,9 @@ WHERE
                             console.log(peer)
                             foundPeers.push({
                                 userFileID: peer[0],
-                                userPeerID: peer[1],
-                                userSocket: peer[2],
-                                statusID: peer[3],
-                                userLastOnline: peer[4],
-                                userID: peer[5]
+                                statusID: peer[1],
+                                userLastOnline: peer[2],                                
+                                userID: peer[3]
                             })
                         });
                     }
@@ -3148,4 +3150,84 @@ WHERE
         callback({ error: new Error("fileID invalid") })
     }                       
  
+}
+
+const peerFileRequest = (userID, params) => {
+    return new Promise(resolve => {
+        mySession.then((session) => {
+            const request = params.request
+            const contactID = params.contactID
+            const userFileID = params.userFileID
+            const userPeerID = params.userPeerID
+            const query = `
+SELECT DISTINCT 
+ user.userSocket 
+FROM 
+ arcturus.userFile, 
+ arcturus.user, 
+ arcturus.userContact 
+WHERE 
+(  
+  user.userID = ${contactID} 
+ AND 
+  userFile.userID = user.userID
+ AND 
+  userFile.accessID = ${access.public} 
+ AND 
+  userFile.userFileID = ${userFileID} 
+ AND 
+  user.userSocket <> ""
+ AND
+  user.statusID = ${status.Online} 
+) OR (
+  user.userID = ${contactID} 
+ AND 
+  userFile.userID = user.userID
+ AND
+  userFile.userFileID = ${userFileID} 
+ AND 
+  userFile.accessID = ${access.contacts} 
+ AND 
+  userContact.userID = user.userID 
+ AND
+  userContact.contactID = ${userID} 
+ AND 
+  user.userSocket <> ""
+ AND
+  user.statusID = ${status.Online} 
+) OR (
+  user.userID = ${contactID} 
+ AND 
+  userFile.userID = user.userID
+ AND
+  userFile.userFileID = ${userFileID}
+ AND 
+  userFile.userFileUserAccess LIKE "'${userID}'"  
+ AND 
+  user.userSocket <> "" 
+ AND 
+  user.statusID = ${status.Online} 
+)`
+            session.sql(query).execute().then((socketSelect) =>{
+                if(socketSelect.hasData())
+                {
+                    console.log("file access available")
+                    const contactSocket = socketSelect.fetchOne()[0]
+                    console.log(contactSocket)
+                    io.to(contactSocket).timeout(500).emit("peerFileRequest", {request:request, peerID:userPeerID, userID:userID}, (err, response)=>{
+                        if(err)
+                        {
+                            resolve({error: new Error("Unable to connect.")})
+                        }else{
+                            console.log(response)
+                            resolve(response)
+                        }
+                        
+                    })
+                }else{
+                    resolve({error: new Error("Connection refused.")})
+                }
+            })
+        })
+    })
 }
