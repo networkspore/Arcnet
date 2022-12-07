@@ -624,7 +624,7 @@ return new Promise(resolve =>{
 })
 }
 
-const getRoomUsers = (userRoomTable, userTable, contactIDList, roomID) => {
+const getRoomUsers = (session, userRoomTable, userTable, contactIDList, roomID) => {
     return new Promise(resolve => {
        
             userRoomTable.select(["userID", "statusID"]).where("roomID = :roomID").bind("roomID", roomID).execute().then((userRoomSelect)=>{
@@ -645,7 +645,7 @@ const getRoomUsers = (userRoomTable, userTable, contactIDList, roomID) => {
 
                                 const isContact = Array.isArray(contactIDList) ?  contactIDList.findIndex(list => list == userID)  != -1 : false
                                
-                                getContactInformation(userTable, userID, isContact).then((userInformation)=>{
+                                getContactInformation(userTable,session, userID, isContact).then((userInformation)=>{
                                     userInformation.roomStatusID = statusID;
                                     roomUsers.push(userInformation)
                                 })
@@ -1431,7 +1431,7 @@ const getContacts = (user, callback) => {
                     
             
 
-                    getContactInformation(userTable, contactID, isContact).then((contactInfo)=>{
+                    getContactInformation(userTable,session, contactID, isContact).then((contactInfo)=>{
                      
 
                         contactInfo.accepted = isContact
@@ -1441,13 +1441,7 @@ const getContacts = (user, callback) => {
                         if("success" in contactInfo && contactInfo.success)
                         {
                      
-                            const contactFileID = contactInfo.userFileID
-
-                           
-                            if(contactFileID == null)
-                            {
-                                console.log("null image")
-                                contactInfo.user.image = nullFile
+                            
                                 contacts.push(
                                     contactInfo
                                 )
@@ -1459,25 +1453,7 @@ const getContacts = (user, callback) => {
                           
                                     callback(contacts)
                                 }
-                            }else{
-                                getFileUserFileID(contactFileID, user.userID, isContact, session).then((userFile) => {
-                                    console.log(userFile)
-                                    contactInfo.user.image = userFile
-
-                                    contacts.push(
-                                        contactInfo
-                                    )
-
-                                    i = i + 1;
-                                    if(i < contactsArray.length){
-                       
-                                        getContactInfoRecursive()
-                                    }else{
-                         
-                                        callback(contacts)
-                                    }
-                                })  
-                            }
+                            
                         }
                         
                     })
@@ -1497,7 +1473,7 @@ const getContacts = (user, callback) => {
     })
 }
 
-const getContactInformation = (userTable, userID, isContact) => {
+const getContactInformation = (userTable, session, userID, isContact) => {
     console.log('getting Contact information')
 
     return new Promise(resolve =>{
@@ -1513,38 +1489,30 @@ const getContactInformation = (userTable, userID, isContact) => {
                 const statusID = one[4];
                 const userFileID = one[5]
                 const accessID = one[6]
-               
+      
                 let user = {
                     userID: contactID,
                     userName: userName,
-                    userHandle: "",
-                    userSocket: "",
-                    statusID:  status.Offline,
+                    userHandle: userHandle,
+                    userSocket: userSocket,
+                    statusID: statusID,
                     accessID: accessID,
-                    image: null
+                    image: {
+                        fileID: -1,
+                        name: null,
+                        crc: null,
+                        mimeType: null,
+                        type: null,
+                        size: null,
+                        lastModified: null,
+                    }
                 }
 
-                switch(accessID){
-                    case access.private:
-                        resolve({ success: true, user: user, userFileID: null })
-                        break;
-                    case access.contacts:
-                        if(!isContact){
-                            resolve({ success: true, user: user, userFileID: null })
-                        }else{
-                            user.userHandle = userHandle;
-                            user.userSocket = userSocket;
-                            user.statusID = statusID;
-                            resolve({ success: true, user: user, userFileID: userFileID })
-                        }
-                        break;
-                    case access.public:
-                        user.userHandle = userHandle;
-                        user.userSocket = userSocket;
-                        user.statusID = statusID;
-                        resolve({ success: true, user: user, userFileID: userFileID })
-                        break;
-                }
+                getFileUserFileID(userFileID, contactID, isContact, session).then((file)=>{
+                    user.image = file
+
+                    resolve({ success: true, user: user })
+                })
 
                
             }else{
@@ -2708,12 +2676,12 @@ const enterRealmGateway = (user, realmID,socket, callback)=>{
 
         const finalize = (admin, userRoomTable, userTable, contactList, userID, gatewayRoomID, roomID) => {
             return new Promise(resolve => {
-                getRoomUsers(userRoomTable, userTable, contactList, gatewayRoomID).then((gatewayRoomResult) => {
+                getRoomUsers(session, userRoomTable, userTable, contactList, gatewayRoomID).then((gatewayRoomResult) => {
                         if(!("success" in gatewayRoomResult)) throw new Error("getgatewayRoomUsers not successfull")
                         
                         const gatewayUsers = gatewayRoomResult.users
 
-                    getRoomUsers(userRoomTable, userTable, contactList, roomID).then((realmRoomResult) => {
+                    getRoomUsers(session, userRoomTable, userTable, contactList, roomID).then((realmRoomResult) => {
                             if (!("success" in gatewayRoomResult)) throw new Error("getRoomUsers not successfull")
 
                             const realmUsers = realmRoomResult.users
