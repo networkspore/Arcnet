@@ -1733,7 +1733,7 @@ const checkUser = (user, callback) => {
 
             if (userArr == undefined) {
 
-                console.log("login try failed for: " + name_email)
+                console.log("login try failed for: " + user.nameEmail)
 
                 callback({success:false})
             } else {
@@ -3093,7 +3093,7 @@ WHERE
   ( 
     ( user.userLastOnline BETWEEN DATE(DATE_SUB(NOW(), INTERVAL 1 DAY)) AND DATE(NOW()) ) 
   OR 
-    ( user.statusID = 5 )
+    ( user.statusID = ${status.Online} )
   )
  OR 
 (
@@ -3104,7 +3104,7 @@ WHERE
  ( 
   ( userLastOnline BETWEEN DATE(DATE_SUB(NOW(), INTERVAL 1 DAY)) AND DATE(NOW()) ) 
   OR 
-  ( user.statusID = 5 )
+  ( user.statusID = ${status.Online} )
 ))
  OR 
 (
@@ -3115,7 +3115,7 @@ WHERE
  ( 
   ( userLastOnline BETWEEN DATE(DATE_SUB(NOW(), INTERVAL 1 DAY)) AND DATE(NOW()) ) 
   OR 
-  (user.statusID = 5 )
+  (user.statusID = ${status.Online} )
 ))
  ORDER BY user.statusID DESC, user.userLastOnline ASC`
 
@@ -3161,11 +3161,12 @@ const peerFileRequest = (userID, params) => {
             const userPeerID = params.userPeerID
             const query = `
 SELECT DISTINCT 
- user.userSocket 
+ user.userSocket, 
+ user.userID 
 FROM 
  arcturus.userFile, 
  arcturus.user, 
- arcturus.userContact 
+ arcturus.userContact
 WHERE 
 (  
   user.userID = ${contactID} 
@@ -3212,20 +3213,39 @@ WHERE
                 if(socketSelect.hasData())
                 {
                     console.log("file access available")
-                    const contactSocket = socketSelect.fetchOne()[0]
-                    console.log(contactSocket)
-                    io.to(contactSocket).timeout(500).emit("peerFileRequest", {request:request, peerID:userPeerID, userID:userID}, (err, response)=>{
-                        if(err)
-                        {
-                            resolve({error: new Error("Unable to connect.")})
-                        }else{
-                            console.log(response)
-                            resolve(response)
-                        }
+                    const one = socketSelect.fetchOne()
+
+                    const contactSocket = one[0]
+                    const contactID = one[1]
+              
+                    
+                    let socketOnline = false;
+
+                    io.sockets.sockets.forEach((connectedSocket) => {
                         
-                    })
+                        if (connectedSocket.id == contactSocket) {
+                            
+                            socketOnline = true
+                        }
+                    });
+                    
+                    if(socketOnline){
+                        io.to(contactSocket).timeout(500).emit("peerFileRequest", {request:request, peerID:userPeerID, userID:userID}, (err, response)=>{
+                            if(err)
+                            {
+                                resolve({error: new Error("Unable to connect.")})
+                            }else{
+                                
+                                resolve(response[0])
+                            }
+                            
+                        })
+                    }else{
+                        updateUserStatus(contactID, status.Offline, "",(complete) =>{} )
+                        resolve({error: new Error("Not online.")})
+                    }
                 }else{
-                    resolve({error: new Error("Connection refused.")})
+                    resolve({error: new Error("File unavailable")})
                 }
             })
         })
