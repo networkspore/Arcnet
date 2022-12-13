@@ -239,7 +239,7 @@ io.on('connection', (socket) => {
                                 }
                             }
                             getContacts(user, (contacts) => {
-
+                                console.log("got contacts")
                                 const result = { success: true, user: user, contacts: contacts, }
 
                                 callback(result)
@@ -1211,8 +1211,7 @@ function createUserOld(user, socketID, callback) {
 
 function createUser(user, callback) {
     var date = new Date().toString();
-    var veriCode = cryptojs.SHA256(user.userEmail + date).toString().slice(0, 8);
-
+  
 
 
     console.log(user)
@@ -1233,25 +1232,14 @@ function createUser(user, callback) {
         session.startTransaction();
         try {
             var res = userTable.insert(
-                ['userName', 'userPassword', "userEmail", 'refID', 'userCode', 'statusID', "imageID", "accessID"]
+                ['userName', 'userPassword', "userEmail", 'refID',  'statusID', "accessID"]
             ).values(
-                [user.userName, user.userPass, user.userEmail, user.userRefID, veriCode, 3, -1, access.contacts]
+                [user.userName, user.userPass, user.userEmail, user.userRefID,  3, access.contacts]
             ).execute();
             res.then((value) => {
                 var id = value.getAutoIncrementValue();
 
-                const eHTML = "\
-<p>" + user.userName + ",</p>\
-<p>Your email verification code is: " + veriCode + "</p>\
-<p>Best Regards,</p>\
-<p>ArcturusRPG.io</p>"
-                email(user.userEmail, "Arcturus RPG", eHTML, (err, info) => {
-                    if (err) {
-                        console.log(err)
-                    } else {
-                        console.log("Email sent to: " + user.userEmail)
-                    }
-                })
+               
                 callback({ create: true, msg: id + "created" })
             }).catch((error) => {
                 console.log(error)
@@ -1413,6 +1401,7 @@ const getContacts = (user, callback) => {
 
             if (contactsArray != undefined) {
 
+                console.log(contactsArray)
                 var contacts =[];
                 var i = 0;
                 
@@ -1462,9 +1451,11 @@ const getContacts = (user, callback) => {
                 if(contactsArray.length > 0){ 
                     console.log("calling recursive function")
                     getContactInfoRecursive()
+                }else{
+                    callback([])
                 }
-            }
-            else {
+            }else {
+                console.log("No contacts found")
                 callback([])
             }
         })
@@ -1482,6 +1473,7 @@ const getContactInformation = (userTable, session, userID, isContact) => {
          
             if(one != undefined)
             {
+                console.log(one)
                 const contactID = one[0];
                 const userName = one[1];
                 const userHandle = one[2];
@@ -1516,7 +1508,7 @@ const getContactInformation = (userTable, session, userID, isContact) => {
 
                
             }else{
-                resolve({error: new Error("not a user")})
+               throw new Error("not a user")
             }
         })
 
