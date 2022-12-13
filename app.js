@@ -24,7 +24,7 @@ const nullFile = {
     fileID: -1,
     fileName: null,
     fileType: null,
-    fileCRC: null,
+    fileHash: null,
     fileMimeType: null,
     fileSize: null,
     fileLastModified: null
@@ -357,15 +357,15 @@ io.on('connection', (socket) => {
                         })
                     })
 
-                    socket.on("checkStorageCRC", (crc, callback) =>{
-                        checkStorageCRC(user.userID, crc, (result)=>{
+                    socket.on("checkStorageHash", (hash, callback) =>{
+                        checkStorageHash(user.userID, hash, (result)=>{
                             callback(result)
                         })
                     })
 
-                    socket.on("loadStorage", (crc, engineKey, callback) => {
+                    socket.on("loadStorage", (hash, engineKey, callback) => {
 
-                        loadStorage(crc, engineKey, (storage)=>{
+                        loadStorage(hash, engineKey, (storage)=>{
                             callback(storage)
                         })
 
@@ -377,8 +377,8 @@ io.on('connection', (socket) => {
                         })
                     })
                     /*
-                    socket.on("checkUserFiles", (crcs, callback) => {
-                        checkUserFiles(user.userID, crcs, (result) => {
+                    socket.on("checkUserFiles", (hashs, callback) => {
+                        checkUserFiles(user.userID, hashs, (result) => {
                             callback(result)
                         })
                     })*/
@@ -1500,7 +1500,7 @@ const getContactInformation = (userTable, session, userID, isContact) => {
                     image: {
                         fileID: -1,
                         name: null,
-                        crc: null,
+                        hash: null,
                         mimeType: null,
                         type: null,
                         size: null,
@@ -1582,7 +1582,7 @@ const getUserReferalCodes = (user, callback) => {
 
 const getOwnUserFile = (userFileID, session) => {
     return new Promise(resolve =>{
-        const userFileQuery = "SELECT DISTINCT file.fileID, file.fileName, file.fileCRC, file.fileMimeType, file.fileType, file.fileSize, file.fileLastModified \
+        const userFileQuery = "SELECT DISTINCT file.fileID, file.fileName, file.fileHash, file.fileMimeType, file.fileType, file.fileSize, file.fileLastModified \
 FROM arcturus.userFile, arcturus.file WHERE userFile.userFileID = " + userFileID + " AND file.fileID = userFile.fileID"
 
         session.sql(userFileQuery).execute().then((userFileSelect)=>{
@@ -1593,7 +1593,7 @@ FROM arcturus.userFile, arcturus.file WHERE userFile.userFileID = " + userFileID
             file = {
                 fileID: value[0],
                 name: value[1],
-                crc: value[2],
+                hash: value[2],
                 mimeType: value[3],
                 type:value[4],
                 size: value[5],
@@ -1614,7 +1614,7 @@ const getFileUserFileID = (userFileID, userID, isContact, session) => {
 SELECT DISTINCT 
  file.fileID, 
  file.fileName, 
- file.fileCRC, 
+ file.fileHash, 
  file.fileMimeType, 
  file.fileType, 
  file.fileSize, 
@@ -1652,7 +1652,7 @@ WHERE
                 file = {
                     fileID: value[0],
                     name: value[1],
-                    crc: value[2],
+                    hash: value[2],
                     mimeType: value[3],
                     type: value[4],
                     size: value[5],
@@ -1719,7 +1719,7 @@ const checkUser = (user, callback) => {
                     image: {
                         fileID: -1,
                         name: null,
-                        crc: null,
+                        hash: null,
                         mimeType: null,
                         type: null,
                         size: null,
@@ -1839,34 +1839,34 @@ const updateUserPassword = (info, callback) => {
     })
 }
 /*
-const checkUserFiles = (userID, crcs, callback) =>{
+const checkUserFiles = (userID, hashs, callback) =>{
     mySession.then((session) => {
 
 
         let i = 0;
-        let passedCrcs = []
+        let passedHashs = []
         const checkFileRecursive = () =>
         {
-            const crc = crcs[i]
+            const hash = hashs[i]
             const query = "SELECT DISTINCT file.fileID from arcturus.file, arcturus.userFile where file.fileID = userFile.fileID AND userFile.userID = " + userID + " \
- AND file.fileCRC = " + crc;
+ AND file.fileHash = " + hash;
             session.sql(query).execute.then((sqlResult)=>{
                 if(sqlResult.hasData()){
                     const one = sqlResult.fetchOne()
                     const fileID = one[0]
 
-                    passedCrcs.push({fileID:fileID, crc:crc, index: i}) 
+                    passedHashs.push({fileID:fileID, hash:hash, index: i}) 
                 
                 }
                 i++;
-                if(i < crcs.length){ 
+                if(i < hashs.length){ 
                     checkFileRecursive()
                 }else{
-                    callback({success:true, userFiles:passedCrcs})
+                    callback({success:true, userFiles:passedHashs})
                 }
             })
         }
-        if(Array.isArray(crcs) && crcs.length > 0) checkFileRecursive()
+        if(Array.isArray(hashs) && hashs.length > 0) checkFileRecursive()
     }).catch((err)=>{
         console.log(err)
         callback({error: new Error("DB error")})
@@ -1874,7 +1874,7 @@ const checkUserFiles = (userID, crcs, callback) =>{
 }*/
 
 const updateStorageConfig = (fileID, fileInfo, callback) =>{
-    console.log("updating storage config: " + fileID + "crc: " + fileInfo.crc)
+    console.log("updating storage config: " + fileID + "hash: " + fileInfo.hash)
     mySession.then((session) => {
 
         var arcDB = session.getSchema('arcturus');
@@ -1883,7 +1883,7 @@ const updateStorageConfig = (fileID, fileInfo, callback) =>{
         fileTable.update().set(
             "fileName", fileInfo.name
         ).set(
-            "fileCRC", fileInfo.crc
+            "fileHash", fileInfo.hash
         ).set(
             "fileSize", fileInfo.size
         ).set(
@@ -1917,9 +1917,9 @@ const createStorage = (userID, fileInfo, storageKey, callback ) =>{
         console.log(fileInfo)
 
         fileTable.insert(
-            ["fileName", "fileCRC", "fileSize", "fileType", "fileMimeType" , "fileLastModified"]
+            ["fileName", "fileHash", "fileSize", "fileType", "fileMimeType" , "fileLastModified"]
         ).values(
-            [fileInfo.name, fileInfo.crc, fileInfo.size, fileInfo.type, fileInfo.mimeType, fileInfo.lastModified]
+            [fileInfo.name, fileInfo.hash, fileInfo.size, fileInfo.type, fileInfo.mimeType, fileInfo.lastModified]
         ).execute().then((fileInsert)=>{
             if(fileInsert.getAffectedItemsCount > 0){
                 callback({error:new Error("File not added.")})
@@ -1961,12 +1961,12 @@ const createStorage = (userID, fileInfo, storageKey, callback ) =>{
     })
 }
 
-const loadStorage = (crc, engineKey, callback) => {
-    crc = mysql.escape(crc);
+const loadStorage = (hash, engineKey, callback) => {
+    hash = mysql.escape(hash);
     engineKey = mysql.escape(engineKey);
 
     mySession.then((session) => {
-        const query = "select storage.storageID, storage.fileID from arcturus.storage, arcturus.file where file.fileCRC = " + crc + " \
+        const query = "select storage.storageID, storage.fileID from arcturus.storage, arcturus.file where file.fileHash = " + hash + " \
 AND storage.storageKey = " + engineKey;
 
         session.sql(query).execute().then((loaded)=>{
@@ -2020,8 +2020,8 @@ function formatedNow(now = new Date(), small = false) {
 }
 
 
-const checkStorageCRC = (userID, crc, callback) => {
-    console.log("checking storageCRC " + crc)
+const checkStorageHash = (userID, hash, callback) => {
+    console.log("checking storageHash " + hash)
     mySession.then((session) => {
 
         const arcDB = session.getSchema("arcturus");
@@ -2029,7 +2029,7 @@ const checkStorageCRC = (userID, crc, callback) => {
         const storageTable = arcDB.getTable("storage");
 
 
-        fileTable.select(["fileID"]).where("fileCRC = :fileCRC").bind("fileCRC", crc).execute().then((fileResult) => {
+        fileTable.select(["fileID"]).where("fileHash = :fileHash").bind("fileHash", hash).execute().then((fileResult) => {
 
             const one = fileResult.fetchOne()
             if (one != undefined) {
@@ -2041,7 +2041,7 @@ const checkStorageCRC = (userID, crc, callback) => {
 
                     if (row != undefined) {
                         const storageID = row[0];
-                        console.log("storageCRC passed")
+                        console.log("storageHash passed")
                         callback({ success: true, fileID: fileID, storageID: storageID })
                     } else {
                         console.log("no storage ID for file")
@@ -2055,7 +2055,7 @@ const checkStorageCRC = (userID, crc, callback) => {
 
 
             } else {
-                callback({ error: new Error("File CRC failed.") })
+                callback({ error: new Error("File Hash failed.") })
             }
 
         }).catch((err) => {
@@ -2094,10 +2094,10 @@ const useConfig = (userID, fileID, storageKey, callback) =>{
     })
 }
 
-const selectFileTableCRC = (fileTable, crc) =>{
+const selectFileTableHash = (fileTable, hash) =>{
     return new Promise(resolve =>{
 
-        fileTable.select(["fileID"]).where("fileCRC = :fileCRC").bind("fileCRC", crc).execute().then((selectRes) => {
+        fileTable.select(["fileID"]).where("fileHash = :fileHash").bind("fileHash", hash).execute().then((selectRes) => {
             const one = selectRes.fetchOne()
             if (one != undefined) {
                 resolve({ fileID: one[0] })
@@ -2109,13 +2109,13 @@ const selectFileTableCRC = (fileTable, crc) =>{
     
 }
 
-const checkFileCRC = (crc, callback) => {
+const checkFileHash = (hash, callback) => {
     mySession.then((session) => {
 
         var arcDB = session.getSchema('arcturus');
         var fileTable = arcDB.getTable("file");
 
-        selectFileTableCRC(fileTable, crc).then((result) => {
+        selectFileTableHash(fileTable, hash).then((result) => {
             callback(result)
         })
 
@@ -2186,15 +2186,15 @@ const addFileToRealm = (userID, realmID, fileInfo, callback) =>{
 
             if(one != undefined)
             {
-                checkFileCRC(fileInfo.crc, (result) => {
+                checkFileHash(fileInfo.hash, (result) => {
                     const fileID = result.fileID;
                     session.startTransaction()
                     if (fileID == null) {
 
                         fileTable.insert(
-                            ["fileName", "fileCRC", "fileSize", "fileType", "fileMimeType", "fileLastModified"]
+                            ["fileName", "fileHash", "fileSize", "fileType", "fileMimeType", "fileLastModified"]
                         ).values(
-                            [fileInfo.name, fileInfo.crc, fileInfo.size, fileInfo.type, fileInfo.mimeType, fileInfo.lastModified]
+                            [fileInfo.name, fileInfo.hash, fileInfo.size, fileInfo.type, fileInfo.mimeType, fileInfo.lastModified]
                         ).execute().then((fileInsert) => {
 
                             const fileID = fileInsert.getAutoIncrementValue()
@@ -2293,9 +2293,9 @@ const checkRealmFile = (realmID, fileID, callback) => {
 const insertFile = (fileTable, fileInfo) =>{
     return new Promise(resolve =>{
         fileTable.insert(
-            ["fileName", "fileCRC", "fileSize", "fileType", "fileMimeType", "fileLastModified"]
+            ["fileName", "fileHash", "fileSize", "fileType", "fileMimeType", "fileLastModified"]
         ).values(
-            [fileInfo.name, fileInfo.crc, fileInfo.size, fileInfo.type, fileInfo.mimeType, fileInfo.lastModified]
+            [fileInfo.name, fileInfo.hash, fileInfo.size, fileInfo.type, fileInfo.mimeType, fileInfo.lastModified]
         ).execute().then((fileInsert) => {
 
             const fileID = fileInsert.getAutoIncrementValue()
@@ -2383,12 +2383,12 @@ const createRealm = (userID, realmName, imageFile, page, index, callback) => {
                                     accessID: access.private,
                                     realmType: "",
                                 }
-                            checkFileCRC(imageFile.crc,(crcResult) =>{
-                                if("error" in crcResult){
+                            checkFileHash(imageFile.hash,(hashResult) =>{
+                                if("error" in hashResult){
                                     session.rollback()
-                                    callback({error:"Error in crc result"})
+                                    callback({error:"Error in hash result"})
                                 }else{
-                                    if(crcResult.fileID == null)
+                                    if(hashResult.fileID == null)
                                     {
                                         insertFile(fileTable, imageFile).then((imageFileInfo)=>{
                                             const imageID = imageFileInfo.fileID;
@@ -2404,9 +2404,9 @@ const createRealm = (userID, realmName, imageFile, page, index, callback) => {
                                     
                                     
                                     }else{
-                                        insertRealm(realmTable, realmName, userID, crcResult.fileID, page, index, roomID, gatewayRoomID).then((realmID) => {
+                                        insertRealm(realmTable, realmName, userID, hashResult.fileID, page, index, roomID, gatewayRoomID).then((realmID) => {
                                             if (realmID != undefined) {
-                                                imageFile.fileID = crcResult.fileID;
+                                                imageFile.fileID = hashResult.fileID;
                                                 realm.image = imageFile;
                                                 realm.realmID = realmID;
                                                 session.commit()
@@ -2449,13 +2449,13 @@ SELECT DISTINCT \
  realm.realmIndex, \
  image.fileID, \
  image.fileName, \
- image.fileCRC, \
+ image.fileHash, \
  image.fileMimeType, \
  image.fileSize, \
  image.fileLastModified, \
  config.fileID, \
  config.fileName, \
- config.fileCRC, \
+ config.fileHash, \
  config.fileMimeType, \
  config.fileSize, \
  config.fileLastModified, \
@@ -2491,7 +2491,7 @@ WHERE \
                         image: {
                             fileID: value[7],
                             name: value[8],
-                            crc: value[9],
+                            hash: value[9],
                             mimeType: value[10],
                             size: value[11],
                             lastModified: value[12],
@@ -2500,7 +2500,7 @@ WHERE \
                         config: {
                             fileID: value[13],
                             name: value[14],
-                            crc: value[15],
+                            hash: value[15],
                             mimeType: value[16],
                             size: value[17],
                             lastModified: value[18],
@@ -2901,7 +2901,7 @@ const userTableImageUpdate = (userTable, userID, userFileID) => {
 }
 const updateUserImage = (userID, imageInfo, accessID, userAccess, callback) =>{
     console.log("updating user Image " + imageInfo.name)
-    if((imageInfo.crc != undefined && imageInfo.crc != null && imageInfo.crc != "" && imageInfo.crc.length > 5)){
+    if((imageInfo.hash != undefined && imageInfo.hash != null && imageInfo.hash != "" && imageInfo.hash.length > 5)){
         mySession.then((session) => {
 
             const arcDB = session.getSchema('arcturus');
@@ -2909,8 +2909,8 @@ const updateUserImage = (userID, imageInfo, accessID, userAccess, callback) =>{
             const fileTable = arcDB.getTable("file")
             const userFileTable = arcDB.getTable("userFile")
 
-            selectFileTableCRC(fileTable, imageInfo.crc).then((crcResult)=>{
-                const fileID = crcResult.fileID != undefined ? crcResult.fileID : null;
+            selectFileTableHash(fileTable, imageInfo.hash).then((hashResult)=>{
+                const fileID = hashResult.fileID != undefined ? hashResult.fileID : null;
                
                 if(fileID != null){
                     imageInfo.fileID = fileID
@@ -2948,8 +2948,8 @@ const updateUserImage = (userID, imageInfo, accessID, userAccess, callback) =>{
         
         })
     }else{
-        console.log("invalid crc")
-        callback({error:"Crc invalid."})
+        console.log("invalid hash")
+        callback({error:"Hash invalid."})
     }
 }
 
@@ -2969,15 +2969,15 @@ const realmTableImageUpdate = (realmTable, userID, realmID, fileID) =>{
 
 const updateRealmImage = (userID,realmID, imageInfo, callback) => {
     console.log("updating realm Image" + imageInfo.name)
-    if ((imageInfo.crc != null && imageInfo.crc != "")) {
+    if ((imageInfo.hash != null && imageInfo.hash != "")) {
         mySession.then((session) => {
 
             const arcDB = session.getSchema('arcturus');
             const fileTable = arcDB.getTable("file")
             const realmTable = arcDB.getTable("realm")
 
-            selectFileTableCRC(fileTable, imageInfo.crc).then((crcResult) => {
-                const fileID = crcResult.fileID != undefined ? crcResult.fileID : null;
+            selectFileTableHash(fileTable, imageInfo.hash).then((hashResult) => {
+                const fileID = hashResult.fileID != undefined ? hashResult.fileID : null;
 
                 if (fileID != null) {
                     
@@ -3006,8 +3006,8 @@ const updateRealmImage = (userID,realmID, imageInfo, callback) => {
 
         })
     } else {
-        console.log("invalid crc")
-        callback({ error: "Crc invalid." })
+        console.log("invalid hash")
+        callback({ error: "Hash invalid." })
     }
 }
 
