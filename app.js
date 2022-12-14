@@ -2102,19 +2102,25 @@ const selectFileTableHash = (fileTable, hash) =>{
 }
 
 const checkFileHash = (hash, callback) => {
-    mySession.then((session) => {
+    if (hash == undefined || hash == null || hash == "" || hash.length < 128 )
+    {
+        callback(undefined)
+    }else{
+        mySession.then((session) => {
 
-        var arcDB = session.getSchema('arcturus');
-        var fileTable = arcDB.getTable("file");
+            var arcDB = session.getSchema('arcturus');
+            var fileTable = arcDB.getTable("file");
 
-        selectFileTableHash(fileTable, hash).then((result) => {
-            callback(result)
+            selectFileTableHash(fileTable, hash).then((result) => {
+                callback(result)
+            })
+
+        }).catch((err) => {
+            console.log(err)
+            callback({ error: new Error("DB error") })
         })
-
-    }).catch((err) => {
-        console.log(err)
-        callback({ error: new Error("DB error") })
-    })
+    }
+    
 }
 
 
