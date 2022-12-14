@@ -226,24 +226,35 @@ io.on('connection', (socket) => {
                                 }
                             });
                         }
-                        
+                        getContacts(user, (contacts) => {
 
-                        updateUserStatus(user.userID, status.Online, id, (isRooms, rooms) => {
-                            if (isRooms) {
-                                for (let i = 0; i < rooms.length; i++) {
+                            getUserFiles(user.userID).then((userFiles)=>{
 
-                                    console.log("sending userStatus message to: " + rooms[i][0] + " user: " + user.userID + " is: Online");
+                                updateUserStatus(user.userID, status.Online, id, (isRooms, rooms) => {
+                                    if (user.accessID != access.private && isRooms) {
+                                        for (let i = 0; i < rooms.length; i++) {
 
-                                    io.to(rooms[i][0]).emit("userStatus", user.userID, user.userName, "Online");
+                                            console.log("sending userStatus message to: " + rooms[i][0] + " user: " + user.userID + " is: Online");
 
-                                }
-                            }
-                            getContacts(user, (contacts) => {
-                                console.log("got contacts")
-                                const result = { success: true, user: user, contacts: contacts, }
+                                            io.to(rooms[i][0]).emit("contactsCmd", { cmd: "userStatus", params: { userID: user.userID, statusID: status.Online, userSocket: user.userSocket, accessID: user.accessID } });
 
-                                callback(result)
+                                        }
+                                    }
+                                    if (user.accessID != access.private && contacts.length > 0)
+                                    {
+                                        contacts.forEach(contact => {
+                                            if( contact.statusID == status.Online && contact.userSocket != "")
+                                            {
+                                                io.to(contact.userSocket).emit("contactsCmd", { cmd: "userStatus", params: { userID: user.userID, statusID: status.Online, userSocket: user.userSocket, accessID: user.accessID } });
+                                            }
+                                        });
+                                    }
 
+                                    
+                                        const result = { success: true, user: user, contacts: contacts, userFiles: userFiles }
+
+                                        callback(result)
+                                })
                             })
 
                         })
@@ -3214,6 +3225,51 @@ WHERE
                     resolve({error: new Error("File unavailable")})
                 }
             })
+        })
+    })
+}
+
+const getUserFiles = (userID) => {
+    return new Promise(resolve =>{
+        mySession.then((session) => {
+            const query = `
+SELECT DISTINCT 
+ file.fileID, file.fileName, file.fileHash, file.fileMimeType, file.fileType, file.fileSize, file.fileLastModified, userFile.userFileID
+FROM 
+ arcturus.userFile, arcturus.file 
+WHERE 
+  userFile.userID = ${userID} 
+ AND 
+  file.fileID = userFile.fileID`
+
+            session.sql(query).execute().then((userFileSelectResult)=>{
+                if(userFileSelectResult.hasData())
+                {
+                    const allUserFiles = userFileSelectResult.fetchAll()
+
+                    let userFiles = []
+
+                    allUserFiles.forEach(userFile => {
+                        const file = {
+                            fileID: userFile[0],
+                            name: userFile[1],
+                            hash: userFile[2],
+                            mimeType: userFile[3],
+                            type: userFile[4],
+                            size: userFile[5],
+                            lastModified: userFile[6],
+                            userFileID: userFile[7],
+                        }
+                        userFiles.push(file)
+                    });
+
+                    resolve(userFiles)
+
+                }else{
+                    resolve([])
+                }
+            })
+
         })
     })
 }
