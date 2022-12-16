@@ -196,6 +196,8 @@ io.on('connection', (socket) => {
                 })
             })
             socket.on("updateUserPassword", (info, callback) => {
+
+
                 updateUserPassword(info, (result) => {
                     callback(result)
                 })
@@ -262,6 +264,19 @@ io.on('connection', (socket) => {
                       
                
                 /* //////////////SUCCESS///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+                        socket.on("updateUserPassword", (info, callback) => {
+
+
+                            updateUserPassword(info, (result) => {
+                                callback(result)
+                            })
+                        })
+                        socket.on("sendEmailCode", (callback) => {
+
+                            sendEmailCode(user.userID, (sent) => {
+                                callback(sent)
+                            })
+                        })
                     socket.on("getFilePeers", (fileID, callback)=>{
                         getFilePeers(user.userID, fileID, (result)=>{
                             callback(result)
@@ -432,6 +447,12 @@ io.on('connection', (socket) => {
                         peerFileRequest(user.userID, params).then((response)=>{
                             callback(response)
                         })
+                    })
+
+                    socket.on("updateUserEmail", (params, callback)=>{
+                        updateUserEmail(user.userID, params).then((result)=>{
+                            callback(result)
+                        })  
                     })
                     socket.on('disconnect', () => {
                         const userName = user.userName;
@@ -1243,9 +1264,9 @@ function createUser(user, callback) {
         session.startTransaction();
         try {
             var res = userTable.insert(
-                ['userName', 'userPassword', "userEmail", 'refID',  'statusID', "accessID"]
+                ['userName', 'userPassword', "userEmail", 'refID',  'statusID', "accessID", "userEmailLastChanged"]
             ).values(
-                [user.userName, user.userPass, user.userEmail, user.userRefID,  3, access.contacts]
+                [user.userName, user.userPass, user.userEmail, user.userRefID,  3, access.contacts, formatedNow()]
             ).execute();
             res.then((value) => {
                 var id = value.getAutoIncrementValue();
@@ -1367,7 +1388,7 @@ function emailValidateCode(userName = "", emailAddress = "", veriCode = "", call
 
 function email(emailAddress, subject, emailHtml, callback) {
 
-
+    console.log("sending Email")
     message = {
         from: emailUser,
         to: emailAddress,
@@ -1748,6 +1769,73 @@ const checkUser = (user, callback) => {
         callback({ error: new Error("DB error") })
     })
 }
+const sendEmailCode = (userID, callback) => {
+    console.log("sending email code")
+    var date = formatedNow();
+    
+    var veriCode = cryptojs.SHA256(date).toString().slice(0, 6);
+   
+ 
+    mySession.then((session) => {
+
+        var arcDB = session.getSchema('arcturus');
+        var userTable = arcDB.getTable("user");
+
+
+        session.startTransaction();
+        try {
+
+            userTable.select(['userName', "userEmail"]).where("user.userID = :userID AND  HOUR(TIMEDIFF(NOW(), userEmailLastChanged))>24").bind("userID",userID).execute().then((value) => {
+                const one = value.fetchOne();
+         
+              
+                if(one !== undefined)
+                {
+                    const userName = one[0];
+                    const userEmail = one[1];
+                
+
+                    
+
+                    const modifiedString = date;
+
+                    userTable.update().set(
+                        'userRecoveryCode', veriCode
+                    ).set(
+                        'userModified', modifiedString
+                    ).where(
+                        "userID = :userID"
+                    ).bind("userID", userID).execute().then((res) => {
+                        if (res.getAffectedItemsCount() > 0) {
+                            emailPassReset(userName, userEmail, veriCode, (err, info) => {
+                                if (err) {
+                                    throw ("unable to send email")
+                                } else {
+                                    callback({ success: true })
+                                }
+                            })
+                        } else {
+                        
+                            session.rollback();
+                            callback({ error: new Error("Cannot update user") });
+                        
+                        }
+                    })
+
+                    session.commit();
+                }else{
+                   
+                    session.rollback();
+                    callback({ error: new Error("Cannot update user") });
+                }
+            })
+        } catch (error) {
+            console.log(error)
+            session.rollback();
+            callback({ error: error });
+        }
+    })
+}
 
 const sendRecoveryEmail = (email, callback) => {
     var date = new Date().toString();
@@ -1810,6 +1898,7 @@ const updateUserPassword = (info, callback) => {
         var arcDB = session.getSchema('arcturus');
         var userTable = arcDB.getTable("user");
         const modifiedString = formatedNow();
+
         const password = info.password;
         const userEmail = info.email;
         const code = info.code;
@@ -1821,7 +1910,7 @@ const updateUserPassword = (info, callback) => {
             ).set(
                 'userModified', modifiedString
             ).where(
-                "userEmail = :userEmail AND userRecoveryCode = :code"
+                "userEmail = :userEmail AND userRecoveryCode = :code AND user.userEmailLastChanged < NOW() - INTERVAL 24 HOUR "
             ).bind(
                 "userEmail", userEmail
             ).bind(
@@ -2523,7 +2612,7 @@ WHERE \
                         gatewayRoomID:value[23]
                        
                     };
-                    console.log(realm)
+                  
                     realms.push(realm);     
                 });
                 
@@ -3038,6 +3127,25 @@ const selectUserContactTableUserIDs = (userContactTable, userID) =>{
         })
     })
 }
+const updateUserEmail = (userID, params) => {
+    return new Promise(resolve => {
+        const email = params.email
+        const now = formatedNow()
+
+        mySession.then((session) => {
+
+            const arcDB = session.getSchema('arcturus');
+            const userTable = arcDB.getTable("user")
+
+            userTable.update().set("userEmail", email).set("userEmailLastChanged", now).where("userID = :userID").bind("userID", userID).execute().then((userEmailUpdate) => {
+                const affected = userEmailUpdate.getAffectedItemsCount() > 0
+
+                resolve({success:affected})
+
+            })
+        })
+    })
+}
 
 const getFilePeers = (userID, fileID, callback) =>{
 
@@ -3231,7 +3339,8 @@ WHERE
 
 const getUserFiles = (userID) => {
     return new Promise(resolve =>{
-        mySession.then((session) => {
+        console.log("getting user files")
+        mySession.then((session) => {           
             const query = `
 SELECT DISTINCT 
  file.fileID, file.fileName, file.fileHash, file.fileMimeType, file.fileType, file.fileSize, file.fileLastModified, userFile.userFileID
@@ -3241,12 +3350,14 @@ WHERE
   userFile.userID = ${userID} 
  AND 
   file.fileID = userFile.fileID`
-
+            
             session.sql(query).execute().then((userFileSelectResult)=>{
+                
                 if(userFileSelectResult.hasData())
                 {
                     const allUserFiles = userFileSelectResult.fetchAll()
 
+               
                     let userFiles = []
 
                     allUserFiles.forEach(userFile => {
