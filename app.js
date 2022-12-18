@@ -460,6 +460,15 @@ io.on('connection', (socket) => {
                             callback(result)
                         })  
                     })
+
+
+                    socket.on("getPeerLibrary", (params, callback)=>{
+                        getPeerLibrary(user.userID, params).then((result)=>{
+                            callback(result)
+                        })
+                        
+                    })
+
                     socket.on('disconnect', () => {
                         const userName = user.userName;
                         const userID = user.userID;
@@ -1583,9 +1592,10 @@ const getContactInformation = (userTable, session, userID, isContact) => {
                 }
 
                 if(userFileID != null){
+                    
                     getFileUserFileID(userFileID, contactID, isContact, session).then((file)=>{
                         user.image = file
-
+                        console.log(file)
                         resolve({ success: true, user: user })
                     })
                 }else{
@@ -1688,7 +1698,7 @@ const getFileUserFileID = (userFileID, userID, isContact, session) => {
     console.log("getting user file")
     return new Promise(resolve => {
         
-        const userFileQuery = `
+        let userFileQuery = `
 SELECT DISTINCT 
  file.fileID, 
  file.fileName, 
@@ -1697,36 +1707,34 @@ SELECT DISTINCT
  file.fileType, 
  file.fileSize, 
  file.fileLastModified,
- userFile.accessID, 
- userFile.userFileUserAccess,
- userFile.userFileID
+ userFile.userFileName,
+ userFile.userFileText
 FROM 
  arcturus.userFile, 
  arcturus.file, 
- arcturus.userContact,
  arcturus.user
 WHERE 
  (
     userFile.accessID = ${access.public} AND userFile.userFileID = ${userFileID} AND file.fileID = userFile.fileID
  )
- OR
- (
-    ( userFile.accessID = ${access.contacts} AND userFile.userFileID = ${userFileID} AND file.fileID = userFile.fileID)
-  AND
-    ( userFile.userID = user.userID AND user.userID = userContact.userID AND userContact.contactID = ${userID})
- )
  OR 
   ( userFile.userFileID = ${userFileID} AND file.fileID = userFile.fileID AND userFile.userFileUserAccess LIKE "%'${userID}'%")`
 
+if (isContact) {
+   userFileQuery = userFileQuery.concat(` OR
+ (
+     userFile.accessID = ${access.contacts} AND userFile.userFileID = ${userFileID} AND file.fileID = userFile.fileID
+ )`)
+}
         session.sql(userFileQuery).execute().then((userFileSelect) => {
 
             if (userFileSelect.hasData()) {
                 const value = userFileSelect.fetchOne()
 
-                const accessID = value[7];
-                const userAccess = value[8];
+               // const accessID = value[7];
+               // const userAccess = value[8];
                
-                console.log(userAccess)
+              
                 file = {
                     fileID: value[0],
                     name: value[1],
@@ -1735,10 +1743,14 @@ WHERE
                     type: value[4],
                     size: value[5],
                     lastModified: value[6],
+                    userFileID: userFileID,
+                    userFileName: value[7],
+                    userFileText: value[8],
+
                 }
 
-               
-                switch (accessID) {
+                resolve(file)
+                /*switch (accessID) {
                     case 1:
                         if (isContact) {
                             resolve(file)
@@ -1747,11 +1759,11 @@ WHERE
                         }
                         break;
                     case 2:
-                        resolve(file)
+                        
                         break;
                     default:
                         resolve(nullFile)
-                }
+                }*/
                 
                 
 
@@ -3369,14 +3381,21 @@ const peerFileRequest = (userID, params) => {
             const contactID = params.contactID
             const userFileID = params.userFileID
             const userPeerID = params.userPeerID
-            const query = `
+
+            const arcDB = session.getSchema("arcturus")
+            const userContactTable = arcDB.getTable("userContact")
+
+            userContactTable.select(["statusID"]).where(`contactID = :userID and userID = :contactID and statusID = ${status.accepted}`).bind("userID", userID).bind("contactID", contactID).execute().then((contactResult)=>{
+                const isContact = contactResult.fetchOne() != undefined
+           
+
+            let query = `
 SELECT DISTINCT 
  user.userSocket, 
  user.userID 
 FROM 
  arcturus.userFile, 
- arcturus.user, 
- arcturus.userContact
+ arcturus.user
 WHERE 
 (  
   user.userID = ${contactID} 
@@ -3395,22 +3414,6 @@ WHERE
  AND 
   userFile.userID = user.userID
  AND
-  userFile.userFileID = ${userFileID} 
- AND 
-  userFile.accessID = ${access.contacts} 
- AND 
-  userContact.userID = user.userID 
- AND
-  userContact.contactID = ${userID} 
- AND 
-  user.userSocket <> ""
- AND
-  user.statusID = ${status.Online} 
-) OR (
-  user.userID = ${contactID} 
- AND 
-  userFile.userID = user.userID
- AND
   userFile.userFileID = ${userFileID}
  AND 
   userFile.userFileUserAccess LIKE "'${userID}'"  
@@ -3418,45 +3421,52 @@ WHERE
   user.userSocket <> "" 
  AND 
   user.statusID = ${status.Online} 
-)`
-            session.sql(query).execute().then((socketSelect) =>{
-                if(socketSelect.hasData())
-                {
-                    console.log("file access available")
-                    const one = socketSelect.fetchOne()
+)`  
 
-                    const contactSocket = one[0]
-                    const contactID = one[1]
-              
-                    
-                    let socketOnline = false;
+if(isContact){
+   query += ` OR ( user.userID = ${contactID} AND userFile.userID = user.userID AND userFile.accessID = ${access.contacts} AND userFile.userFileID = ${userFileID} AND user.userSocket <> '' AND user.statusID = ${status.Online} )`
+}
+ 
 
-                    io.sockets.sockets.forEach((connectedSocket) => {
+session.sql(query).execute().then((socketSelect) =>{
+                    if(socketSelect.hasData())
+                    {
+                        console.log("file access available")
+                        const one = socketSelect.fetchOne()
+
+                        const contactSocket = one[0]
+                        const contactID = one[1]
+                
                         
-                        if (connectedSocket.id == contactSocket) {
+                        let socketOnline = false;
+
+                        io.sockets.sockets.forEach((connectedSocket) => {
                             
-                            socketOnline = true
-                        }
-                    });
-                    
-                    if(socketOnline){
-                        io.to(contactSocket).timeout(500).emit("peerFileRequest", {request:request, peerID:userPeerID, userID:userID}, (err, response)=>{
-                            if(err)
-                            {
-                                resolve({error: new Error("Unable to connect.")})
-                            }else{
+                            if (connectedSocket.id == contactSocket) {
                                 
-                                resolve(response[0])
+                                socketOnline = true
                             }
-                            
-                        })
+                        });
+                        
+                        if(socketOnline){
+                            io.to(contactSocket).timeout(500).emit("peerFileRequest", {request:request, peerID:userPeerID, userID:userID}, (err, response)=>{
+                                if(err)
+                                {
+                                    resolve({error: new Error("Unable to connect.")})
+                                }else{
+                                    
+                                    resolve(response[0])
+                                }
+                                
+                            })
+                        }else{
+                            updateUserStatus(contactID, status.Offline, "",(complete) =>{} )
+                            resolve({error: new Error("Not online.")})
+                        }
                     }else{
-                        updateUserStatus(contactID, status.Offline, "",(complete) =>{} )
-                        resolve({error: new Error("Not online.")})
+                        resolve({error: new Error("File unavailable")})
                     }
-                }else{
-                    resolve({error: new Error("File unavailable")})
-                }
+                })
             })
         })
     })
@@ -3468,7 +3478,7 @@ const getUserFiles = (userID) => {
         mySession.then((session) => {           
             const query = `
 SELECT DISTINCT 
- file.fileID, file.fileName, file.fileHash, file.fileMimeType, file.fileType, file.fileSize, file.fileLastModified, userFile.userFileID
+ file.fileID, file.fileName, file.fileHash, file.fileMimeType, file.fileType, file.fileSize, file.fileLastModified, userFile.userFileID, userFile.userFileName, userFile.userFileText 
 FROM 
  arcturus.userFile, arcturus.file 
 WHERE 
@@ -3506,6 +3516,80 @@ WHERE
                 }
             })
 
+        })
+    })
+}
+
+const getPeerLibrary = (userID, params) => {
+    return new Promise(resolve => {
+        console.log("getting peer library")
+        mySession.then((session) => {
+            
+            const contactID = params.contactID
+
+            const contactQuery = `
+SELECT statusID FROM arcturus.userContact WHERE userID = ${contactID} AND contactID = ${userID} AND statusID = ${status.accepted}`
+
+            session.sql(contactQuery).execute().then((contactSelect)=>{
+                const isContact = contactSelect.hasData()
+
+            
+
+
+                let query = `
+SELECT DISTINCT 
+ file.fileID, file.fileName, file.fileHash, file.fileMimeType, file.fileType, file.fileSize, file.fileLastModified, userFile.userFileID, userFile.userFileName, userFile.userFileText 
+FROM 
+ arcturus.userFile, arcturus.file 
+WHERE
+ (
+  userFile.accessID = ${access.public}
+ AND
+  userFile.userID = ${contactID} 
+ AND 
+  file.fileID = userFile.fileID 
+ )`
+                if(isContact){
+                    query = query.concat(
+` OR (
+  userFile.accessID = ${access.contacts}
+ AND
+  userFile.userID = ${contactID} 
+ AND 
+  file.fileID = userFile.fileID 
+ )`)
+                }
+            session.sql(query).execute().then((userFileSelectResult) => {
+
+                if (userFileSelectResult.hasData()) {
+                    const allUserFiles = userFileSelectResult.fetchAll()
+
+
+                    let userFiles = []
+
+                    allUserFiles.forEach(userFile => {
+                        const file = {
+                            fileID: userFile[0],
+                            name: userFile[1],
+                            hash: userFile[2],
+                            mimeType: userFile[3],
+                            type: userFile[4],
+                            size: userFile[5],
+                            lastModified: userFile[6],
+                            userFileID: userFile[7],
+                            userFileName: userFile[8],
+                            userFileText: userFile[9],
+                        }
+                        userFiles.push(file)
+                    });
+
+                    resolve({success:true, files:userFiles})
+
+                } else {
+                    resolve({success:false})
+                }
+            })
+            })
         })
     })
 }
