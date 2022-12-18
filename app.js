@@ -197,8 +197,7 @@ io.on('connection', (socket) => {
             })
             socket.on("updateUserPassword", (info, callback) => {
 
-
-                updateUserPassword(info, (result) => {
+                updateUserPasswordAnon(info, (result) => {
                     callback(result)
                 })
             })
@@ -216,7 +215,7 @@ io.on('connection', (socket) => {
                         
                         const user = checkResult.user;
                        
-                        console.log(user)
+                        
                         const userSocket = checkResult.userSocket
 
                         if(userSocket != ""){
@@ -264,10 +263,17 @@ io.on('connection', (socket) => {
                       
                
                 /* //////////////SUCCESS///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+                        socket.on("updateUserAccess", (info, callback) => {
+
+                            updateUserAccess(user.userID, info).then((result) => {
+                                callback(result)
+                            })
+                        })
+
                         socket.on("updateUserPassword", (info, callback) => {
 
 
-                            updateUserPassword(info, (result) => {
+                            updateUserPassword(user.userID, info, (result) => {
                                 callback(result)
                             })
                         })
@@ -957,10 +963,10 @@ SELECT userSocket FROM arcturus.user WHERE userID = " + contactID + " AND user.s
 const findPeople = (text = "", userID = 0, callback) => {
     text = text.toLocaleLowerCase();
     text = "%" + text + "%";
-    const name_email = mysql.escape(text);
+   /* const name_email = mysql.escape(text);
     var query = "SELECT userName, userEmail, user.userID FROM arcturus.user WHERE (userName LIKE ";
     query += name_email + " OR userEmail LIKE " + name_email + ") AND user.userID <> " + userID + " AND user.userID NOT IN (\
- SELECT contactID from arcturus.userContact where userID = " + userID + " ) LIMIT 50";
+ SELECT contactID from arcturus.userContact where userID = " + userID + " ) LIMIT 50";*/
 
 
     mySession.then((session) => {
@@ -971,7 +977,8 @@ const findPeople = (text = "", userID = 0, callback) => {
         userContactTable.select(["contactID"]).where("userID = :userID").bind("userID",userID).execute().then((contactResults) => {
             const contactsArray = contactResults.fetchAll()
             let contactList = ""
-            if(contactsArray != undefined)
+     
+            if(contactsArray != undefined && contactsArray.length != 0)
             {
                 const contactsLength = contactsArray.length
                 for(let i = 0; i < contactsLength -1 ; i++)
@@ -982,22 +989,59 @@ const findPeople = (text = "", userID = 0, callback) => {
                 const contactID = contactsArray[contactsLength -1][0]
                 contactList.concat(`'${contactID}'`)
             }
-            userTable.select(["userID", "userName"]).where("LOWER(userName) LIKE :text AND userID <> :userID AND userID NOT IN (:contactList)")
+            if(contactList == "") contactList = "''"
+
+            userTable.select(["userID"]).where("LOWER(userName) LIKE :text AND userID <> :userID AND userID NOT IN (:contactList) and accessID > 0")
                 .bind("text", text)
                 .bind("userID", userID)
                 .bind("contactList", contactList)
                 .execute().then((selectResults) =>{
+                    
+                const people = selectResults.fetchAll()
                 
-                    const people = selectResults.fetchAll()
+
                 if (people == undefined) {
                     callback([]);
                 } else {
+   
+                    const resultLength = people.length;
 
-                    
-              
                     let searchResults = [];
+                    let i = 0;
+                    
 
-                    for (let i = 0; i < people.length; i++) {
+                    const getContactInfoRecursive = () =>
+                    {
+                        const contactID = people[i][0]
+                        
+                        getContactInformation(userTable, session, contactID, false).then((contactInfoResult)=>{
+                            if("success" in contactInfoResult && contactInfoResult.success){
+                                
+                                const contact = contactInfoResult.user
+                               
+                                searchResults.push(contact)
+                            
+                            }
+                            i++
+                            if (i < resultLength) {
+                                getContactInfoRecursive()
+                            } else {
+                                callback(searchResults)
+                            }
+                        }).catch((err)=>{
+                            console.log(err)
+                            i++
+                            if(i < resultLength)
+                            {
+                                getContactInfoRecursive()
+                            }else{
+                                console.log(searchResults)
+                                callback(searchResults)
+                            }
+                        })
+                    }
+                                        
+                        /*for (let i = 0; i < people.length; i++) {
                         const person = {
                             userID:     people[i][0],
                             userName:   people[i][1],
@@ -1007,9 +1051,12 @@ const findPeople = (text = "", userID = 0, callback) => {
                         searchResults.push(
                             person
                         )
+                    }*/
+                    if(people.length == 0){
+                        callback([])
+                    }else{
+                        getContactInfoRecursive()
                     }
-
-                    callback(searchResults)
             }
             })
         })
@@ -1506,13 +1553,15 @@ const getContactInformation = (userTable, session, userID, isContact) => {
             if(one != undefined)
             {
                 console.log(one)
+                const accessID = one[6]
+
                 const contactID = one[0];
                 const userName = one[1];
-                const userHandle = one[2];
-                const userSocket = one[3];
-                const statusID = one[4];
-                const userFileID = one[5]
-                const accessID = one[6]
+                const userHandle = accessID != access.private ? one[2] : null;
+                const userSocket =  one[3];
+                const statusID = accessID != access.private ? one[4] : status.Offline;
+                const userFileID = accessID != access.private ? one[5] : null;
+                
       
                 let user = {
                     userID: contactID,
@@ -1521,6 +1570,7 @@ const getContactInformation = (userTable, session, userID, isContact) => {
                     userSocket: userSocket,
                     statusID: statusID,
                     accessID: accessID,
+                    isContact: isContact,
                     image: {
                         fileID: -1,
                         name: null,
@@ -1532,11 +1582,15 @@ const getContactInformation = (userTable, session, userID, isContact) => {
                     }
                 }
 
-                getFileUserFileID(userFileID, contactID, isContact, session).then((file)=>{
-                    user.image = file
+                if(userFileID != null){
+                    getFileUserFileID(userFileID, contactID, isContact, session).then((file)=>{
+                        user.image = file
 
+                        resolve({ success: true, user: user })
+                    })
+                }else{
                     resolve({ success: true, user: user })
-                })
+                }
 
                
             }else{
@@ -1718,7 +1772,7 @@ const checkUser = (user, callback) => {
         const userTable = arctDB.getTable("user")
         
 
-        userTable.select(["userID", "userName", "userEmail", "userHandle", "userFileID", "userSocket"]).where(
+        userTable.select(["userID", "userName", "userEmail", "userHandle", "userFileID", "userSocket", "accessID"]).where(
             "( LOWER(userName) = LOWER(:nameEmail) OR LOWER(userEmail) = LOWER(:nameEmail)) AND userPassword = :password"
         ).bind("nameEmail", user.nameEmail + "").bind("password",user.password + "").execute().then((results) => {
             const userArr = results.fetchOne()
@@ -1740,6 +1794,7 @@ const checkUser = (user, callback) => {
                     userName: userArr[1],
                     userEmail: userArr[2],
                     userHandle: userArr[3],
+                    accessID: userArr[6],
                     image: {
                         fileID: -1,
                         name: null,
@@ -1785,7 +1840,7 @@ const sendEmailCode = (userID, callback) => {
         session.startTransaction();
         try {
 
-            userTable.select(['userName', "userEmail"]).where("user.userID = :userID AND  HOUR(TIMEDIFF(NOW(), userEmailLastChanged))>24").bind("userID",userID).execute().then((value) => {
+            userTable.select(['userName', "userEmail"]).where("user.userID = :userID AND HOUR(TIMEDIFF(UTC_TIMESTAMP(), userEmailLastChanged))>24").bind("userID",userID).execute().then((value) => {
                 const one = value.fetchOne();
          
               
@@ -1890,7 +1945,7 @@ const sendRecoveryEmail = (email, callback) => {
     })
 }
 
-const updateUserPassword = (info, callback) => {
+const updateUserPassword = (userID, info, callback) => {
     console.log("update password")
     console.log(info)
     mySession.then((session) => {
@@ -1910,7 +1965,51 @@ const updateUserPassword = (info, callback) => {
             ).set(
                 'userModified', modifiedString
             ).where(
+                "userID = :userID AND userEmail = :userEmail AND userRecoveryCode = :code AND user.userEmailLastChanged < NOW() - INTERVAL 24 HOUR "
+            ).bind(
+                "userID", userID
+            ).bind(
+                "userEmail", userEmail
+            ).bind(
+                "code", code
+            ).execute().then((result) => {
+                const affected = result.getAffectedItemsCount()
+                if (affected > 0) {
+                    callback({ success: true })
+                } else {
+                    callback({ success: false })
+                }
+            })
+        } catch (error) {
+            console.log(error)
+            session.rollback();
+            callback({ success: false, msg: error });
+        }
+    })
+}
+
+const updateUserPasswordAnon = (info, callback) => {
+ 
+    mySession.then((session) => {
+
+        var arcDB = session.getSchema('arcturus');
+        var userTable = arcDB.getTable("user");
+        const modifiedString = formatedNow();
+
+        const password = info.password;
+        const userEmail = info.email;
+        const code = info.code;
+
+        session.startTransaction();
+        try {
+            userTable.update().set(
+                'userPassword', password
+            ).set(
+                'userModified', modifiedString
+            ).where(
                 "userEmail = :userEmail AND userRecoveryCode = :code AND user.userEmailLastChanged < NOW() - INTERVAL 24 HOUR "
+            ).bind(
+                "userID", userID
             ).bind(
                 "userEmail", userEmail
             ).bind(
@@ -3137,13 +3236,39 @@ const updateUserEmail = (userID, params) => {
             const arcDB = session.getSchema('arcturus');
             const userTable = arcDB.getTable("user")
 
-            userTable.update().set("userEmail", email).set("userEmailLastChanged", now).where("userID = :userID").bind("userID", userID).execute().then((userEmailUpdate) => {
+            userTable.update().set("userEmail", email).set("userModified",now).set("userEmailLastChanged", now).where("userID = :userID").bind("userID", userID).execute().then((userEmailUpdate) => {
                 const affected = userEmailUpdate.getAffectedItemsCount() > 0
 
                 resolve({success:affected})
 
             })
         })
+    })
+}
+
+
+const updateUserAccess = (userID, params) => {
+    console.log("updating user access")
+    return new Promise(resolve => {
+        const accessID = params.accessID
+        const now = formatedNow()
+
+        if(accessID > -1 && accessID < 3){
+            mySession.then((session) => {
+
+                const arcDB = session.getSchema('arcturus');
+                const userTable = arcDB.getTable("user")
+
+                userTable.update().set("accessID", accessID).set("userModified",now).where("userID = :userID").bind("userID", userID).execute().then((userAccessUpdate) => {
+                    const affected = userAccessUpdate.getAffectedItemsCount() > 0
+
+                    resolve({ success: affected })
+
+                })
+            })
+        }else{
+            resolve({error: new Error("Value out of range.")})
+        }
     })
 }
 
