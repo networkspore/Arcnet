@@ -435,8 +435,8 @@ io.on('connection', (socket) => {
                         })
                     })
 
-                    socket.on("updateUserImage", (imageInfo, accessID, userAccess, callback) => {
-                        updateUserImage(user.userID, imageInfo,accessID, userAccess, (updated) =>{
+                    socket.on("updateUserImage", (imageInfo, callback) => {
+                        updateUserImage(user.userID, imageInfo, (updated) =>{
                             callback(updated)
                         })
                     })
@@ -1707,7 +1707,7 @@ SELECT DISTINCT
  file.fileType, 
  file.fileSize, 
  file.fileLastModified,
- userFile.userFileName,
+ userFile.userFileTitle,
  userFile.userFileText
 FROM 
  arcturus.userFile, 
@@ -1744,8 +1744,8 @@ if (isContact) {
                     size: value[5],
                     lastModified: value[6],
                     userFileID: userFileID,
-                    userFileName: value[7],
-                    userFileText: value[8],
+                    title: value[7],
+                    text: value[8],
 
                 }
 
@@ -3050,11 +3050,11 @@ const updateUserPeerID = (userID, peerID, callback) =>{
     })
 }
 
-const insertUserFile = (userFileTable, userID, fileID, accessID, userAccess) => {
+const insertUserFile = (userFileTable, userID, fileID, title, text, accessID, userAccess) => {
   
     return new Promise(resolve => {
-        userFileTable.insert(["userID", "fileID", "accessID", "userFileUserAccess"]).values([
-            userID, fileID, accessID, userAccess
+        userFileTable.insert(["userID", "fileID", "userFileTitle", "userFileText", "accessID", "userFileUserAccess"]).values([
+            userID, fileID, title, text, accessID, userAccess
         ]).execute().then((result) => {
             
             resolve(result.getAutoIncrementValue())
@@ -3062,10 +3062,10 @@ const insertUserFile = (userFileTable, userID, fileID, accessID, userAccess) => 
         })
     })
 }
-const updateUserFile = (userFileTable, userFileID, accessID, userAccess) => {
+const updateUserFile = (userFileTable, userFileID, title, text, accessID, userAccess) => {
 
     return new Promise(resolve => {
-        userFileTable.update().set("accessID", accessID).set("userFileUserAccess", userAccess).where("userFileID = :userFileID").bind("userFileID", userFileID).execute().then((result) => {
+        userFileTable.update().set("userFileTitle",title).set("userFileText", text).set("accessID",accessID).set("userFileUserAccess", userAccess).where("userFileID = :userFileID").bind("userFileID", userFileID).execute().then((result) => {
 
             resolve(result.getAffectedItemsCount() > 0)
 
@@ -3073,27 +3073,47 @@ const updateUserFile = (userFileTable, userFileID, accessID, userAccess) => {
     })
 }
 
-const addUpdateUserFile = (userFileTable,userID, imageInfo, accessID, userAccess) =>{
+const addUpdateUserFile = (userFileTable,userID, imageInfo) =>{
     return new Promise(resolve => {
         userFileTable.select(["userFileID"]).where("userID = :userID AND fileID = :fileID").bind("userID", userID).bind("fileID", imageInfo.fileID).execute().then((userFileSelectResult)=>{
             const userFileIDSelect = userFileSelectResult.fetchOne()
 
+            /*fileInfo = {
+                name: file.name,
+                hash: file.hash,
+                size: file.size,
+                type: file.type,
+                mimeType: file.mimeType,
+                lastModified: file.lastModified,
+                title: title,
+                text: text,
+                accessID: accessID,
+                userAccess: userAccess
+            }*/
+
+            const accessID = imageInfo.accessID
+            const userAccess = imageInfo.userAccess
+            const title = imageInfo.title
+            const text = imageInfo.text
+
             if(userFileIDSelect == undefined)
             {
-                insertUserFile(userFileTable, userID, imageInfo.fileID, accessID, userAccess).then((insertID)=>{
+                insertUserFile(userFileTable, userID, imageInfo.fileID,title, text, accessID, userAccess).then((insertID)=>{
                     imageInfo.accessID = accessID;
                     imageInfo.userFileID = insertID;
                     imageInfo.userAccess = userAccess
-
+                    imageInfo.title = title
+                    imageInfo.text = text
                     resolve({file: imageInfo, userFileID: insertID, update:false})
                 })
             }else{
                 const userFileID = userFileIDSelect[0]
-                updateUserFile(userFileTable, userFileID, accessID, userAccess).then((updated)=>{
+                updateUserFile(userFileTable, userFileID,title,text, accessID, userAccess).then((updated)=>{
                     fileInfo.accessID = accessID;
                     fileInfo.userFileID = userFileID;
                     fileInfo.userAccess = userAccess;
-
+                    fileInfo.title = title
+                    fileInfo.text = text
                     resolve({file: fileInfo, userFileID: userFileID, update: updated})
                 })
             }
@@ -3108,8 +3128,9 @@ const userTableImageUpdate = (userTable, userID, userFileID) => {
         })
     })
 }
-const updateUserImage = (userID, imageInfo, accessID, userAccess, callback) =>{
+const updateUserImage = (userID, imageInfo, callback) =>{
     console.log("updating user Image " + imageInfo.name)
+
     if((imageInfo.hash != undefined && imageInfo.hash != null && imageInfo.hash != "" && imageInfo.hash.length > 5)){
         mySession.then((session) => {
 
@@ -3118,13 +3139,17 @@ const updateUserImage = (userID, imageInfo, accessID, userAccess, callback) =>{
             const fileTable = arcDB.getTable("file")
             const userFileTable = arcDB.getTable("userFile")
 
+
+
+           
+
             selectFileTableHash(fileTable, imageInfo.hash).then((hashResult)=>{
                 const fileID = hashResult.fileID != undefined ? hashResult.fileID : null;
                
                 if(fileID != null){
                     imageInfo.fileID = fileID
 
-                    addUpdateUserFile(userFileTable,userID, imageInfo, accessID, userAccess).then((userFileUpdate)=>{
+                    addUpdateUserFile(userFileTable,userID, imageInfo).then((userFileUpdate)=>{
 
                         const userFileID = userFileUpdate.userFileID
 
@@ -3140,7 +3165,7 @@ const updateUserImage = (userID, imageInfo, accessID, userAccess, callback) =>{
                     insertFile(fileTable, imageInfo).then((iFile)=>{
                         const fileID = iFile.fileID;
                         imageInfo.fileID = fileID
-                        addUpdateUserFile(userFileTable,userID, imageInfo, accessID, userAccess).then((userFileUpdate) => {
+                        addUpdateUserFile(userFileTable,userID, imageInfo).then((userFileUpdate) => {
                         
                                 const userFileID = userFileUpdate.userFileID
 
@@ -3478,7 +3503,7 @@ const getUserFiles = (userID) => {
         mySession.then((session) => {           
             const query = `
 SELECT DISTINCT 
- file.fileID, file.fileName, file.fileHash, file.fileMimeType, file.fileType, file.fileSize, file.fileLastModified, userFile.userFileID, userFile.userFileName, userFile.userFileText 
+ file.fileID, file.fileName, file.fileHash, file.fileMimeType, file.fileType, file.fileSize, file.fileLastModified, userFile.userFileID, userFile.userFileTitle, userFile.userFileText 
 FROM 
  arcturus.userFile, arcturus.file 
 WHERE 
@@ -3505,6 +3530,8 @@ WHERE
                             size: userFile[5],
                             lastModified: userFile[6],
                             userFileID: userFile[7],
+                            title: userFile[8],
+                            text: userFile[9]
                         }
                         userFiles.push(file)
                     });
@@ -3538,7 +3565,7 @@ SELECT statusID FROM arcturus.userContact WHERE userID = ${contactID} AND contac
 
                 let query = `
 SELECT DISTINCT 
- file.fileID, file.fileName, file.fileHash, file.fileMimeType, file.fileType, file.fileSize, file.fileLastModified, userFile.userFileID, userFile.userFileName, userFile.userFileText 
+ file.fileID, file.fileName, file.fileHash, file.fileMimeType, file.fileType, file.fileSize, file.fileLastModified, userFile.userFileID, userFile.userFileTitle, userFile.userFileText 
 FROM 
  arcturus.userFile, arcturus.file 
 WHERE
@@ -3577,8 +3604,8 @@ WHERE
                             size: userFile[5],
                             lastModified: userFile[6],
                             userFileID: userFile[7],
-                            userFileName: userFile[8],
-                            userFileText: userFile[9],
+                            title: userFile[8],
+                            text: userFile[9],
                         }
                         userFiles.push(file)
                     });
