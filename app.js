@@ -2299,7 +2299,7 @@ const useConfig = (userID, fileID, storageKey, callback) =>{
 
 const selectFileTableHash = (fileTable, hash) =>{
     return new Promise(resolve =>{
-
+        console.log("hashLength:" + hash.length)
         fileTable.select(["fileID"]).where("fileHash = :fileHash").bind("fileHash", hash).execute().then((selectRes) => {
             const one = selectRes.fetchOne()
             if (one != undefined) {
@@ -3073,9 +3073,9 @@ const updateUserFile = (userFileTable, userFileID, title, text, accessID, userAc
     })
 }
 
-const addUpdateUserFile = (userFileTable,userID, imageInfo) =>{
+const addUpdateUserFile = (userFileTable,userID,fileInfo) =>{
     return new Promise(resolve => {
-        userFileTable.select(["userFileID"]).where("userID = :userID AND fileID = :fileID").bind("userID", userID).bind("fileID", imageInfo.fileID).execute().then((userFileSelectResult)=>{
+        userFileTable.select(["userFileID"]).where("userID = :userID AND fileID = :fileID").bind("userID", userID).bind("fileID",fileInfo.fileID).execute().then((userFileSelectResult)=>{
             const userFileIDSelect = userFileSelectResult.fetchOne()
 
             /*fileInfo = {
@@ -3090,30 +3090,35 @@ const addUpdateUserFile = (userFileTable,userID, imageInfo) =>{
                 accessID: accessID,
                 userAccess: userAccess
             }*/
-
-            const accessID = imageInfo.accessID
-            const userAccess = imageInfo.userAccess
-            const title = imageInfo.title
-            const text = imageInfo.text
+            console.log(imageInfo)
+            const accessID =fileInfo.accessID
+            const userAccess =fileInfo.userAccess
+            const title =fileInfo.title
+            const text =fileInfo.text
 
             if(userFileIDSelect == undefined)
             {
-                insertUserFile(userFileTable, userID, imageInfo.fileID,title, text, accessID, userAccess).then((insertID)=>{
-                    imageInfo.accessID = accessID;
-                    imageInfo.userFileID = insertID;
-                    imageInfo.userAccess = userAccess
-                    imageInfo.title = title
-                    imageInfo.text = text
-                    resolve({file: imageInfo, userFileID: insertID, update:false})
+                insertUserFile(userFileTable, userID,fileInfo.fileID,title, text, accessID, userAccess).then((insertID)=>{
+                   fileInfo.accessID = accessID;
+                   fileInfo.userFileID = insertID;
+                   fileInfo.userAccess = userAccess
+                   fileInfo.title = title
+                   fileInfo.text = text
+                    resolve({file:fileInfo, userFileID: insertID, update:false})
                 })
             }else{
                 const userFileID = userFileIDSelect[0]
                 updateUserFile(userFileTable, userFileID,title,text, accessID, userAccess).then((updated)=>{
-                    fileInfo.accessID = accessID;
-                    fileInfo.userFileID = userFileID;
-                    fileInfo.userAccess = userAccess;
-                    fileInfo.title = title
-                    fileInfo.text = text
+                    console.log(updated)
+                    if(updated)
+                    {
+                        fileInfo.accessID = accessID;
+                        fileInfo.userFileID = userFileID;
+                        fileInfo.userAccess = userAccess;
+                        fileInfo.title = title
+                        fileInfo.text = text
+                    }
+                  
                     resolve({file: fileInfo, userFileID: userFileID, update: updated})
                 })
             }
@@ -3131,7 +3136,7 @@ const userTableImageUpdate = (userTable, userID, userFileID) => {
 const updateUserImage = (userID, imageInfo, callback) =>{
     console.log("updating user Image " + imageInfo.name)
 
-    if((imageInfo.hash != undefined && imageInfo.hash != null && imageInfo.hash != "" && imageInfo.hash.length > 5)){
+    if((imageInfo != undefined && imageInfo.hash != undefined && imageInfo.hash != null && imageInfo.hash != "" && imageInfo.hash.length > 5)){
         mySession.then((session) => {
 
             const arcDB = session.getSchema('arcturus');
