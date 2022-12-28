@@ -3090,7 +3090,7 @@ const addUpdateUserFile = (userFileTable,userID,fileInfo) =>{
                 accessID: accessID,
                 userAccess: userAccess
             }*/
-            console.log(imageInfo)
+       
             const accessID =fileInfo.accessID
             const userAccess =fileInfo.userAccess
             const title =fileInfo.title
