@@ -6,7 +6,7 @@ const cryptojs = require('crypto-js');
 const util = require('util');
 const { homeURL, socketURL, wwwURL, server, dbURL, dbPort, sqlCred, emailUser, emailPassword, authToken, loginToken } = require('./httpVars');
 const e = require('express');
-
+var moment = require('moment')
 
 const adminAddress = emailUser;
 
@@ -17,13 +17,6 @@ const io = require('socket.io')(server, {
     },
 
 });
-
-
-
-
-
-
-
 
 
 server.listen(54944);
@@ -115,18 +108,18 @@ const pingAlive = () => {
         const arcDB = session.getSchema("arcturus");
         const keepAliveTable = arcDB.getTable("keepAlive");
 
-        keepAliveTable.select(["keepAliveValue"]).where("keepAliveID = 1").execute().then((res) =>{
+        keepAliveTable.select(["keepAliveValue"]).where("keepAliveID = 1").execute().then((res) => {
             const keepAliveValue = res.fetchOne();
-            if (keepAliveValue != undefined){
+            if (keepAliveValue != undefined) {
                 console.log(keepAliveValue[0]);
-            }else{
+            } else {
                 console.log(0)
             }
-        }).catch((err)=>{
+        }).catch((err) => {
             console.log("KeepAlive error: ")
             console.log(err)
         })
-       
+
     })
     setTimeout(pingAlive, 100000);
 }
@@ -161,168 +154,188 @@ const access = Object.freeze({
 io.on('connection', (socket) => {
     const id = socket.id;
     if (socket.handshake.auth.token == authToken) {
-        
-            console.log("anonymous")
-            socket.on('createUser', (user, userCreated) => {
-                createUser(user, (results) => {
-                    userCreated(results);
-                });
+
+        console.log("anonymous")
+        socket.on('createUser', (user, userCreated) => {
+            createUser(user, (results) => {
+                userCreated(results);
             });
+        });
 
 
-            socket.on('checkUserName', (userName, check) => {
-                console.log('checkUserName:' + userName);
-                checkUserName(userName, (results) => {
-                    check(results)
-                });
+        socket.on('checkUserName', (userName, check) => {
+            console.log('checkUserName:' + userName);
+            checkUserName(userName, (results) => {
+                check(results)
             });
+        });
 
-            socket.on('checkEmail', (userEmail, check) => {
-                console.log('checkUserEmail:' + userEmail);
-                checkEmail(userEmail, (results) => {
-                    check(results)
-                });
+        socket.on('checkEmail', (userEmail, check) => {
+            console.log('checkUserEmail:' + userEmail);
+            checkEmail(userEmail, (results) => {
+                check(results)
             });
+        });
 
-            socket.on('validateEmail', (userEmail, status, code, check) => {
-                console.log('checkUserEmail:' + userEmail);
-                validateEmail(userEmail, code, (results) => {
-                    check(results)
-                });
+        socket.on('validateEmail', (userEmail, status, code, check) => {
+            console.log('checkUserEmail:' + userEmail);
+            validateEmail(userEmail, code, (results) => {
+                check(results)
             });
+        });
 
-            socket.on('checkRefCode', (code, returnID) => {
-                console.log('checkRefCode: ' + code);
-                checkReferral(code, (results) => {
-                    returnID(results);
-                })
-            });
-            socket.on("sendRecoveryEmail", (email, callback) => {
-                sendRecoveryEmail(email, (sent) => {
-                    callback(sent)
-                })
+        socket.on('checkRefCode', (code, returnID) => {
+            console.log('checkRefCode: ' + code);
+            checkReferral(code, (results) => {
+                returnID(results);
             })
-            socket.on("updateUserPassword", (info, callback) => {
-
-                updateUserPasswordAnon(info, (result) => {
-                    callback(result)
-                })
+        });
+        socket.on("sendRecoveryEmail", (email, callback) => {
+            sendRecoveryEmail(email, (sent) => {
+                callback(sent)
             })
-        } else if(socket.handshake.auth.token == loginToken) {
-            socket.on("login", (params, callback)=>{
-             
-                checkUser(params, (checkResult) => {
-                    console.log(checkResult)
-                    if (("success" in checkResult && checkResult.success == false) || ("error" in checkResult)) {
-                      
-                        callback({success:false})
-                        socket.disconnect()
-                    }else{
-                       
-                        
-                        const user = checkResult.user;
-                       
-                        
-                        const userSocket = checkResult.userSocket
+        })
+        socket.on("updateUserPassword", (info, callback) => {
 
-                        if(userSocket != ""){
-                            io.sockets.sockets.forEach((connectedSocket) => {
-                               console.log(connectedSocket.id)
-                                if (connectedSocket.id == userSocket){
-                                    console.log("disconnecting old socket: " + userSocket)
-                                    connectedSocket.disconnect()
+            updateUserPasswordAnon(info, (result) => {
+                callback(result)
+            })
+        })
+    } else if (socket.handshake.auth.token == loginToken) {
+        socket.on("login", (params, callback) => {
+
+            checkUser(params, (checkResult) => {
+                console.log(checkResult)
+                if (("success" in checkResult && checkResult.success == false) || ("error" in checkResult)) {
+
+                    callback({ success: false })
+                    socket.disconnect()
+                } else {
+
+
+                    const user = checkResult.user;
+
+
+                    const userSocket = checkResult.userSocket
+
+                    if (userSocket != "") {
+                        io.sockets.sockets.forEach((connectedSocket) => {
+                            console.log(connectedSocket.id)
+                            if (connectedSocket.id == userSocket) {
+                                console.log("disconnecting old socket: " + userSocket)
+                                connectedSocket.disconnect()
+                            }
+                        });
+                    }
+                    getContacts(user, (contacts) => {
+
+                        getUserFiles(user.userID).then((userFiles) => {
+
+                            updateUserStatus(user.userID, status.Online, id, (isRooms, rooms) => {
+                                if (user.accessID != access.private && isRooms) {
+                                    for (let i = 0; i < rooms.length; i++) {
+
+                                        console.log("sending userStatus message to: " + rooms[i][0] + " user: " + user.userID + " is: Online");
+
+                                        io.to(rooms[i][0]).emit("contactsCmd", { cmd: "userStatus", params: { userID: user.userID, statusID: status.Online, userSocket: user.userSocket, accessID: user.accessID } });
+
+                                    }
                                 }
-                            });
-                        }
-                        getContacts(user, (contacts) => {
-
-                            getUserFiles(user.userID).then((userFiles)=>{
-
-                                updateUserStatus(user.userID, status.Online, id, (isRooms, rooms) => {
-                                    if (user.accessID != access.private && isRooms) {
-                                        for (let i = 0; i < rooms.length; i++) {
-
-                                            console.log("sending userStatus message to: " + rooms[i][0] + " user: " + user.userID + " is: Online");
-
-                                            io.to(rooms[i][0]).emit("contactsCmd", { cmd: "userStatus", params: { userID: user.userID, statusID: status.Online, userSocket: user.userSocket, accessID: user.accessID } });
-
+                                if (user.accessID != access.private && contacts.length > 0) {
+                                    contacts.forEach(contact => {
+                                        if (contact.statusID == status.Online && contact.userSocket != "") {
+                                            io.to(contact.userSocket).emit("contactsCmd", { cmd: "userStatus", params: { userID: user.userID, statusID: status.Online, userSocket: user.userSocket, accessID: user.accessID } });
                                         }
-                                    }
-                                    if (user.accessID != access.private && contacts.length > 0)
-                                    {
-                                        contacts.forEach(contact => {
-                                            if( contact.statusID == status.Online && contact.userSocket != "")
-                                            {
-                                                io.to(contact.userSocket).emit("contactsCmd", { cmd: "userStatus", params: { userID: user.userID, statusID: status.Online, userSocket: user.userSocket, accessID: user.accessID } });
-                                            }
-                                        });
-                                    }
+                                    });
+                                }
 
-                                    
-                                        const result = { success: true, user: user, contacts: contacts, userFiles: userFiles }
 
-                                        callback(result)
+                                const result = { success: true, user: user, contacts: contacts, userFiles: userFiles }
+
+                                callback(result)
+                            })
+                        })
+
+                    })
+
+
+
+                    /* //////////////SUCCESS///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+                    socket.on("getAppList", (params, callback)=>{
+                        console.log("getAppList")
+                        if("admin" in params && params.admin)
+                        {
+                            if(user.userID == 22){ 
+                                getAppList(params).then((result) => {
+                                    result.admin = true
+                                    console.log(result)
+                                    callback(result)
                                 })
+                            }else{
+                               console.log("not admin")
+                                callback({error: new Error("Not admin")})
+                            }
+                        }else[
+                            getAppList(params).then((result) => {
+                                callback(result)
                             })
-
-                        })
+                        ]
+        
+                        
+                    })
                     
-                      
-               
-                /* //////////////SUCCESS///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
-                        socket.on("updateUserAccess", (info, callback) => {
+                    socket.on("updateUserAccess", (info, callback) => {
 
-                            updateUserAccess(user.userID, info).then((result) => {
-                                callback(result)
-                            })
-                        })
-
-                        socket.on("updateUserPassword", (info, callback) => {
-
-
-                            updateUserPassword(user.userID, info, (result) => {
-                                callback(result)
-                            })
-                        })
-                        socket.on("sendEmailCode", (callback) => {
-
-                            sendEmailCode(user.userID, (sent) => {
-                                callback(sent)
-                            })
-                        })
-                    socket.on("getFilePeers", (fileID, callback)=>{
-                        getFilePeers(user.userID, fileID, (result)=>{
+                        updateUserAccess(user.userID, info).then((result) => {
                             callback(result)
                         })
                     })
-                    
-                    
-                    socket.on("enterRealmGateway", (realmID, callback)=>{
-                      
-                        enterRealmGateway(user, realmID, socket, (enteredGateway)=>{
+
+                    socket.on("updateUserPassword", (info, callback) => {
+
+
+                        updateUserPassword(user.userID, info, (result) => {
+                            callback(result)
+                        })
+                    })
+                    socket.on("sendEmailCode", (callback) => {
+
+                        sendEmailCode(user.userID, (sent) => {
+                            callback(sent)
+                        })
+                    })
+                    socket.on("getFilePeers", (fileID, callback) => {
+                        getFilePeers(user.userID, fileID, (result) => {
+                            callback(result)
+                        })
+                    })
+
+
+                    socket.on("enterRealmGateway", (realmID, callback) => {
+
+                        enterRealmGateway(user, realmID, socket, (enteredGateway) => {
                             callback(enteredGateway)
                         })
                     })
-                  
-                    socket.on("checkRealmName", (name, callback)=>{
+
+                    socket.on("checkRealmName", (name, callback) => {
                         checkRealmName(name, callback)
                     })
 
-                    socket.on("createRealm", (realmName, imageFile, page, index, callback) =>{
-                        createRealm(user.userID, realmName, imageFile, page, index, (created) =>{
+                    socket.on("createRealm", (realmName, imageFile, page, index, callback) => {
+                        createRealm(user.userID, realmName, imageFile, page, index, (created) => {
                             callback(created)
                         })
                     })
 
-                    socket.on("deleteRealm", (realmID, callback) =>{
-                        deleteRealm(user.userID,realmID,(result) =>{
-                            if(!("error" in result)){
-                                if(result.success)
-                                {
+                    socket.on("deleteRealm", (realmID, callback) => {
+                        deleteRealm(user.userID, realmID, (result) => {
+                            if (!("error" in result)) {
+                                if (result.success) {
                                     result.realmUsers.forEach(user => {
-                                        getUserSocket(user.userID, (userSocket)=>{     
-                                            if(userSocket != null) io.to(userSocket).emit("realmDelete", realmID)
-                                        }) 
+                                        getUserSocket(user.userID, (userSocket) => {
+                                            if (userSocket != null) io.to(userSocket).emit("realmDelete", realmID)
+                                        })
                                     });
                                 }
                             }
@@ -330,19 +343,19 @@ io.on('connection', (socket) => {
                         })
                     })
 
-                    socket.on("getRealms", (callback)=>{
-                        getRealms(user.userID, (realms)=>{
+                    socket.on("getRealms", (callback) => {
+                        getRealms(user.userID, (realms) => {
                             callback(realms)
                         })
                     })
 
-                    socket.on("updateRealmInformation", (information, callback)=>{
-                        updateRealmInformation(information, (result)=>{
+                    socket.on("updateRealmInformation", (information, callback) => {
+                        updateRealmInformation(information, (result) => {
                             callback(result)
                         })
                     })
-                     
-             
+
+
 
                     socket.on("requestContact", (contactID, msg, callback) => {
                         const userID = user.userID;
@@ -375,46 +388,62 @@ io.on('connection', (socket) => {
                         })
                     })
 
-                   /* socket.on('getUserInformation', (userInformation) => {
-                        console.log(user)
-                        if (user != null) {
-                            getUserInformation(user, (info) => {
-                                userInformation(info);
-                            })
-                        }
-                    })*/
-                    socket.on("createStorage", (fileInfo, engineKey,  callback) => {
-                     
-                        createStorage(user.userID, fileInfo, engineKey,  (created) => {
+                    socket.on("checkStorageHash", (params, callback) => {
+                       checkStorageHash(user.userID, params).then((result)=>{
+                            callback(result)
+                        })
+                    })
+                    socket.on("createStorage", (params, callback) => {
+                        createStorage(user.userID, params).then((result) => {
+                            callback(result)
+                        })
+                    })
+                    socket.on("getStorageKey", (callback) => {
+                        getStorageKey(user.userID).then((result) => {
+                            callback(result)
+                        })
+                    })
+
+                    /* socket.on('getUserInformation', (userInformation) => {
+                         console.log(user)
+                         if (user != null) {
+                             getUserInformation(user, (info) => {
+                                 userInformation(info);
+                             })
+                         }
+                     })*/  /*
+                    socket.on("createStorage", (fileInfo, engineKey, callback) => {
+
+                        createStorage(user.userID, fileInfo, engineKey, (created) => {
                             callback(created)
                         })
                     })
 
-                    socket.on("useConfig", (fileID, storageKey, callback)=>{
-                        useConfig(user.userID, fileID, storageKey, (success)=>{
+                    socket.on("useConfig", (fileID, callback) => {
+                        useConfig(user.userID, fileID, (success) => {
                             callback(success)
                         })
                     })
-
-                    socket.on("checkStorageHash", (hash, callback) =>{
-                        checkStorageHash(user.userID, hash, (result)=>{
+                  
+                    socket.on("checkStorageHash", (hash, callback) => {
+                        checkStorageHash(user.userID, hash, (result) => {
                             callback(result)
                         })
                     })
 
                     socket.on("loadStorage", (hash, engineKey, callback) => {
 
-                        loadStorage(hash, engineKey, (storage)=>{
+                        loadStorage(hash, engineKey, (storage) => {
                             callback(storage)
                         })
 
                     })
 
-                    socket.on("updateStorageConfig", (fileID, fileInfo, callback)=>{
-                        updateStorageConfig(fileID, fileInfo, (result)=>{
+                    socket.on("updateStorageConfig", (fileID, fileInfo, callback) => {
+                        updateStorageConfig(fileID, fileInfo, (result) => {
                             callback(result)
                         })
-                    })
+                    })*/
                     /*
                     socket.on("checkUserFiles", (hashs, callback) => {
                         checkUserFiles(user.userID, hashs, (result) => {
@@ -436,44 +465,44 @@ io.on('connection', (socket) => {
                     });
 
                     socket.on("updateUserPeerID", (peerID, callback) => {
-                       console.log("updatingPeerID: " + peerID)
-                        updateUserPeerID(user.userID, peerID, (result)=>{
+                        console.log("updatingPeerID: " + peerID)
+                        updateUserPeerID(user.userID, peerID, (result) => {
                             callback(result)
                         })
                     })
 
                     socket.on("updateUserImage", (imageInfo, callback) => {
-                        updateUserImage(user.userID, imageInfo, (updated) =>{
+                        updateUserImage(user.userID, imageInfo, (updated) => {
                             callback(updated)
                         })
                     })
 
-                    socket.on("updateRealmImage", (realmID, imageInfo, callback)=>{
-                        updateRealmImage(user.userID, realmID, imageInfo, (result)=>{
+                    socket.on("updateRealmImage", (realmID, imageInfo, callback) => {
+                        updateRealmImage(user.userID, realmID, imageInfo, (result) => {
                             callback(result)
                         })
                     })
 
-                    socket.on("peerFileRequest", (params, callback) =>{
+                    socket.on("peerFileRequest", (params, callback) => {
                         console.log("peer file request")
                         console.log(params)
-                        peerFileRequest(user.userID, params).then((response)=>{
+                        peerFileRequest(user.userID, params).then((response) => {
                             callback(response)
                         })
                     })
 
-                    socket.on("updateUserEmail", (params, callback)=>{
-                        updateUserEmail(user.userID, params).then((result)=>{
+                    socket.on("updateUserEmail", (params, callback) => {
+                        updateUserEmail(user.userID, params).then((result) => {
                             callback(result)
-                        })  
+                        })
                     })
 
 
-                    socket.on("getPeerLibrary", (params, callback)=>{
-                        getPeerLibrary(user.userID, params).then((result)=>{
+                    socket.on("getPeerLibrary", (params, callback) => {
+                        getPeerLibrary(user.userID, params).then((result) => {
                             callback(result)
                         })
-                        
+
                     })
 
                     socket.on('disconnect', () => {
@@ -487,18 +516,18 @@ io.on('connection', (socket) => {
                     });
 
 
-                } 
+                }
             });
-    })
-    
-      
-}else{
-    socket.disconnect()
-}
+        })
+
+
+    } else {
+        socket.disconnect()
+    }
 
 })
 
-    /* */
+/* */
 
 
 
@@ -509,26 +538,26 @@ function CapFirstLetter(string) {
 
 const createRoom = (roomTable, userRoomTable, userID, roomName) => {
     return new Promise(resolve => {
-   
-            roomTable.insert(["roomName", "adminID"]).values(roomName, userID).execute().then((roomCreated) => {
-                const roomID = roomCreated.getAutoIncrementValue();
 
-                userRoomTable.insert(["userID","roomID", "statusID"]).values(userID,roomID, status.Offline).execute().then((userRoomInsert)=>{
-                        resolve(
-                            {
-                            success: true,
-                            room:{
-                                roomID: roomID,
-                                roomName: roomName,
-                                adminID: userID 
-                            },
-                            addedUser: userRoomInsert.getAffectedItemsCount() > 0
-                        }
-                        )
-                })
+        roomTable.insert(["roomName", "adminID"]).values(roomName, userID).execute().then((roomCreated) => {
+            const roomID = roomCreated.getAutoIncrementValue();
 
-               
+            userRoomTable.insert(["userID", "roomID", "statusID"]).values(userID, roomID, status.Offline).execute().then((userRoomInsert) => {
+                resolve(
+                    {
+                        success: true,
+                        room: {
+                            roomID: roomID,
+                            roomName: roomName,
+                            adminID: userID
+                        },
+                        addedUser: userRoomInsert.getAffectedItemsCount() > 0
+                    }
+                )
             })
+
+
+        })
 
     })
 }
@@ -536,47 +565,43 @@ const createRoom = (roomTable, userRoomTable, userID, roomName) => {
 
 
 const addUserToRoom = (userRoomTable, userID, roomID) => {
-   return new Promise(resolve => {
+    return new Promise(resolve => {
         userRoomTable.insert(["userID", "roomID", "statusID"]).values(userID, roomID, status.Offline).execute().then((userAddedToRoom) => {
-                const affected = userAddedToRoom.getAffectedItemsCount() > 0;
-                if (affected) {
-                    
-                    io.to(roomID).emit("addedUserIDtoRoom", userID);
-                     
-                }
-                resolve(affected)
+            const affected = userAddedToRoom.getAffectedItemsCount() > 0;
+            if (affected) {
+
+                io.to(roomID).emit("addedUserIDtoRoom", userID);
+
+            }
+            resolve(affected)
         })
-   })
+    })
 }
 
 const updateUserStatus = (userID = -1, statusID = 5, socketID = "", callback) => {
-    let query = "UPDATE arcturus.user SET user.userSocket = " + mysql.escape() + "\
-, user.statusID = " + statusID + " WHERE userID =" + userID;
+  
 
     mySession.then((session) => {
-        const arcDB = session.getSchema("arcturus");
-        const userTable = arcDB.getTable("user")
-        const now = formatedNow();
-        console.log(statusID)
-        console.log(socketID)
-        userTable.update().set("userSocket", socketID).set("statusID", statusID).set("userLastOnline", now).where("userID = :userID").bind("userID", userID).execute().then((updated) => {
+
+        const query = `UPDATE arcturus.user SET userSocket = ${mysql.escape(socketID)}, statusID = ${statusID}, userLastOnline = UTC_TIMESTAMP() WHERE userID = ${userID}`
+    
+        session.sql(query).execute().then((updated) => {
             const affected = updated.getAffectedItemsCount();
             console.log("updated status affected: " + affected)
             if (affected > 0) {
-                query = "select userRoom.roomID, status.statusName from arcturus.userRoom, arcturus.status WHERE userRoom.userID = \
- " + userID + " AND status.statusID = userRoom.statusID";
-                session.sql(query).execute().then((found) => {
+                const query2 = "select userRoom.roomID, status.statusName from arcturus.userRoom, arcturus.status WHERE userRoom.userID = userID AND status.statusID = userRoom.statusID";
+                session.sql(query2).execute().then((found) => {
                     const inRooms = found.hasData()
                     const rooms = inRooms ? found.fetchAll() : [];
 
-                    const contactQuery = "\
+               /*     const contactQuery = "\
 SELECT distinct userID, userSocket \
 FROM arcturus.user, arcturus.status, arcturus.contact \
 WHERE \
 statusName = 'Online' AND \
 status.statusID = user.statusID AND \
 contact.userID = user.userID AND \
-contact.contactID = " + userID;
+contact.contactID = " + userID;*/
 
                     callback(inRooms, rooms);
                 })
@@ -611,116 +636,116 @@ const getUser = (socketID = "", callback) => {
 }
 
 const cleanRooms = (userID = 0, callback) => {
-  
-    if(userID > 0){
+
+    if (userID > 0) {
         mySession.then((session) => {
             const arcDB = session.getSchema("arcturus")
             const userRoomTable = arcDB.getTable("userRoom")
-            const userTable = arcDB.getTable("user")
-           
-            updateUserPeerID(userID, "", (callback)=>{
+   
+            updateUserPeerID(userID, "", (callback) => {
                 console.log(callback)
             })
-            const now = formatedNow()
 
-            userTable.update().set("userLastOnline", now).set("statusID",status.Offline).set("userSocket", "").where("userID = :userID").bind("userID", userID).execute().then((updatedUserSocket) =>{
+            const query = `UPDATE arcturus.user SET userSocket = '', statusID = ${status.Offline}, userLastOnline = UTC_TIMESTAMP() WHERE userID = ${userID}`
+
+            session.sql(query).execute().then((updatedUserSocket) => {
                 userRoomTable.select(["roomID"]).where("userID = :userID and statusID <> " + status.Offline).bind("userID", userID).execute().then((userRoomSelect) => {
-                
+
                     const allRooms = userRoomSelect.fetchAll();
-                    if (allRooms != undefined){
+                    if (allRooms != undefined) {
                         userRoomTable.update().set("statusID", status.Offline).where("userID = :userID").bind("userID", userID).execute().then((userRooms) => {
                             const roomsAffected = userRooms.getAffectedItemsCount();
-                            if(roomsAffected > 0){
-                                
-                                    allRooms.forEach(room => {
-                                        const roomID = room[0];
-                                        console.log("sending userStatus message to: " + roomID + " user: " + userID + " is: Offline");
-                                        io.to(roomID).emit("userStatus", userID, status.Offline);
-                                    });
-                                    callback(roomsAffected);
-                            
-                                    
-                            }else{
+                            if (roomsAffected > 0) {
+
+                                allRooms.forEach(room => {
+                                    const roomID = room[0];
+                                    console.log("sending userStatus message to: " + roomID + " user: " + userID + " is: Offline");
+                                    io.to(roomID).emit("userStatus", userID, status.Offline);
+                                });
                                 callback(roomsAffected);
-                            }   
+
+
+                            } else {
+                                callback(roomsAffected);
+                            }
                         })
-                    }else{
+                    } else {
                         callback(0)
                     }
                 })
             })
 
         })
-    }else{
+    } else {
         callback(0)
     }
-  
+
 }
 
 
 
 
-const setUserRoomStatus = (userRoomTable, userID , roomID, statusID = 4) => {
- 
-return new Promise(resolve =>{
+const setUserRoomStatus = (userRoomTable, userID, roomID, statusID = 4) => {
+
+    return new Promise(resolve => {
 
 
         userRoomTable.update().set("statusID", statusID).where("userID = :userID AND roomID = :roomID").bind("userID", userID).bind("roomID", roomID).execute().then((results) => {
             affectedRows = results.getAffectedItemsCount();
 
             if (affectedRows > 0) {
-                resolve({success:true});
+                resolve({ success: true });
             } else {
-                resolve({success:false});
+                resolve({ success: false });
             }
         })
 
-})
+    })
 }
 
 const getRoomUsers = (session, userRoomTable, userTable, contactIDList, roomID) => {
     return new Promise(resolve => {
-       
-            userRoomTable.select(["userID", "statusID"]).where("roomID = :roomID").bind("roomID", roomID).execute().then((userRoomSelect)=>{
-               
-                    const all = userRoomSelect.fetchAll()
 
-                    if (all != undefined){
-                        
-                        let roomUsers = []
-                        let i = 0;
-                        const recursiveInformation = () =>{
-                        
-                            if (i < all.length) {
+        userRoomTable.select(["userID", "statusID"]).where("roomID = :roomID").bind("roomID", roomID).execute().then((userRoomSelect) => {
 
-                                const roomUser = all[i]
-                                const userID = roomUser[0]
-                                const statusID = roomUser[1]
+            const all = userRoomSelect.fetchAll()
 
-                                const isContact = Array.isArray(contactIDList) ?  contactIDList.findIndex(list => list == userID)  != -1 : false
-                               
-                                getContactInformation(userTable,session, userID, isContact).then((userInformation)=>{
-                                    userInformation.roomStatusID = statusID;
-                                    roomUsers.push(userInformation)
-                                })
-                                i++; 
-                                recursiveInformation()
+            if (all != undefined) {
 
-                        } else {
-                                resolve({ success: true, users: roomUsers })
-                            }
-                        }
+                let roomUsers = []
+                let i = 0;
+                const recursiveInformation = () => {
 
+                    if (i < all.length) {
+
+                        const roomUser = all[i]
+                        const userID = roomUser[0]
+                        const statusID = roomUser[1]
+
+                        const isContact = Array.isArray(contactIDList) ? contactIDList.findIndex(list => list == userID) != -1 : false
+
+                        getContactInformation(userTable, session, userID, isContact).then((userInformation) => {
+                            userInformation.roomStatusID = statusID;
+                            roomUsers.push(userInformation)
+                        })
+                        i++;
                         recursiveInformation()
-                
-                    }else{
-                        resolve({success:false, users:[]})
+
+                    } else {
+                        resolve({ success: true, users: roomUsers })
                     }
-               
-            })
-       
+                }
+
+                recursiveInformation()
+
+            } else {
+                resolve({ success: false, users: [] })
+            }
+
+        })
+
     })
-   
+
 }
 
 const storeMessage = (room = 0, userID = 0, type = 0, msg = "", callback) => {
@@ -755,16 +780,15 @@ const storeMessage = (room = 0, userID = 0, type = 0, msg = "", callback) => {
 
 const getStoredMessages = (messageTable, roomID) => {
 
-    return new Promise(resolve =>{
+    return new Promise(resolve => {
         messageTable.select(["messageID", "userID", "messageType", "messageText", "messageTime"]).where("roomID = :roomID").orderBy(["messageTime DESC"]).limit(30).bind("roomID", roomID).execute().then((result) => {
-          
-            
+
+
             const all = result.fetchAll()
 
             if (all != undefined) {
                 let messages = []
-                for(let i = all.length -1 ; i > -1 ; i--)
-                {
+                for (let i = all.length - 1; i > -1; i--) {
                     messages.push({
                         messageID: all[i][0],
                         userID: all[i][1],
@@ -773,10 +797,10 @@ const getStoredMessages = (messageTable, roomID) => {
                         messageTime: all[i][4],
                     })
                 }
-                
-                resolve({success:true, messages:messages});
+
+                resolve({ success: true, messages: messages });
             } else {
-                callback({success:false, messages:[]});
+                callback({ success: false, messages: [] });
             }
 
         })
@@ -868,39 +892,39 @@ const acknowledgeContact = (userID, acknowledgement, contactID, callback) => {
                     [userID, contactID, acknowledgement ? status.accepted : status.rejected]
                 ).execute().then((res) => {
                     const affected2 = res.getAffectedItemsCount()
-                if (affected > 0 && affected2 > 0) {
-                    getUserInformation(userTable, fileTable, contactID).then((contact) => {
-                    
-                        if (acknowledgement) {
-                 
-                            getUserInformation(userTable, fileTable, userID).then((user) => {
+                    if (affected > 0 && affected2 > 0) {
+                        getUserInformation(userTable, fileTable, contactID).then((contact) => {
 
-                                io.to(contact.userSocket).emit("acknowledgeContact", {acknowledgement:acknowledgement, contact:user})
-                            
-                            })
-                                
-                            callback({ 
-                                acknowledgement: acknowledgement, 
-                                success:true,
-                                contact: contact,
-                            })
+                            if (acknowledgement) {
 
-                            session.commit();
-                         } else {
+                                getUserInformation(userTable, fileTable, userID).then((user) => {
 
-                            io.to(contact.userSocket).emit("acknowledgeContact", { acknowledgement: false })
+                                    io.to(contact.userSocket).emit("acknowledgeContact", { acknowledgement: acknowledgement, contact: user })
 
-                            callback({ success: true, acknowledgement: false })
-                            session.commit();
-                        }  
-                    })
-                      
-              
-                } else {
-                    console.log("userContact tables could not insert / update")
-                    callback({ success: false })
-                    session.rollback()
-                }
+                                })
+
+                                callback({
+                                    acknowledgement: acknowledgement,
+                                    success: true,
+                                    contact: contact,
+                                })
+
+                                session.commit();
+                            } else {
+
+                                io.to(contact.userSocket).emit("acknowledgeContact", { acknowledgement: false })
+
+                                callback({ success: true, acknowledgement: false })
+                                session.commit();
+                            }
+                        })
+
+
+                    } else {
+                        console.log("userContact tables could not insert / update")
+                        callback({ success: false })
+                        session.rollback()
+                    }
                 })
             })
         } catch (error) {
@@ -909,8 +933,8 @@ const acknowledgeContact = (userID, acknowledgement, contactID, callback) => {
             console.log(error)
             callback({ error: error })
         }
-                
-     })
+
+    })
 }
 
 const requestContact = (userID, contactID, msg, callback) => {
@@ -979,84 +1003,80 @@ SELECT userSocket FROM arcturus.user WHERE userID = " + contactID + " AND user.s
 const findPeople = (text = "", userID = 0, callback) => {
     text = text.toLocaleLowerCase();
     text = "%" + text + "%";
-   /* const name_email = mysql.escape(text);
-    var query = "SELECT userName, userEmail, user.userID FROM arcturus.user WHERE (userName LIKE ";
-    query += name_email + " OR userEmail LIKE " + name_email + ") AND user.userID <> " + userID + " AND user.userID NOT IN (\
- SELECT contactID from arcturus.userContact where userID = " + userID + " ) LIMIT 50";*/
+    /* const name_email = mysql.escape(text);
+     var query = "SELECT userName, userEmail, user.userID FROM arcturus.user WHERE (userName LIKE ";
+     query += name_email + " OR userEmail LIKE " + name_email + ") AND user.userID <> " + userID + " AND user.userID NOT IN (\
+  SELECT contactID from arcturus.userContact where userID = " + userID + " ) LIMIT 50";*/
 
 
     mySession.then((session) => {
         const arcDB = session.getSchema("arcturus")
         const userContactTable = arcDB.getTable("userContact")
         const userTable = arcDB.getTable("user")
-        
-        userContactTable.select(["contactID"]).where("userID = :userID").bind("userID",userID).execute().then((contactResults) => {
+
+        userContactTable.select(["contactID"]).where("userID = :userID").bind("userID", userID).execute().then((contactResults) => {
             const contactsArray = contactResults.fetchAll()
             let contactList = ""
-     
-            if(contactsArray != undefined && contactsArray.length != 0)
-            {
+
+            if (contactsArray != undefined && contactsArray.length != 0) {
                 const contactsLength = contactsArray.length
-                for(let i = 0; i < contactsLength -1 ; i++)
-                {
+                for (let i = 0; i < contactsLength - 1; i++) {
                     const contactID = contactsArray[i][0]
                     contactList.concat(`'${contactID}',`)
                 }
-                const contactID = contactsArray[contactsLength -1][0]
+                const contactID = contactsArray[contactsLength - 1][0]
                 contactList.concat(`'${contactID}'`)
             }
-            if(contactList == "") contactList = "''"
+            if (contactList == "") contactList = "''"
 
             userTable.select(["userID"]).where("LOWER(userName) LIKE :text AND userID <> :userID AND userID NOT IN (:contactList) and accessID > 0")
                 .bind("text", text)
                 .bind("userID", userID)
                 .bind("contactList", contactList)
-                .execute().then((selectResults) =>{
-                    
-                const people = selectResults.fetchAll()
-                
+                .execute().then((selectResults) => {
 
-                if (people == undefined) {
-                    callback([]);
-                } else {
-   
-                    const resultLength = people.length;
+                    const people = selectResults.fetchAll()
 
-                    let searchResults = [];
-                    let i = 0;
-                    
 
-                    const getContactInfoRecursive = () =>
-                    {
-                        const contactID = people[i][0]
-                        
-                        getContactInformation(userTable, session, contactID, false).then((contactInfoResult)=>{
-                            if("success" in contactInfoResult && contactInfoResult.success){
-                                
-                                const contact = contactInfoResult.user
-                               
-                                searchResults.push(contact)
-                            
-                            }
-                            i++
-                            if (i < resultLength) {
-                                getContactInfoRecursive()
-                            } else {
-                                callback(searchResults)
-                            }
-                        }).catch((err)=>{
-                            console.log(err)
-                            i++
-                            if(i < resultLength)
-                            {
-                                getContactInfoRecursive()
-                            }else{
-                                console.log(searchResults)
-                                callback(searchResults)
-                            }
-                        })
-                    }
-                                        
+                    if (people == undefined) {
+                        callback([]);
+                    } else {
+
+                        const resultLength = people.length;
+
+                        let searchResults = [];
+                        let i = 0;
+
+
+                        const getContactInfoRecursive = () => {
+                            const contactID = people[i][0]
+
+                            getContactInformation(userTable, session, contactID, false).then((contactInfoResult) => {
+                                if ("success" in contactInfoResult && contactInfoResult.success) {
+
+                                    const contact = contactInfoResult.user
+
+                                    searchResults.push(contact)
+
+                                }
+                                i++
+                                if (i < resultLength) {
+                                    getContactInfoRecursive()
+                                } else {
+                                    callback(searchResults)
+                                }
+                            }).catch((err) => {
+                                console.log(err)
+                                i++
+                                if (i < resultLength) {
+                                    getContactInfoRecursive()
+                                } else {
+                                    console.log(searchResults)
+                                    callback(searchResults)
+                                }
+                            })
+                        }
+
                         /*for (let i = 0; i < people.length; i++) {
                         const person = {
                             userID:     people[i][0],
@@ -1068,13 +1088,13 @@ const findPeople = (text = "", userID = 0, callback) => {
                             person
                         )
                     }*/
-                    if(people.length == 0){
-                        callback([])
-                    }else{
-                        getContactInfoRecursive()
+                        if (people.length == 0) {
+                            callback([])
+                        } else {
+                            getContactInfoRecursive()
+                        }
                     }
-            }
-            })
+                })
         })
 
     }, (reason) => {
@@ -1306,7 +1326,7 @@ function createUserOld(user, socketID, callback) {
 
 function createUser(user, callback) {
     var date = new Date().toString();
-  
+
 
 
     console.log(user)
@@ -1327,14 +1347,14 @@ function createUser(user, callback) {
         session.startTransaction();
         try {
             var res = userTable.insert(
-                ['userName', 'userPassword', "userEmail", 'refID',  'statusID', "accessID", "userEmailLastChanged"]
+                ['userName', 'userPassword', "userEmail", 'refID', 'statusID', "accessID", "userEmailLastChanged"]
             ).values(
-                [user.userName, user.userPass, user.userEmail, user.userRefID,  3, access.contacts, formatedNow()]
+                [user.userName, user.userPass, user.userEmail, user.userRefID, 3, access.contacts, formatedNow()]
             ).execute();
             res.then((value) => {
                 var id = value.getAutoIncrementValue();
 
-               
+
                 callback({ create: true, msg: id + "created" })
             }).catch((error) => {
                 console.log(error)
@@ -1356,31 +1376,6 @@ function createUser(user, callback) {
 
 }
 
-function formatedNow(now = new Date()) {
-
-    const year = now.getUTCFullYear();
-    const month = now.getUTCMonth()
-    const day = now.getUTCDate();
-    const hours = now.getUTCHours();
-    const minutes = now.getUTCMinutes();
-    const seconds = now.getUTCSeconds();
-
-
-    const stringYear = year.toString();
-    const stringMonth = month < 10 ? "0" + month : String(month);
-    const stringDay = day < 10 ? "0" + day : String(day);
-    const stringHours = hours < 10 ? "0" + hours : String(hours);
-    const stringMinutes = minutes < 10 ? "0" + minutes : String(minutes);
-    const stringSeconds = seconds < 10 ? "0" + seconds : String(seconds);
-
-
-
-    return stringYear + "-" + stringMonth + "-" + stringDay + " " + stringHours + ":" + stringMinutes + ":" + stringSeconds;
-
-
-
-
-}
 
 
 
@@ -1406,16 +1401,16 @@ const createRefCode = (user, code, callback) => {
 
             console.log("Created code: " + code + " at: " + now)
 
-            callback({success:true, code:{refCode: code, refCreated: now} })
+            callback({ success: true, code: { refCode: code, refCreated: now } })
         } catch (error) {
             console.log(error)
             session.rollback();
-            callback({success:false});
+            callback({ success: false });
         }
 
     }).catch((error) => {
         console.log(error)
-        callback({success:false})
+        callback({ success: false })
     })
 }
 
@@ -1480,7 +1475,7 @@ function email(emailAddress, subject, emailHtml, callback) {
 }
 
 const getContacts = (user, callback) => {
-  
+
 
     console.log("getting contacts")
 
@@ -1488,68 +1483,66 @@ const getContacts = (user, callback) => {
         const arcDB = session.getSchema("arcturus")
         const userTable = arcDB.getTable("user")
         const userContactTable = arcDB.getTable("userContact")
-        
-        
+
+
         userContactTable.select(["contactID", "statusID", "userContactMsg", "userID"]).where("userID = :userID OR (contactID =:userID and statusID = 3)").bind("userID", user.userID).execute().then((results) => {
             const contactsArray = results.fetchAll();
-        
+
 
             if (contactsArray != undefined) {
 
                 console.log(contactsArray)
-                var contacts =[];
+                var contacts = [];
                 var i = 0;
-                
 
-                const getContactInfoRecursive = () =>
-                {
+
+                const getContactInfoRecursive = () => {
                     console.log(i)
                     const contact = contactsArray[i]
-      
+
                     const contactID = contact[0]
                     const statusID = contact[1]
                     const userContactMsg = contact[2]
                     const userContactUserID = contact[3]
 
                     const isContact = user.userID == userContactUserID && statusID == status.accepted
-                    
-            
 
-                    getContactInformation(userTable,session, contactID, isContact).then((contactInfo)=>{
-                     
+
+
+                    getContactInformation(userTable, session, contactID, isContact).then((contactInfo) => {
+
 
                         contactInfo.accepted = isContact
                         contactInfo.requested = contactID == user.userID
                         contactInfo.userContactMsg = userContactMsg
 
-                        if("success" in contactInfo && contactInfo.success)
-                        {
-                     
-                            
-                                contacts.push(
-                                    contactInfo
-                                )
-                                i = i + 1;
-                                if (i < contactsArray.length) {
-                      
-                                    getContactInfoRecursive()
-                                } else {
-                          
-                                    callback(contacts)
-                                }
-                            
+                        if ("success" in contactInfo && contactInfo.success) {
+
+
+                            contacts.push(
+                                contactInfo
+                            )
+                            i = i + 1;
+                            if (i < contactsArray.length) {
+
+                                getContactInfoRecursive()
+                            } else {
+
+                                callback(contacts)
+                            }
+
                         }
-                        
+
                     })
                 }
 
-                if(contactsArray.length > 0){ 
+                if (contactsArray.length > 0) {
                     console.log("calling recursive function")
                     getContactInfoRecursive()
-                }else{
+                } else {
                     callback([])
                 }
-            }else {
+            } else {
                 console.log("No contacts found")
                 callback([])
             }
@@ -1562,23 +1555,22 @@ const getContacts = (user, callback) => {
 const getContactInformation = (userTable, session, userID, isContact) => {
     console.log('getting Contact information')
 
-    return new Promise(resolve =>{
-        userTable.select(["userID", "userName", "userHandle", "userSocket", "statusID", "userFileID", "accessID"]).where("userID = :userID").bind("userID", userID).execute().then((userSelect)=>{
+    return new Promise(resolve => {
+        userTable.select(["userID", "userName", "userHandle", "userSocket", "statusID", "userFileID", "accessID"]).where("userID = :userID").bind("userID", userID).execute().then((userSelect) => {
             const one = userSelect.fetchOne()
-         
-            if(one != undefined)
-            {
+
+            if (one != undefined) {
                 console.log(one)
                 const accessID = one[6]
 
                 const contactID = one[0];
                 const userName = one[1];
                 const userHandle = accessID != access.private ? one[2] : null;
-                const userSocket =  one[3];
+                const userSocket = one[3];
                 const statusID = accessID != access.private ? one[4] : status.Offline;
                 const userFileID = accessID != access.private ? one[5] : null;
-                
-      
+
+
                 let user = {
                     userID: contactID,
                     userName: userName,
@@ -1598,20 +1590,20 @@ const getContactInformation = (userTable, session, userID, isContact) => {
                     }
                 }
 
-                if(userFileID != null){
-                    
-                    getFileUserFileID(userFileID, contactID, isContact, session).then((file)=>{
+                if (userFileID != null) {
+
+                    getFileUserFileID(userFileID, contactID, isContact, session).then((file) => {
                         user.image = file
                         console.log(file)
                         resolve({ success: true, user: user })
                     })
-                }else{
+                } else {
                     resolve({ success: true, user: user })
                 }
 
-               
-            }else{
-               throw new Error("not a user")
+
+            } else {
+                throw new Error("not a user")
             }
         })
 
@@ -1676,35 +1668,34 @@ const getUserReferalCodes = (user, callback) => {
 }
 
 const getOwnUserFile = (userFileID, session) => {
-    return new Promise(resolve =>{
+    return new Promise(resolve => {
         const userFileQuery = "SELECT DISTINCT file.fileID, file.fileName, file.fileHash, file.fileMimeType, file.fileType, file.fileSize, file.fileLastModified \
 FROM arcturus.userFile, arcturus.file WHERE userFile.userFileID = " + userFileID + " AND file.fileID = userFile.fileID"
 
-        session.sql(userFileQuery).execute().then((userFileSelect)=>{
+        session.sql(userFileQuery).execute().then((userFileSelect) => {
 
-        if (userFileSelect.hasData())
-        {
-            const value = userFileSelect.fetchOne()
-            file = {
-                fileID: value[0],
-                name: value[1],
-                hash: value[2],
-                mimeType: value[3],
-                type:value[4],
-                size: value[5],
-                lastModified: value[6],
+            if (userFileSelect.hasData()) {
+                const value = userFileSelect.fetchOne()
+                file = {
+                    fileID: value[0],
+                    name: value[1],
+                    hash: value[2],
+                    mimeType: value[3],
+                    type: value[4],
+                    size: value[5],
+                    lastModified: value[6],
+                }
+                resolve(file)
+            } else {
+                resolve(null)
             }
-            resolve(file)
-        }else{
-            resolve(null)
-        }
+        })
     })
-})
 }
 const getFileUserFileID = (userFileID, userID, isContact, session) => {
     console.log("getting user file")
     return new Promise(resolve => {
-        
+
         let userFileQuery = `
 SELECT DISTINCT 
  file.fileID, 
@@ -1727,21 +1718,21 @@ WHERE
  OR 
   ( userFile.userFileID = ${userFileID} AND file.fileID = userFile.fileID AND userFile.userFileUserAccess LIKE "%'${userID}'%")`
 
-if (isContact) {
-   userFileQuery = userFileQuery.concat(` OR
+        if (isContact) {
+            userFileQuery = userFileQuery.concat(` OR
  (
      userFile.accessID = ${access.contacts} AND userFile.userFileID = ${userFileID} AND file.fileID = userFile.fileID
  )`)
-}
+        }
         session.sql(userFileQuery).execute().then((userFileSelect) => {
 
             if (userFileSelect.hasData()) {
                 const value = userFileSelect.fetchOne()
 
-               // const accessID = value[7];
-               // const userAccess = value[8];
-               
-              
+                // const accessID = value[7];
+                // const userAccess = value[8];
+
+
                 file = {
                     fileID: value[0],
                     name: value[1],
@@ -1771,8 +1762,8 @@ if (isContact) {
                     default:
                         resolve(nullFile)
                 }*/
-                
-                
+
+
 
             } else {
                 resolve(nullFile)
@@ -1782,31 +1773,31 @@ if (isContact) {
 }
 
 const checkUser = (user, callback) => {
-  
+
 
 
     mySession.then((session) => {
 
         const arctDB = session.getSchema("arcturus")
         const userTable = arctDB.getTable("user")
-        
+
 
         userTable.select(["userID", "userName", "userEmail", "userHandle", "userFileID", "userSocket", "accessID"]).where(
             "( LOWER(userName) = LOWER(:nameEmail) OR LOWER(userEmail) = LOWER(:nameEmail)) AND userPassword = :password"
-        ).bind("nameEmail", user.nameEmail + "").bind("password",user.password + "").execute().then((results) => {
+        ).bind("nameEmail", user.nameEmail + "").bind("password", user.password + "").execute().then((results) => {
             const userArr = results.fetchOne()
 
             if (userArr == undefined) {
 
                 console.log("login try failed for: " + user.nameEmail)
 
-                callback({success:false})
+                callback({ success: false })
             } else {
 
 
                 const userID = userArr[0];
                 const userFileID = userArr[4];
-                const userSocket = userArr[5]; 
+                const userSocket = userArr[5];
 
                 let loginUser = {
                     userID: userID,
@@ -1822,19 +1813,21 @@ const checkUser = (user, callback) => {
                         type: null,
                         size: null,
                         lastModified: null,
-                    }
+                    },
+                    admin: userID == 22 
                 }
+       
 
-                if(userFileID == null){
-                    callback({ success: true, user: loginUser, userSocket: userSocket });
-                }else{
-                    getOwnUserFile(userFileID, session).then((imageFile) =>{
+                if (userFileID == null) {
+                    callback({ success: true, user: loginUser, userSocket: userSocket  });
+                } else {
+                    getOwnUserFile(userFileID, session).then((imageFile) => {
                         loginUser.image = imageFile
 
                         callback({ success: true, user: loginUser, userSocket: userSocket });
                     })
                 }
-                
+
 
             }
         })
@@ -1846,10 +1839,10 @@ const checkUser = (user, callback) => {
 const sendEmailCode = (userID, callback) => {
     console.log("sending email code")
     var date = formatedNow();
-    
+
     var veriCode = cryptojs.SHA256(date).toString().slice(0, 6);
-   
- 
+
+
     mySession.then((session) => {
 
         var arcDB = session.getSchema('arcturus');
@@ -1859,17 +1852,16 @@ const sendEmailCode = (userID, callback) => {
         session.startTransaction();
         try {
 
-            userTable.select(['userName', "userEmail"]).where("user.userID = :userID AND HOUR(TIMEDIFF(UTC_TIMESTAMP(), userEmailLastChanged))>24").bind("userID",userID).execute().then((value) => {
+            userTable.select(['userName', "userEmail"]).where("user.userID = :userID AND HOUR(TIMEDIFF(UTC_TIMESTAMP(), userEmailLastChanged))>24").bind("userID", userID).execute().then((value) => {
                 const one = value.fetchOne();
-         
-              
-                if(one !== undefined)
-                {
+
+
+                if (one !== undefined) {
                     const userName = one[0];
                     const userEmail = one[1];
-                
 
-                    
+
+
 
                     const modifiedString = date;
 
@@ -1889,16 +1881,16 @@ const sendEmailCode = (userID, callback) => {
                                 }
                             })
                         } else {
-                        
+
                             session.rollback();
                             callback({ error: new Error("Cannot update user") });
-                        
+
                         }
                     })
 
                     session.commit();
-                }else{
-                   
+                } else {
+
                     session.rollback();
                     callback({ error: new Error("Cannot update user") });
                 }
@@ -2008,7 +2000,7 @@ const updateUserPassword = (userID, info, callback) => {
 }
 
 const updateUserPasswordAnon = (info, callback) => {
- 
+
     mySession.then((session) => {
 
         var arcDB = session.getSchema('arcturus');
@@ -2051,8 +2043,6 @@ const updateUserPasswordAnon = (info, callback) => {
 /*
 const checkUserFiles = (userID, hashs, callback) =>{
     mySession.then((session) => {
-
-
         let i = 0;
         let passedHashs = []
         const checkFileRecursive = () =>
@@ -2064,7 +2054,6 @@ const checkUserFiles = (userID, hashs, callback) =>{
                 if(sqlResult.hasData()){
                     const one = sqlResult.fetchOne()
                     const fileID = one[0]
-
                     passedHashs.push({fileID:fileID, hash:hash, index: i}) 
                 
                 }
@@ -2083,7 +2072,7 @@ const checkUserFiles = (userID, hashs, callback) =>{
     })
 }*/
 
-const updateStorageConfig = (fileID, fileInfo, callback) =>{
+const updateStorageConfig = (fileID, fileInfo, callback) => {
     console.log("updating storage config: " + fileID + "hash: " + fileInfo.hash)
     mySession.then((session) => {
 
@@ -2104,18 +2093,19 @@ const updateStorageConfig = (fileID, fileInfo, callback) =>{
             "fileLastModified", fileInfo.lastModified
         ).where("fileID = :fileID").bind(
             "fileID", fileID
-        ).execute().then((fileUpdateResult)=>{
+        ).execute().then((fileUpdateResult) => {
             const result = fileUpdateResult.getAffectedItemsCount()
 
-            callback({success:result > 0})
-        }).catch((err)=>{
+            callback({ success: result > 0 })
+        }).catch((err) => {
             console.log(err);
-            callback({error: new Error("DB error")})
+            callback({ error: new Error("DB error") })
         })
-      
+
     })
 }
-const createStorage = (userID, fileInfo, storageKey, callback ) =>{
+/*
+const createStorage = (userID, fileInfo, storageKey, callback) => {
 
 
     mySession.then((session) => {
@@ -2123,17 +2113,17 @@ const createStorage = (userID, fileInfo, storageKey, callback ) =>{
         var arcDB = session.getSchema('arcturus');
         var storageTable = arcDB.getTable("storage");
         var fileTable = arcDB.getTable("file")
-   
+
         console.log(fileInfo)
 
         fileTable.insert(
-            ["fileName", "fileHash", "fileSize", "fileType", "fileMimeType" , "fileLastModified"]
+            ["fileName", "fileHash", "fileSize", "fileType", "fileMimeType", "fileLastModified"]
         ).values(
             [fileInfo.name, fileInfo.hash, fileInfo.size, fileInfo.type, fileInfo.mimeType, fileInfo.lastModified]
-        ).execute().then((fileInsert)=>{
-            if(fileInsert.getAffectedItemsCount > 0){
-                callback({error:new Error("File not added.")})
-            }else{
+        ).execute().then((fileInsert) => {
+            if (fileInsert.getAffectedItemsCount > 0) {
+                callback({ error: new Error("File not added.") })
+            } else {
                 const fileID = fileInsert.getAutoIncrementValue()
                 console.log(fileID)
                 storageTable.insert(
@@ -2143,28 +2133,27 @@ const createStorage = (userID, fileInfo, storageKey, callback ) =>{
                 ).execute().then((res) => {
                     const affected = res.getAffectedItemsCount();
 
-                    if(affected > 0)
-                    {
+                    if (affected > 0) {
                         const storageID = res.getAutoIncrementValue()
 
-                        callback({success:true, storageID: storageID, fileID: fileID})
-                    }else{
-                        callback({success:false})
+                        callback({ success: true, storageID: storageID, fileID: fileID })
+                    } else {
+                        callback({ success: false })
                     }
-                    
+
                 }).catch((err) => {
                     console.log(err)
 
-                    callback({error:new Error("Storage not created")})
+                    callback({ error: new Error("Storage not created") })
                 })
             }
-        }).catch((err) =>{
+        }).catch((err) => {
             console.log(err)
             callback({ error: new Error("Storage not created") })
         })
-       
-        
-       
+
+
+
     }).catch((err) => {
         console.log(err)
         callback({ error: new Error("Storage not created") })
@@ -2179,56 +2168,39 @@ const loadStorage = (hash, engineKey, callback) => {
         const query = "select storage.storageID, storage.fileID from arcturus.storage, arcturus.file where file.fileHash = " + hash + " \
 AND storage.storageKey = " + engineKey;
 
-        session.sql(query).execute().then((loaded)=>{
-            if(loaded.hasData())
-            {
+        session.sql(query).execute().then((loaded) => {
+            if (loaded.hasData()) {
                 const info = loaded.fetchOne();
                 const storageID = info[0];
                 const fileID = info[1];
 
                 callback({ success: true, storageID: storageID, fileID: fileID })
-            }else{
+            } else {
                 callback({ error: new Error("No storage.") })
             }
         })
-    }).catch((err)=>{
+    }).catch((err) => {
         console.log(err)
-        callback({error: new Error("DB error")})
+        callback({ error: new Error("DB error") })
     })
 
-}
+}*/
 
 
 
 
 
 
-function formatedNow(now = new Date(), small = false) {
-
-    const year = now.getUTCFullYear();
-    const month = now.getUTCMonth()
-    const day = now.getUTCDate();
-    const hours = now.getUTCHours();
-    const minutes = now.getUTCMinutes();
-    const seconds = now.getUTCSeconds();
-    const miliseconds = now.getUTCMilliseconds();
-
-    const stringYear = year.toString();
-    const stringMonth = month < 10 ? "0" + month : String(month);
-    const stringDay = day < 10 ? "0" + day : String(day);
-    const stringHours = hours < 10 ? "0" + hours : String(hours);
-    const stringMinutes = minutes < 10 ? "0" + minutes : String(minutes);
-    const stringSeconds = seconds < 10 ? "0" + seconds : String(seconds);
-    const stringMiliseconds = miliseconds < 100 ? (miliseconds < 10 ? "00" + miliseconds : "0" + miliseconds) : String(miliseconds);
-
-
-   return  stringNow = stringYear + "-" + stringMonth + "-" + stringDay + " " + stringHours + ":" + stringMinutes;
-
-
-
+function formatedNow(n) {
     
+    return moment().format('DD-MM-YYYY HH:mm:ss')
+
+
+
 }
 
+
+/*
 
 const checkStorageHash = (userID, hash, callback) => {
     console.log("checking storageHash " + hash)
@@ -2277,35 +2249,36 @@ const checkStorageHash = (userID, hash, callback) => {
 }
 
 
-const useConfig = (userID, fileID, storageKey, callback) =>{
+const useConfig = (userID, fileID, callback) => {
     mySession.then((session) => {
 
         const arcDB = session.getSchema("arcturus");
         const storageTable = arcDB.getTable("storage");
 
+        storageTable.select(["storageID"]).where("userID = :userID AND fileID =:fileID")
+
         storageTable.insert(["userID", "fileID", "storageKey", "statusID",]).values(
-            userID, fileID, storageKey, status.Offline, 
-        ).execute().then((storageInsert)=>{
+            userID, fileID, storageKey, status.Offline,
+        ).execute().then((storageInsert) => {
             const affected = storageInsert.getAffectedItemsCount()
 
-            if(affected > 0)
-            {
+            if (affected > 0) {
                 const storageID = storageInsert.getAutoIncrementValue();
 
-                callback({success:true, storageID: storageID})
-            }else{
-                callback({success:false})
+                callback({ success: true, storageID: storageID })
+            } else {
+                callback({ success: false })
             }
-        }).catch((err)=>{
+        }).catch((err) => {
             console.log(err)
-            callback({error: new Error("DB error")})
+            callback({ error: new Error("DB error") })
         })
 
     })
-}
+}*/
 
-const selectFileTableHash = (fileTable, hash) =>{
-    return new Promise(resolve =>{
+const selectFileTableHash = (fileTable, hash) => {
+    return new Promise(resolve => {
         console.log("hashLength:" + hash.length)
         fileTable.select(["fileID"]).where("fileHash = :fileHash").bind("fileHash", hash).execute().then((selectRes) => {
             const one = selectRes.fetchOne()
@@ -2316,14 +2289,13 @@ const selectFileTableHash = (fileTable, hash) =>{
             }
         })
     })
-    
+
 }
 
 const checkFileHash = (hash, callback) => {
-    if (hash == undefined || hash == null || hash == "" || hash.length < 128 )
-    {
+    if (hash == undefined || hash == null || hash == "" || hash.length < 128) {
         callback(undefined)
-    }else{
+    } else {
         mySession.then((session) => {
 
             var arcDB = session.getSchema('arcturus');
@@ -2338,7 +2310,7 @@ const checkFileHash = (hash, callback) => {
             callback({ error: new Error("DB error") })
         })
     }
-    
+
 }
 
 
@@ -2353,14 +2325,13 @@ const checkRealmName = (name, callback) => {
 
         realmTable.select(["realmName"]).where("realmName = :realmName").bind(
             "realmName", name
-        ).execute().then((result)=>{
-            if(result.fetchOne() == undefined)
-            {
+        ).execute().then((result) => {
+            if (result.fetchOne() == undefined) {
                 callback(true)
-            }else{
+            } else {
                 callback(false)
             }
-        }).catch((err)=>{
+        }).catch((err) => {
             console.log(err)
             callback(false)
         })
@@ -2380,16 +2351,16 @@ const checkUserFileTable = (userFileTable, userID, fileID) => {
             const one = result.fetchOne();
             console.log(one)
             if (one == undefined) {
-                resolve({success:false})
+                resolve({ success: false })
             } else {
-                resolve({success:true, accessID:one[0]})
+                resolve({ success: true, accessID: one[0] })
             }
         })
     })
 
 }
 
-const addFileToRealm = (userID, realmID, fileInfo, callback) =>{
+const addFileToRealm = (userID, realmID, fileInfo, callback) => {
     mySession.then((session) => {
 
         const arcDB = session.getSchema('arcturus');
@@ -2397,11 +2368,10 @@ const addFileToRealm = (userID, realmID, fileInfo, callback) =>{
         const realmFileTable = arcDB.getTable("realmFile")
         const realmTable = arcDB.getTable("realm");
 
-        realmTable.select(["userID"]).where("userID = :userID").bind("userID", userID).execute().then((realmSelect)=>{
+        realmTable.select(["userID"]).where("userID = :userID").bind("userID", userID).execute().then((realmSelect) => {
             const one = realmSelect.fetchOne()
 
-            if(one != undefined)
-            {
+            if (one != undefined) {
                 checkFileHash(fileInfo.hash, (result) => {
                     const fileID = result.fileID;
                     session.startTransaction()
@@ -2422,10 +2392,10 @@ const addFileToRealm = (userID, realmID, fileInfo, callback) =>{
                                     session.commit()
                                     fileInfo.fileID = fileID;
                                     fileInfo.realmFileID = realmFileID;
-                                    callback({success: true, file:fileInfo})
+                                    callback({ success: true, file: fileInfo })
                                 } else {
                                     session.rollback()
-                                    callback({ success:false, msgCode:status.invalid })
+                                    callback({ success: false, msgCode: status.invalid })
                                 }
 
                             }).catch((err) => {
@@ -2440,18 +2410,17 @@ const addFileToRealm = (userID, realmID, fileInfo, callback) =>{
                             callback({ error: new Error("File Insert failed.") })
                         })
                     } else {
-                        checkRealmFile(realmID, fileID, (crfResult)=>{
-                            if("error" in crfResult) {
+                        checkRealmFile(realmID, fileID, (crfResult) => {
+                            if ("error" in crfResult) {
                                 session.rollback();
-                                callback({error: crfResult.error})
-                            }else{
-                                if(crfResult.success)
-                                {
+                                callback({ error: crfResult.error })
+                            } else {
+                                if (crfResult.success) {
                                     const realmFileID = crfr.realmFileID
                                     fileInfo.fileID = fileID;
                                     fileInfo.realmFileID = realmFileID;
                                     callback({ success: true, file: fileInfo })
-                                }else{
+                                } else {
                                     realmFileTable.insert(["realmID", "fileID"]).values([realmID, fileID]).execute().then((realmFileInsert) => {
                                         const affected = realmFileInsert.getAffectedItemsCount()
                                         if (affected > 0) {
@@ -2470,15 +2439,15 @@ const addFileToRealm = (userID, realmID, fileInfo, callback) =>{
                         })
                     }
                 })
-            }else{
-                callback({success:false, msgCode:status.invalid})
+            } else {
+                callback({ success: false, msgCode: status.invalid })
             }
         }).catch((err) => {
             console.log(err)
             session.rollback();
             callback({ error: new Error("DB error") })
         })
-        
+
     }).catch((err) => {
         console.log(err)
         callback({ error: new Error("DB error") })
@@ -2486,28 +2455,28 @@ const addFileToRealm = (userID, realmID, fileInfo, callback) =>{
 }
 
 const checkRealmFile = (realmID, fileID, callback) => {
-    mySession.then((session) =>{
+    mySession.then((session) => {
         const arcDB = session.getSchema("arcturus")
         const realmFileTable = arcDB.getTable("realmFile")
 
         realmFileTable.select(["realmFileID"]).where("fileID = :fileID and realmID = :realmID").bind("fileID", fileID).bind("realmID", realmID).execute().then((realmFileSelect) => {
             const rfsOne = realmFileSelect.fetchOne()
             if (rfsOne == undefined) {
-                
-                callback({success:false, realmFileID:null})
-            }else{
+
+                callback({ success: false, realmFileID: null })
+            } else {
                 const realmFileID = rfsOne[0]
-                callback({success:true, realmFileID: realmFileID})
+                callback({ success: true, realmFileID: realmFileID })
             }
-        }).catch((err)=>{
+        }).catch((err) => {
             console.log(err)
-            callback({error:new Error("DB error")})
+            callback({ error: new Error("DB error") })
         })
     })
 }
 
-const insertFile = (fileTable, fileInfo) =>{
-    return new Promise(resolve =>{
+const insertFile = (fileTable, fileInfo) => {
+    return new Promise(resolve => {
         fileTable.insert(
             ["fileName", "fileHash", "fileSize", "fileType", "fileMimeType", "fileLastModified"]
         ).values(
@@ -2519,7 +2488,7 @@ const insertFile = (fileTable, fileInfo) =>{
             resolve(fileInfo)
         })
     })
-    
+
 }
 
 const createRealm = (userID, realmName, imageFile, page, index, callback) => {
@@ -2530,35 +2499,35 @@ const createRealm = (userID, realmName, imageFile, page, index, callback) => {
         const roomTable = arcDB.getTable("room");
         const fileTable = arcDB.getTable("file")
         const userRoomTable = arcDB.getTable("userRoom");
-      
-        const insertRealm = (innerRealmTable, realmName, userID,imageID, page, index, roomID, gatewayRoomID) =>{
-            return new Promise(resolve =>{
-            
+
+        const insertRealm = (innerRealmTable, realmName, userID, imageID, page, index, roomID, gatewayRoomID) => {
+            return new Promise(resolve => {
+
                 innerRealmTable.insert([
-                    "realmName", 
+                    "realmName",
                     "configID",
-                    "userID", 
-                    "roomID", 
-                    "gatewayRoomID", 
-                    "imageID",  
-                    "realmPage", 
-                    "realmIndex", 
-                    "statusID", 
-                    "accessID", 
-                    "advisoryID", 
+                    "userID",
+                    "roomID",
+                    "gatewayRoomID",
+                    "imageID",
+                    "realmPage",
+                    "realmIndex",
+                    "statusID",
+                    "accessID",
+                    "advisoryID",
                     "realmType"
-                 ]).values([
-                    realmName, 
-                    -1, 
-                    userID, 
-                    roomID, 
-                    gatewayRoomID, 
-                    imageID, 
-                    page, 
-                    index, 
-                    status.Offline, 
-                    access.private, 
-                    advisory.none, 
+                ]).values([
+                    realmName,
+                    -1,
+                    userID,
+                    roomID,
+                    gatewayRoomID,
+                    imageID,
+                    page,
+                    index,
+                    status.Offline,
+                    access.private,
+                    advisory.none,
                     ""
                 ]).execute().then((realmResult) => {
                     const realmID = realmResult.getAutoIncrementValue()
@@ -2568,90 +2537,89 @@ const createRealm = (userID, realmName, imageFile, page, index, callback) => {
             })
         }
 
-      
-           
-     
 
-        try{
-             session.startTransaction()
-           
-                createRoom(roomTable,userRoomTable, userID, realmName).then((roomResult)=>{
-                    if(!roomResult.success) throw new Error("room not created")
 
-                    const roomID = roomResult.room.roomID
-                    createRoom(roomTable,userRoomTable, userID, realmName).then((gatewayRoomResult) => {
-                        if (!gatewayRoomResult.success) throw new Error("gateway room not created")
 
-                        const gatewayRoomID = gatewayRoomResult.room.roomID
-                        
-                        if(roomID != undefined && gatewayRoomID != undefined){
-                            let realm = {
-                                    userID: userID,
-                                    realmName: realmName,
-                                    roomID: roomID,
-                                    gatewayRoomID: gatewayRoomID,
-                                    config: { fileID: -1, value: null, handle: null },
-                                    realmPage: page,
-                                    realmIndex: index,
-                                    realmDescription: null,
-                                    statusID: status.Offline,
-                                    advisoryID: advisory.none,
-                                    accessID: access.private,
-                                    realmType: "",
-                                }
-                            checkFileHash(imageFile.hash,(hashResult) =>{
-                                if("error" in hashResult){
-                                    session.rollback()
-                                    callback({error:"Error in hash result"})
-                                }else{
-                                    if(hashResult.fileID == null)
-                                    {
-                                        insertFile(fileTable, imageFile).then((imageFileInfo)=>{
-                                            const imageID = imageFileInfo.fileID;
 
-                                            insertRealm(realmTable, realmName, userID, imageID, page, index, roomID, gatewayRoomID).then((realmID) => {
-                                                
-                                                realm.image = imageFileInfo;
-                                                realm.realmID = realmID;
-                                                session.commit()
-                                                callback({success:true, realm:realm})
-                                            })
-                                        })
-                                    
-                                    
-                                    }else{
-                                        insertRealm(realmTable, realmName, userID, hashResult.fileID, page, index, roomID, gatewayRoomID).then((realmID) => {
-                                            if (realmID != undefined) {
-                                                imageFile.fileID = hashResult.fileID;
-                                                realm.image = imageFile;
-                                                realm.realmID = realmID;
-                                                session.commit()
-                                                callback({ success: true, realm: realm })
-                                            }
-                                        })
-                                    }
-                                }
-                            
-                            })
+        try {
+            session.startTransaction()
 
-                        }else{
-                            session.rollback()
-                            callback({ error: new Error("Error adding room.") })
+            createRoom(roomTable, userRoomTable, userID, realmName).then((roomResult) => {
+                if (!roomResult.success) throw new Error("room not created")
+
+                const roomID = roomResult.room.roomID
+                createRoom(roomTable, userRoomTable, userID, realmName).then((gatewayRoomResult) => {
+                    if (!gatewayRoomResult.success) throw new Error("gateway room not created")
+
+                    const gatewayRoomID = gatewayRoomResult.room.roomID
+
+                    if (roomID != undefined && gatewayRoomID != undefined) {
+                        let realm = {
+                            userID: userID,
+                            realmName: realmName,
+                            roomID: roomID,
+                            gatewayRoomID: gatewayRoomID,
+                            config: { fileID: -1, value: null, handle: null },
+                            realmPage: page,
+                            realmIndex: index,
+                            realmDescription: null,
+                            statusID: status.Offline,
+                            advisoryID: advisory.none,
+                            accessID: access.private,
+                            realmType: "",
                         }
+                        checkFileHash(imageFile.hash, (hashResult) => {
+                            if ("error" in hashResult) {
+                                session.rollback()
+                                callback({ error: "Error in hash result" })
+                            } else {
+                                if (hashResult.fileID == null) {
+                                    insertFile(fileTable, imageFile).then((imageFileInfo) => {
+                                        const imageID = imageFileInfo.fileID;
+
+                                        insertRealm(realmTable, realmName, userID, imageID, page, index, roomID, gatewayRoomID).then((realmID) => {
+
+                                            realm.image = imageFileInfo;
+                                            realm.realmID = realmID;
+                                            session.commit()
+                                            callback({ success: true, realm: realm })
+                                        })
+                                    })
+
+
+                                } else {
+                                    insertRealm(realmTable, realmName, userID, hashResult.fileID, page, index, roomID, gatewayRoomID).then((realmID) => {
+                                        if (realmID != undefined) {
+                                            imageFile.fileID = hashResult.fileID;
+                                            realm.image = imageFile;
+                                            realm.realmID = realmID;
+                                            session.commit()
+                                            callback({ success: true, realm: realm })
+                                        }
+                                    })
+                                }
+                            }
+
+                        })
+
+                    } else {
+                        session.rollback()
+                        callback({ error: new Error("Error adding room.") })
+                    }
                 })
-            })    
-             
-        }catch(err){
+            })
+
+        } catch (err) {
             console.log(err)
             session.rollback()
-            callback({ error: new Error ("Unable to create realm.") })
+            callback({ error: new Error("Unable to create realm.") })
         }
-        
-          
+
+
     })
 }
 
-const getRealms = (userID, callback) =>{
+const getRealms = (userID, callback) => {
     mySession.then((session) => {
 
         const query = "\
@@ -2683,18 +2651,17 @@ SELECT DISTINCT \
 FROM \
  arcturus.realm, arcturus.status, arcturus.file as image, arcturus.file as config \
 WHERE \
- realm.imageID = image.fileID AND realm.configID = config.fileID AND userID = " + userID 
+ realm.imageID = image.fileID AND realm.configID = config.fileID AND userID = " + userID
 
 
- 
-       session.sql(query).execute().then((selectResult)=>{
-            
-            if(selectResult.hasData())
-            {
+
+        session.sql(query).execute().then((selectResult) => {
+
+            if (selectResult.hasData()) {
                 const all = selectResult.fetchAll()
                 let realms = []
-               
-      
+
+
                 all.forEach((value) => {
                     const realm = {
                         realmID: value[0],
@@ -2727,53 +2694,52 @@ WHERE \
                         realmDescription: value[20],
                         advisoryID: value[21],
                         realmType: value[22],
-                        gatewayRoomID:value[23]
-                       
+                        gatewayRoomID: value[23]
+
                     };
-                  
-                    realms.push(realm);     
+
+                    realms.push(realm);
                 });
-                
-                
-                
-                callback({success:true, realms:realms})
+
+
+
+                callback({ success: true, realms: realms })
             } else {
                 callback({ success: false })
             }
-        }).catch((err)=>{
+        }).catch((err) => {
             console.log(err)
 
-            callback({error:new Error("DB error")})
+            callback({ error: new Error("DB error") })
         })
     })
 
 }
-const getUserSocket = (userID, callback) =>{
-    mySession.then((session)=>{
+const getUserSocket = (userID, callback) => {
+    mySession.then((session) => {
         const arcDB = session.getSchema("arcturus")
         const userTable = arcDB.getTable("user")
 
-        userTable.select(["userSocket"]).where("userID = :userID").bind("userID", userID).then((userSelect)=>{
+        userTable.select(["userSocket"]).where("userID = :userID").bind("userID", userID).then((userSelect) => {
             const one = userSelect.fetchOne()
-            if(one != undefined)
-            {
+            if (one != undefined) {
                 const userSocket = one[0]
-                if(userSocket == ""){ 
+                if (userSocket == "") {
                     callback(null)
-                }else{
+                } else {
                     callback(userSocket)
                 }
-            }else{
+            } else {
                 callback(null)
             }
-        }).catch((err)=>{
+        }).catch((err) => {
             callback(null)
         })
     })
 }
 
-const deleteRealm = (userID, realmID, callback) =>{
-    
+const deleteRealm = (userID, realmID, callback) => {
+
     mySession.then((session) => {
         //to get more complicated?
 
@@ -2786,23 +2752,23 @@ const deleteRealm = (userID, realmID, callback) =>{
 
         console.log("deleting realm: " + realmID + " by userID: " + userID)
 
-        realmTable.select(["roomID", "gatewayRoomID"]).where("userID = :userID and realmID = :realmID").bind("userID", userID).bind("realmID", realmID).execute().then((realmSelect)=>{
+        realmTable.select(["roomID", "gatewayRoomID"]).where("userID = :userID and realmID = :realmID").bind("userID", userID).bind("realmID", realmID).execute().then((realmSelect) => {
             const rsOne = realmSelect.fetchOne()
-            if(rsOne != undefined){
+            if (rsOne != undefined) {
                 const roomID = rsOne[0]
                 const gatewayRoomID = rsOne[1]
 
-                realmUserTable.select(["userID",]).where("realmID = :realmID").bind("realmID", realmID).execute().then((realmUserSelect)=>{
+                realmUserTable.select(["userID",]).where("realmID = :realmID").bind("realmID", realmID).execute().then((realmUserSelect) => {
                     const rusrs = realmUserSelect.fetchAll()
                     session.startTransaction()
                     try {
                         let realmUsers = []
                         rusrs.forEach(realmUser => {
                             const realmUserID = realmUser[0];
-                            realmUsers.push({userID:realmUserID})
-                           
+                            realmUsers.push({ userID: realmUserID })
+
                         });
-                        
+
                         realmUserFile.delete().where("realmID = :realmID").bind("realmID", realmID).execute();
                         realmUserTable.delete().where("realmID = :realmID").bind("realmID", realmID).execute()
 
@@ -2813,29 +2779,29 @@ const deleteRealm = (userID, realmID, callback) =>{
                             roomTable.delete().where("roomID = :roomID").bind("roomID", roomID).execute();
                             roomTable.delete().where("roomID = :roomID").bind("roomID", gatewayRoomID).execute();
 
-                            callback({success:affectedRealms > 0, realmUsers:realmUsers})
+                            callback({ success: affectedRealms > 0, realmUsers: realmUsers })
                         })
                         session.commit()
-                    }catch(err){
+                    } catch (err) {
                         console.log(err)
                         session.rollback()
                         callback({ error: new Error("realm delete DB error") })
                     }
-                        
 
-               
+
+
                 })
-              
+
             }
         })
 
-      
+
     })
 
 }
 
 
-const updateRealmInformation = (information, callback) =>{
+const updateRealmInformation = (information, callback) => {
     const realmID = information.realmID
     const accessID = information.accessID
     const realmDescription = information.realmDescription
@@ -2848,7 +2814,7 @@ const updateRealmInformation = (information, callback) =>{
 
         var arcDB = session.getSchema('arcturus');
         var realmTable = arcDB.getTable("realm");
-    
+
 
 
         realmTable.update().set(
@@ -2858,27 +2824,26 @@ const updateRealmInformation = (information, callback) =>{
         ).set(
             "advisoryID", advisoryID
         ).set(
-            "realmType",realmType
-        ).where("realmID = :realmID").bind("realmID", realmID).execute().then((realmUpdateResult)=>{
+            "realmType", realmType
+        ).where("realmID = :realmID").bind("realmID", realmID).execute().then((realmUpdateResult) => {
             const affected = realmUpdateResult.getAffectedItemsCount()
-            if(affected > 0)
-            {
-                callback({success:true})
-            }else{
-                callback({sucess:false})
+            if (affected > 0) {
+                callback({ success: true })
+            } else {
+                callback({ sucess: false })
             }
-        }).catch((err)=>{
+        }).catch((err) => {
             console.log(err)
-            callback({error: new Error("DB error")})
+            callback({ error: new Error("DB error") })
         })
     })
 }
 
 
 
-const enterRealmGateway = (user, realmID,socket, callback)=>{
+const enterRealmGateway = (user, realmID, socket, callback) => {
 
-    
+
 
     mySession.then((session) => {
 
@@ -2893,143 +2858,139 @@ const enterRealmGateway = (user, realmID,socket, callback)=>{
         const finalize = (admin, userRoomTable, userTable, contactList, userID, gatewayRoomID, roomID) => {
             return new Promise(resolve => {
                 getRoomUsers(session, userRoomTable, userTable, contactList, gatewayRoomID).then((gatewayRoomResult) => {
-                        if(!("success" in gatewayRoomResult)) throw new Error("getgatewayRoomUsers not successfull")
-                        
-                        const gatewayUsers = gatewayRoomResult.users
+                    if (!("success" in gatewayRoomResult)) throw new Error("getgatewayRoomUsers not successfull")
+
+                    const gatewayUsers = gatewayRoomResult.users
 
                     getRoomUsers(session, userRoomTable, userTable, contactList, roomID).then((realmRoomResult) => {
-                            if (!("success" in gatewayRoomResult)) throw new Error("getRoomUsers not successfull")
+                        if (!("success" in gatewayRoomResult)) throw new Error("getRoomUsers not successfull")
 
-                            const realmUsers = realmRoomResult.users
+                        const realmUsers = realmRoomResult.users
 
-                            const index = realmUsers.findIndex(search => search.userID == user.userID)
+                        const index = realmUsers.findIndex(search => search.userID == user.userID)
 
-                            const realmMember = index > 0
+                        const realmMember = index > 0
 
-                            getStoredMessages(messageTable, gatewayRoomID).then((messagesResult) => {
-                            
-                                setUserRoomStatus(userRoomTable, userID, gatewayRoomID, status.Online).then((statusUpdated) => {
+                        getStoredMessages(messageTable, gatewayRoomID).then((messagesResult) => {
 
-                                    io.to(gatewayRoomID).emit("userRoomStatus", userID, status.Online);
-                                    socket.join(gatewayRoomID)
+                            setUserRoomStatus(userRoomTable, userID, gatewayRoomID, status.Online).then((statusUpdated) => {
 
-                                    resolve({ admin: admin, realmMember:realmMember, success: true, gatewayUsers: gatewayUsers, realmUsers: realmUsers, gatewayMessages: messagesResult.messages });
+                                io.to(gatewayRoomID).emit("userRoomStatus", userID, status.Online);
+                                socket.join(gatewayRoomID)
+
+                                resolve({ admin: admin, realmMember: realmMember, success: true, gatewayUsers: gatewayUsers, realmUsers: realmUsers, gatewayMessages: messagesResult.messages });
                             })
                         })
                     })
 
                 })
-            
+
             })
         }
-    
-        realmTable.select(["userID", "accessID", "gatewayRoomID", "roomID"]).where("realmID = :realmID").bind("realmID", realmID).execute().then((realmSelect)=>{
+
+        realmTable.select(["userID", "accessID", "gatewayRoomID", "roomID"]).where("realmID = :realmID").bind("realmID", realmID).execute().then((realmSelect) => {
             const oneRealm = realmSelect.fetchOne()
 
-            if(oneRealm == undefined){
-                callback({success:false})
-            }else{
-                userContactTable.select(["userID"]).where("contactID = :userID").bind("userID", user.userID).execute().then((contactResult)=>{
+            if (oneRealm == undefined) {
+                callback({ success: false })
+            } else {
+                userContactTable.select(["userID"]).where("contactID = :userID").bind("userID", user.userID).execute().then((contactResult) => {
                     const contactArray = contactResult.fetchAll()
                     const contactIDList = []
                     contactArray.forEach(contact => {
                         const contactID = contact[0];
                         contactIDList.push(contactID)
                     });
-                
+
                     const realmAdminID = oneRealm[0];
                     const accessID = oneRealm[1];
                     const gatewayRoomID = oneRealm[2]
                     const roomID = oneRealm[3]
                     const admin = realmAdminID == user.userID;
 
-                userRoomTable.select(["userRoomBanned"]).where("userID =:userID and roomID = :roomID").bind("userID", user.userID).bind("roomID", gatewayRoomID).execute().then((userRoomSelect)=>{
-                    const oneUserRoom = userRoomSelect.fetchOne()
-                    if(!admin)
-                    {
-                        if (oneUserRoom == undefined) {
-                            switch(accessID)
-                            {
-                                case access.private:
-                                    callback({success:"false"})
-                                    break;
-                                case access.contacts:
-                                    userContactTable.select(["userID"]).where("userID = :userID and contactID = :contactID").bind("userID", realmAdminID).bind("contactID", user.userID).execute().then((userContactSelect)=>{
-                                        const ucsOne  = userContactSelect.fetchOne()
-                                        if(ucsOne == undefined)
-                                        {
-                                            callback({ success: "false" })
-                                        }else{
-                                            addUserToRoom(userRoomTable, user.userID, gatewayRoomID).then((added)=>{
-                                                if(added){
-                                        
-                                                    finalize(admin, userRoomTable, userTable, contactIDList, user.userID, gatewayRoomID, roomID).then(result => {
-                                                        callback(result)
-                                                    })
-                                                  
-                                                }else{
-                                                    callback({ success: "false" })
-                                                }
-                                            })
-                                        }
-                                    })
-                                    break;
-                                case access.public:
-                                    addUserToRoom( userRoomTable, user.userID, gatewayRoomID).then((added) => {
-                                        if (added) {
+                    userRoomTable.select(["userRoomBanned"]).where("userID =:userID and roomID = :roomID").bind("userID", user.userID).bind("roomID", gatewayRoomID).execute().then((userRoomSelect) => {
+                        const oneUserRoom = userRoomSelect.fetchOne()
+                        if (!admin) {
+                            if (oneUserRoom == undefined) {
+                                switch (accessID) {
+                                    case access.private:
+                                        callback({ success: "false" })
+                                        break;
+                                    case access.contacts:
+                                        userContactTable.select(["userID"]).where("userID = :userID and contactID = :contactID").bind("userID", realmAdminID).bind("contactID", user.userID).execute().then((userContactSelect) => {
+                                            const ucsOne = userContactSelect.fetchOne()
+                                            if (ucsOne == undefined) {
+                                                callback({ success: "false" })
+                                            } else {
+                                                addUserToRoom(userRoomTable, user.userID, gatewayRoomID).then((added) => {
+                                                    if (added) {
 
-                                            finalize(admin, userRoomTable, userTable, contactIDList, user.userID, gatewayRoomID, roomID).then(result => {
-                                                callback(result)
-                                            })
+                                                        finalize(admin, userRoomTable, userTable, contactIDList, user.userID, gatewayRoomID, roomID).then(result => {
+                                                            callback(result)
+                                                        })
 
-                                        } else {
-                                            callback({ success: "false" })
-                                        }
-                                    })
-                                    break;
-                            }
-                        }else{
-                            const banned = oneUserRoom[0]
-                            if(banned == 0){
-                                finalize(admin, userRoomTable, userTable, contactIDList, user.userID, gatewayRoomID, roomID).then(result => {
-                                    callback(result)
-                                })
-                            }else[
-                                callback({ success: "false" })
-                            ]
-                        }
-                    
-                    }else{
-                        if(oneUserRoom == undefined)
-                        {
-                            addUserToRoom(userTable, userRoomTable, fileTable, user.userID, gatewayRoomID).then((added) => {
-                                if(added){
-                                    finalize(admin, userRoomTable, userTable, fileTable, user.userID, gatewayRoomID, roomID).then(result => {
+                                                    } else {
+                                                        callback({ success: "false" })
+                                                    }
+                                                })
+                                            }
+                                        })
+                                        break;
+                                    case access.public:
+                                        addUserToRoom(userRoomTable, user.userID, gatewayRoomID).then((added) => {
+                                            if (added) {
+
+                                                finalize(admin, userRoomTable, userTable, contactIDList, user.userID, gatewayRoomID, roomID).then(result => {
+                                                    callback(result)
+                                                })
+
+                                            } else {
+                                                callback({ success: "false" })
+                                            }
+                                        })
+                                        break;
+                                }
+                            } else {
+                                const banned = oneUserRoom[0]
+                                if (banned == 0) {
+                                    finalize(admin, userRoomTable, userTable, contactIDList, user.userID, gatewayRoomID, roomID).then(result => {
                                         callback(result)
                                     })
-                                }else{
-                                    console.log("admin couldn't be added to gateway room")
-                                    callback({ error: new Error("error joining room") })
-                                }
-                            })
-                        }else{
-                            finalize(admin, userRoomTable, userTable, fileTable, user.userID, gatewayRoomID, roomID).then(result => {
-                                callback(result)
-                            })
-                        }
+                                } else[
+                                    callback({ success: "false" })
+                                ]
+                            }
 
-                    
-                    }
+                        } else {
+                            if (oneUserRoom == undefined) {
+                                addUserToRoom(userTable, userRoomTable, fileTable, user.userID, gatewayRoomID).then((added) => {
+                                    if (added) {
+                                        finalize(admin, userRoomTable, userTable, fileTable, user.userID, gatewayRoomID, roomID).then(result => {
+                                            callback(result)
+                                        })
+                                    } else {
+                                        console.log("admin couldn't be added to gateway room")
+                                        callback({ error: new Error("error joining room") })
+                                    }
+                                })
+                            } else {
+                                finalize(admin, userRoomTable, userTable, fileTable, user.userID, gatewayRoomID, roomID).then(result => {
+                                    callback(result)
+                                })
+                            }
+
+
+                        }
+                    })
                 })
-            })
-        }
+            }
         })
-    
+
     })
-    
+
 }
 
-const updateUserPeerID = (userID, peerID, callback) =>{
+const updateUserPeerID = (userID, peerID, callback) => {
 
     mySession.then((session) => {
 
@@ -3037,42 +2998,42 @@ const updateUserPeerID = (userID, peerID, callback) =>{
         const userTable = arcDB.getTable("user")
         const userRoom = arcDB.getTable("userRoom")
 
-        userTable.update().set("userPeerID", peerID).where("userID = :userID").bind("userID", userID).execute().then((userUpdate)=>{
+        userTable.update().set("userPeerID", peerID).where("userID = :userID").bind("userID", userID).execute().then((userUpdate) => {
             const updated = userUpdate.getAffectedItemsCount() > 0
-            
-            if(updated){
-                userRoom.select(["roomID"]).where("userID = :userID and statusID = :statusID").bind("userID", userID).bind("statusID", status.Online).execute().then((userRoomSelect) =>{
-                   
+
+            if (updated) {
+                userRoom.select(["roomID"]).where("userID = :userID and statusID = :statusID").bind("userID", userID).bind("statusID", status.Online).execute().then((userRoomSelect) => {
+
                     const allRooms = userRoomSelect.fetchAll();
                     allRooms.forEach(room => {
                         const roomID = room[0]
                         io.to(roomID).emit("updateUserPeerID", peerID)
                     });
-                   
+
                 })
             }
             callback(updated)
         })
-        
+
     })
 }
 
 const insertUserFile = (userFileTable, userID, fileID, title, text, accessID, userAccess) => {
-  
+
     return new Promise(resolve => {
         userFileTable.insert(["userID", "fileID", "userFileTitle", "userFileText", "accessID", "userFileUserAccess"]).values([
             userID, fileID, title, text, accessID, userAccess
         ]).execute().then((result) => {
-            
+
             resolve(result.getAutoIncrementValue())
-            
+
         })
     })
 }
 const updateUserFile = (userFileTable, userFileID, title, text, accessID, userAccess) => {
 
     return new Promise(resolve => {
-        userFileTable.update().set("userFileTitle",title).set("userFileText", text).set("accessID",accessID).set("userFileUserAccess", userAccess).where("userFileID = :userFileID").bind("userFileID", userFileID).execute().then((result) => {
+        userFileTable.update().set("userFileTitle", title).set("userFileText", text).set("accessID", accessID).set("userFileUserAccess", userAccess).where("userFileID = :userFileID").bind("userFileID", userFileID).execute().then((result) => {
 
             resolve(result.getAffectedItemsCount() > 0)
 
@@ -3080,9 +3041,9 @@ const updateUserFile = (userFileTable, userFileID, title, text, accessID, userAc
     })
 }
 
-const addUpdateUserFile = (userFileTable,userID,fileInfo) =>{
+const addUpdateUserFile = (userFileTable, userID, fileInfo) => {
     return new Promise(resolve => {
-        userFileTable.select(["userFileID"]).where("userID = :userID AND fileID = :fileID").bind("userID", userID).bind("fileID",fileInfo.fileID).execute().then((userFileSelectResult)=>{
+        userFileTable.select(["userFileID"]).where("userID = :userID AND fileID = :fileID").bind("userID", userID).bind("fileID", fileInfo.fileID).execute().then((userFileSelectResult) => {
             const userFileIDSelect = userFileSelectResult.fetchOne()
 
             /*fileInfo = {
@@ -3097,36 +3058,34 @@ const addUpdateUserFile = (userFileTable,userID,fileInfo) =>{
                 accessID: accessID,
                 userAccess: userAccess
             }*/
-       
-            const accessID =fileInfo.accessID
-            const userAccess =fileInfo.userAccess
-            const title =fileInfo.title
-            const text =fileInfo.text
 
-            if(userFileIDSelect == undefined)
-            {
-                insertUserFile(userFileTable, userID,fileInfo.fileID,title, text, accessID, userAccess).then((insertID)=>{
-                   fileInfo.accessID = accessID;
-                   fileInfo.userFileID = insertID;
-                   fileInfo.userAccess = userAccess
-                   fileInfo.title = title
-                   fileInfo.text = text
-                    resolve({file:fileInfo, userFileID: insertID, update:false})
+            const accessID = fileInfo.accessID
+            const userAccess = fileInfo.userAccess
+            const title = fileInfo.title
+            const text = fileInfo.text
+
+            if (userFileIDSelect == undefined) {
+                insertUserFile(userFileTable, userID, fileInfo.fileID, title, text, accessID, userAccess).then((insertID) => {
+                    fileInfo.accessID = accessID;
+                    fileInfo.userFileID = insertID;
+                    fileInfo.userAccess = userAccess
+                    fileInfo.title = title
+                    fileInfo.text = text
+                    resolve({ file: fileInfo, userFileID: insertID, update: false })
                 })
-            }else{
+            } else {
                 const userFileID = userFileIDSelect[0]
-                updateUserFile(userFileTable, userFileID,title,text, accessID, userAccess).then((updated)=>{
+                updateUserFile(userFileTable, userFileID, title, text, accessID, userAccess).then((updated) => {
                     console.log(updated)
-                    if(updated)
-                    {
+                    if (updated) {
                         fileInfo.accessID = accessID;
                         fileInfo.userFileID = userFileID;
                         fileInfo.userAccess = userAccess;
                         fileInfo.title = title
                         fileInfo.text = text
                     }
-                  
-                    resolve({file: fileInfo, userFileID: userFileID, update: updated})
+
+                    resolve({ file: fileInfo, userFileID: userFileID, update: updated })
                 })
             }
         })
@@ -3140,10 +3099,10 @@ const userTableImageUpdate = (userTable, userID, userFileID) => {
         })
     })
 }
-const updateUserImage = (userID, imageInfo, callback) =>{
+const updateUserImage = (userID, imageInfo, callback) => {
     console.log("updating user Image " + imageInfo.name)
 
-    if((imageInfo != undefined && imageInfo.hash != undefined && imageInfo.hash != null && imageInfo.hash != "" && imageInfo.hash.length > 5)){
+    if ((imageInfo != undefined && imageInfo.hash != undefined && imageInfo.hash != null && imageInfo.hash != "" && imageInfo.hash.length > 5)) {
         mySession.then((session) => {
 
             const arcDB = session.getSchema('arcturus');
@@ -3153,15 +3112,15 @@ const updateUserImage = (userID, imageInfo, callback) =>{
 
 
 
-           
 
-            selectFileTableHash(fileTable, imageInfo.hash).then((hashResult)=>{
+
+            selectFileTableHash(fileTable, imageInfo.hash).then((hashResult) => {
                 const fileID = hashResult.fileID != undefined ? hashResult.fileID : null;
-               
-                if(fileID != null){
+
+                if (fileID != null) {
                     imageInfo.fileID = fileID
 
-                    addUpdateUserFile(userFileTable,userID, imageInfo).then((userFileUpdate)=>{
+                    addUpdateUserFile(userFileTable, userID, imageInfo).then((userFileUpdate) => {
 
                         const userFileID = userFileUpdate.userFileID
 
@@ -3171,49 +3130,48 @@ const updateUserImage = (userID, imageInfo, callback) =>{
                             callback({ success: true, file: userFileUpdate.file, updated: updated })
                         })
                     })
-                    
-               
-                }else{
-                    insertFile(fileTable, imageInfo).then((iFile)=>{
+
+
+                } else {
+                    insertFile(fileTable, imageInfo).then((iFile) => {
                         const fileID = iFile.fileID;
                         imageInfo.fileID = fileID
-                        addUpdateUserFile(userFileTable,userID, imageInfo).then((userFileUpdate) => {
-                        
-                                const userFileID = userFileUpdate.userFileID
+                        addUpdateUserFile(userFileTable, userID, imageInfo).then((userFileUpdate) => {
 
-                                userTableImageUpdate(userTable, userID, userFileID).then((updated) => {
+                            const userFileID = userFileUpdate.userFileID
 
-                                    
-                                    callback({ success: true, file: userFileUpdate.file, updated: updated })
-                                })
-                            
+                            userTableImageUpdate(userTable, userID, userFileID).then((updated) => {
+
+
+                                callback({ success: true, file: userFileUpdate.file, updated: updated })
+                            })
+
                         })
                     })
                 }
             })
-        
+
         })
-    }else{
+    } else {
         console.log("invalid hash")
-        callback({error:"Hash invalid."})
+        callback({ error: "Hash invalid." })
     }
 }
 
-const realmTableImageUpdate = (realmTable, userID, realmID, fileID) =>{
+const realmTableImageUpdate = (realmTable, userID, realmID, fileID) => {
     return new Promise(resolve => {
-        realmTable.select(["accessID"]).where("userID = :userID AND realmID = :realmID").bind("userID", userID).bind("realmID", realmID).execute().then((realmSelect)=>{
+        realmTable.select(["accessID"]).where("userID = :userID AND realmID = :realmID").bind("userID", userID).bind("realmID", realmID).execute().then((realmSelect) => {
             const accessID = realmSelect.fetchOne()
-            if(accessID != undefined)
-            {
-                realmTable.update().set("imageID", fileID).where("userID = :userID AND realmID = :realmID").bind("userID", userID).bind("realmID", realmID).execute().then((realmUpdate)=>{
-                    resolve({success:realmUpdate.getAffectedItemsCount() > 0})
+            if (accessID != undefined) {
+                realmTable.update().set("imageID", fileID).where("userID = :userID AND realmID = :realmID").bind("userID", userID).bind("realmID", realmID).execute().then((realmUpdate) => {
+                    resolve({ success: realmUpdate.getAffectedItemsCount() > 0 })
                 })
             }
         })
     })
 }
 
-const updateRealmImage = (userID,realmID, imageInfo, callback) => {
+const updateRealmImage = (userID, realmID, imageInfo, callback) => {
     console.log("updating realm Image" + imageInfo.name)
     if ((imageInfo.hash != null && imageInfo.hash != "")) {
         mySession.then((session) => {
@@ -3226,18 +3184,18 @@ const updateRealmImage = (userID,realmID, imageInfo, callback) => {
                 const fileID = hashResult.fileID != undefined ? hashResult.fileID : null;
 
                 if (fileID != null) {
-                    
-                            realmTableImageUpdate(realmTable, userID, realmID, fileID).then((updated) => {
 
-                                imageInfo.fileID = fileID
-                                console.log(imageInfo)
-                                callback({ success: true, file: imageInfo, updated: updated })
-                            })
-                
+                    realmTableImageUpdate(realmTable, userID, realmID, fileID).then((updated) => {
+
+                        imageInfo.fileID = fileID
+                        console.log(imageInfo)
+                        callback({ success: true, file: imageInfo, updated: updated })
+                    })
+
                 } else {
                     insertFile(fileTable, imageInfo).then((iFile) => {
                         const fileID = iFile.fileID;
-                       
+
                         realmTableImageUpdate(realmTable, userID, realmID, fileID).then((updated) => {
 
                             imageInfo.fileID = fileID
@@ -3257,18 +3215,18 @@ const updateRealmImage = (userID,realmID, imageInfo, callback) => {
     }
 }
 
-const selectUserContactTableUserIDs = (userContactTable, userID) =>{
+const selectUserContactTableUserIDs = (userContactTable, userID) => {
     return new Promise(resolve => {
         userContactTable.select(["userID"]).where("contactID = :userID").bind("userID", userID).execute().then((contactsSelect) => {
             const contactsArray = contactsSelect.fetchAll()
 
-            if(contactsArray != undefined){
+            if (contactsArray != undefined) {
                 let userIDs = []
                 contactsArray.forEach(user => {
                     userIDs.push(user[0])
                 });
                 resolve(userIDs)
-            }else{
+            } else {
                 resolve([])
             }
 
@@ -3285,10 +3243,10 @@ const updateUserEmail = (userID, params) => {
             const arcDB = session.getSchema('arcturus');
             const userTable = arcDB.getTable("user")
 
-            userTable.update().set("userEmail", email).set("userModified",now).set("userEmailLastChanged", now).where("userID = :userID").bind("userID", userID).execute().then((userEmailUpdate) => {
+            userTable.update().set("userEmail", email).set("userModified", now).set("userEmailLastChanged", now).where("userID = :userID").bind("userID", userID).execute().then((userEmailUpdate) => {
                 const affected = userEmailUpdate.getAffectedItemsCount() > 0
 
-                resolve({success:affected})
+                resolve({ success: affected })
 
             })
         })
@@ -3302,42 +3260,42 @@ const updateUserAccess = (userID, params) => {
         const accessID = params.accessID
         const now = formatedNow()
 
-        if(accessID > -1 && accessID < 3){
+        if (accessID > -1 && accessID < 3) {
             mySession.then((session) => {
 
                 const arcDB = session.getSchema('arcturus');
                 const userTable = arcDB.getTable("user")
 
-                userTable.update().set("accessID", accessID).set("userModified",now).where("userID = :userID").bind("userID", userID).execute().then((userAccessUpdate) => {
+                userTable.update().set("accessID", accessID).set("userModified", now).where("userID = :userID").bind("userID", userID).execute().then((userAccessUpdate) => {
                     const affected = userAccessUpdate.getAffectedItemsCount() > 0
 
                     resolve({ success: affected })
 
                 })
             })
-        }else{
-            resolve({error: new Error("Value out of range.")})
+        } else {
+            resolve({ error: new Error("Value out of range.") })
         }
     })
 }
 
-const getFilePeers = (userID, fileID, callback) =>{
+const getFilePeers = (userID, fileID, callback) => {
 
     console.log("looking for fileID: " + fileID)
     if (fileID != undefined && fileID != null && fileID > -1) {
-       /*
- (user.userID <> " + userID + " AND user.accessID > 0 AND user.userID = userFile.userID AND userFile.fileID = " + fileID + ") OR \
- (user.userID <> " + userID + " AND realm.accessID > 0 AND realm.userID = user.userID AND realm.imageID = " + fileID + ") OR \
- (user.userID <> " + userID + " AND realm.accessID > 0 AND realm.userID = user.userID AND realm.reamID = realmFile.realmID AND realmFile.fileID =" + fileID + ") "*/
+        /*
+  (user.userID <> " + userID + " AND user.accessID > 0 AND user.userID = userFile.userID AND userFile.fileID = " + fileID + ") OR \
+  (user.userID <> " + userID + " AND realm.accessID > 0 AND realm.userID = user.userID AND realm.imageID = " + fileID + ") OR \
+  (user.userID <> " + userID + " AND realm.accessID > 0 AND realm.userID = user.userID AND realm.reamID = realmFile.realmID AND realmFile.fileID =" + fileID + ") "*/
 
         mySession.then((session) => {
             const arcDB = session.getSchema("arcturus")
             const userContactTable = arcDB.getTable("userContact")
-           
-            selectUserContactTableUserIDs(userContactTable, userID).then((accessableContactIDs)=>{
-                
 
-                                const selectPeerQuery = `
+            selectUserContactTableUserIDs(userContactTable, userID).then((accessableContactIDs) => {
+
+
+                const selectPeerQuery = `
 SELECT DISTINCT
  userFile.userFileID,
  user.statusID, 
@@ -3378,28 +3336,27 @@ WHERE
 ))
  ORDER BY user.statusID DESC, user.userLastOnline ASC`
 
-                session.sql(selectPeerQuery).execute().then((peerSelect)=>{
+                session.sql(selectPeerQuery).execute().then((peerSelect) => {
                     const foundPeers = []
-                    
-                    if(peerSelect.hasData())
-                    {
+
+                    if (peerSelect.hasData()) {
                         const peerArray = peerSelect.fetchAll()
                         peerArray.forEach(peer => {
                             console.log(peer)
                             foundPeers.push({
                                 userFileID: peer[0],
                                 statusID: peer[1],
-                                userLastOnline: peer[2],                                
+                                userLastOnline: peer[2],
                                 userID: peer[3]
                             })
                         });
                     }
                     console.log("foundPeers")
                     console.log(foundPeers)
-                    callback({ success: foundPeers.length > 0, peers:foundPeers})
+                    callback({ success: foundPeers.length > 0, peers: foundPeers })
                 })
-                
-            
+
+
 
             })
 
@@ -3407,8 +3364,8 @@ WHERE
 
     } else {
         callback({ error: new Error("fileID invalid") })
-    }                       
- 
+    }
+
 }
 
 const peerFileRequest = (userID, params) => {
@@ -3422,11 +3379,11 @@ const peerFileRequest = (userID, params) => {
             const arcDB = session.getSchema("arcturus")
             const userContactTable = arcDB.getTable("userContact")
 
-            userContactTable.select(["statusID"]).where(`contactID = :userID and userID = :contactID and statusID = ${status.accepted}`).bind("userID", userID).bind("contactID", contactID).execute().then((contactResult)=>{
+            userContactTable.select(["statusID"]).where(`contactID = :userID and userID = :contactID and statusID = ${status.accepted}`).bind("userID", userID).bind("contactID", contactID).execute().then((contactResult) => {
                 const isContact = contactResult.fetchOne() != undefined
-           
 
-            let query = `
+
+                let query = `
 SELECT DISTINCT 
  user.userSocket, 
  user.userID 
@@ -3458,50 +3415,48 @@ WHERE
   user.userSocket <> "" 
  AND 
   user.statusID = ${status.Online} 
-)`  
+)`
 
-if(isContact){
-   query += ` OR ( user.userID = ${contactID} AND userFile.userID = user.userID AND userFile.accessID = ${access.contacts} AND userFile.userFileID = ${userFileID} AND user.userSocket <> '' AND user.statusID = ${status.Online} )`
-}
- 
+                if (isContact) {
+                    query += ` OR ( user.userID = ${contactID} AND userFile.userID = user.userID AND userFile.accessID = ${access.contacts} AND userFile.userFileID = ${userFileID} AND user.userSocket <> '' AND user.statusID = ${status.Online} )`
+                }
 
-session.sql(query).execute().then((socketSelect) =>{
-                    if(socketSelect.hasData())
-                    {
+
+                session.sql(query).execute().then((socketSelect) => {
+                    if (socketSelect.hasData()) {
                         console.log("file access available")
                         const one = socketSelect.fetchOne()
 
                         const contactSocket = one[0]
                         const contactID = one[1]
-                
-                        
+
+
                         let socketOnline = false;
 
                         io.sockets.sockets.forEach((connectedSocket) => {
-                            
+
                             if (connectedSocket.id == contactSocket) {
-                                
+
                                 socketOnline = true
                             }
                         });
-                        
-                        if(socketOnline){
-                            io.to(contactSocket).timeout(500).emit("peerFileRequest", {request:request, peerID:userPeerID, userID:userID}, (err, response)=>{
-                                if(err)
-                                {
-                                    resolve({error: new Error("Unable to connect.")})
-                                }else{
-                                    
+
+                        if (socketOnline) {
+                            io.to(contactSocket).timeout(500).emit("peerFileRequest", { request: request, peerID: userPeerID, userID: userID }, (err, response) => {
+                                if (err) {
+                                    resolve({ error: new Error("Unable to connect.") })
+                                } else {
+
                                     resolve(response[0])
                                 }
-                                
+
                             })
-                        }else{
-                            updateUserStatus(contactID, status.Offline, "",(complete) =>{} )
-                            resolve({error: new Error("Not online.")})
+                        } else {
+                            updateUserStatus(contactID, status.Offline, "", (complete) => { })
+                            resolve({ error: new Error("Not online.") })
                         }
-                    }else{
-                        resolve({error: new Error("File unavailable")})
+                    } else {
+                        resolve({ error: new Error("File unavailable") })
                     }
                 })
             })
@@ -3510,9 +3465,9 @@ session.sql(query).execute().then((socketSelect) =>{
 }
 
 const getUserFiles = (userID) => {
-    return new Promise(resolve =>{
+    return new Promise(resolve => {
         console.log("getting user files")
-        mySession.then((session) => {           
+        mySession.then((session) => {
             const query = `
 SELECT DISTINCT 
  file.fileID, file.fileName, file.fileHash, file.fileMimeType, file.fileType, file.fileSize, file.fileLastModified, userFile.userFileID, userFile.userFileTitle, userFile.userFileText 
@@ -3522,14 +3477,13 @@ WHERE
   userFile.userID = ${userID} 
  AND 
   file.fileID = userFile.fileID`
-            
-            session.sql(query).execute().then((userFileSelectResult)=>{
-                
-                if(userFileSelectResult.hasData())
-                {
+
+            session.sql(query).execute().then((userFileSelectResult) => {
+
+                if (userFileSelectResult.hasData()) {
                     const allUserFiles = userFileSelectResult.fetchAll()
 
-               
+
                     let userFiles = []
 
                     allUserFiles.forEach(userFile => {
@@ -3550,7 +3504,7 @@ WHERE
 
                     resolve(userFiles)
 
-                }else{
+                } else {
                     resolve([])
                 }
             })
@@ -3563,16 +3517,16 @@ const getPeerLibrary = (userID, params) => {
     return new Promise(resolve => {
         console.log("getting peer library")
         mySession.then((session) => {
-            
+
             const contactID = params.contactID
 
             const contactQuery = `
 SELECT statusID FROM arcturus.userContact WHERE userID = ${contactID} AND contactID = ${userID} AND statusID = ${status.accepted}`
 
-            session.sql(contactQuery).execute().then((contactSelect)=>{
+            session.sql(contactQuery).execute().then((contactSelect) => {
                 const isContact = contactSelect.hasData()
 
-            
+
 
 
                 let query = `
@@ -3588,9 +3542,9 @@ WHERE
  AND 
   file.fileID = userFile.fileID 
  )`
-                if(isContact){
+                if (isContact) {
                     query = query.concat(
-` OR (
+                        ` OR (
   userFile.accessID = ${access.contacts}
  AND
   userFile.userID = ${contactID} 
@@ -3598,37 +3552,147 @@ WHERE
   file.fileID = userFile.fileID 
  )`)
                 }
-            session.sql(query).execute().then((userFileSelectResult) => {
+                session.sql(query).execute().then((userFileSelectResult) => {
 
-                if (userFileSelectResult.hasData()) {
-                    const allUserFiles = userFileSelectResult.fetchAll()
+                    if (userFileSelectResult.hasData()) {
+                        const allUserFiles = userFileSelectResult.fetchAll()
 
 
-                    let userFiles = []
+                        let userFiles = []
 
-                    allUserFiles.forEach(userFile => {
-                        const file = {
-                            fileID: userFile[0],
-                            name: userFile[1],
-                            hash: userFile[2],
-                            mimeType: userFile[3],
-                            type: userFile[4],
-                            size: userFile[5],
-                            lastModified: userFile[6],
-                            userFileID: userFile[7],
-                            title: userFile[8],
-                            text: userFile[9],
-                        }
-                        userFiles.push(file)
-                    });
+                        allUserFiles.forEach(userFile => {
+                            const file = {
+                                fileID: userFile[0],
+                                name: userFile[1],
+                                hash: userFile[2],
+                                mimeType: userFile[3],
+                                type: userFile[4],
+                                size: userFile[5],
+                                lastModified: userFile[6],
+                                userFileID: userFile[7],
+                                title: userFile[8],
+                                text: userFile[9],
+                            }
+                            userFiles.push(file)
+                        });
 
-                    resolve({success:true, files:userFiles})
+                        resolve({ success: true, files: userFiles })
 
-                } else {
+                    } else {
+                        resolve({ success: false })
+                    }
+                })
+            })
+        })
+    })
+}
+
+const getAppList = (params) =>{
+    return new Promise(resolve =>{
+        
+
+
+        mySession.then((session) => {
+
+            
+
+
+
+
+            const arcDB = session.getSchema("arcturus")
+     
+            const appsTable = arcDB.getTable("apps")
+
+            
+            resolve({success:true, apps:[]})
+        })
+    })
+}
+
+const getStorageKey = (userID, params) =>{
+    return new Promise(resolve => {
+        mySession.then((session) => {
+
+            const arcDB = session.getSchema('arcturus');
+            const storageTable = arcDB.getTable("user")
+            const storageID = params.storageID
+
+            storageTable.select(["storageKey"]).where("userID = :userID AND storageID = :storageID").bind("userID", userID).bind("storageID", storageID).execute().then((result)=>{
+                const one = result.fetchOne()
+
+               if(one != undefined){
+                    resolve({success:true, storageKey: one[0]})
+                }else{
                     resolve({success:false})
                 }
             })
+        })
+    })
+}
+const checkStorageHash = (userID, params) => {
+    console.log("checking storage hash")
+    return new Promise(resolve => {
+        mySession.then((session) => {
+            const storageHash = params.storageHash
+            
+            const arcDB = session.getSchema('arcturus');
+            const storageTable = arcDB.getTable("storage")
+
+            storageTable.select(["storageID"]).where("userID = :userID AND storageHash = :storageHash").bind("userID", userID).bind("storageHash", storageHash).execute().then((result) => {
+                const one = result.fetchOne()
+
+                if (one != undefined) {
+                    const storageID = one[0]
+                    resolve({ success: true, storageID: storageID })
+                } else {
+                    resolve({ error: new Error("Incorrect Hash")})
+                }
             })
+        })
+    })
+}
+
+
+
+const createStorage = (userID, params) => {
+    return new Promise(resolve => {
+        
+        
+ 
+
+        mySession.then((session) => {
+
+            const arcDB = session.getSchema('arcturus');
+            const storageTable = arcDB.getTable("storage")
+            
+            console.log(userID)
+            console.log(params)
+            const storageKey =  params.storageKey
+            const storageHash = params.storageHash
+            
+
+            storageTable.select(["userID"]).where("userID = :userID AND storageHash = :storageHash").bind("userID", userID).bind("storageHash", storageHash).execute().then((selectResult)=>{
+                const one = selectResult.fetchOne()
+
+                if(one == undefined)
+                {
+                    console.log("inserting")
+                    storageTable.insert(["storageKey", "storageHash", "userID"]).values(storageKey, storageHash, userID).execute().then((result) => {
+                        const storageID = result.getAutoIncrementValue()
+                        if(storageID != undefined && storageID > 0){
+                            resolve({ success: true })
+                        }else{
+                            resolve({error: new Error("undefined")})
+                        }
+                    })
+                }else{
+                    
+                        resolve({success: false})
+                    
+                }
+            })
+
+            
         })
     })
 }
