@@ -1,17 +1,60 @@
-const nodemailer = require('nodemailer');
-const mysql = require('mysql2');
-const mysqlx = require('@mysql/xdevapi');
-const fs = require('fs');
-const cryptojs = require('crypto-js');
-const util = require('util');
-const { homeURL, socketURL, wwwURL, server, dbURL, dbPort, sqlCred, emailUser, emailPassword, authToken, loginToken } = require('./httpVars');
-const e = require('express');
-var moment = require('moment')
+import nodemailer  from "nodemailer"
+import mysql from 'mysql2'
+import mysqlx from '@mysql/xdevapi'
+import util from 'util'
+import aesjs from 'aes-js';
+import { Server } from 'socket.io'
+import moment from 'moment'
+import bcrypt from 'bcrypt'
+import { serverPassword, server, advisory, status, access, homeURL, socketURL, wwwURL, sqlCred, emailUser, emailPassword, authToken, loginToken } from './httpVars.mjs'
+import { xmur3, sfc32, getRandomIntSync, getRandomIntSFC, generateCode, getUintHash, getStringHash, generateCodeBytes } from "./utils.mjs";
+import { createMessage, encrypt, decrypt, generateKey, readMessage, readKey, decryptKey, readPrivateKey } from 'openpgp';
+import { getFingerprint } from 'hw-fingerprint';
 
-const adminAddress = emailUser;
+const serverKey = await getServerKey()
+
+const fingerPrintHex = await getFingerPrintHex()
+
+const instanceCode = await getInstanceCode(fingerPrintHex)
+
+async function getFingerPrintHex() {
+    const fp = getFingerprint()
+    const fpHex = aesjs.utils.hex.fromBytes(fp.buffer)
+    return fpHex
+}
+
+async function getInstanceCode(string) {
+    const now = moment.now.toString(16)
+    const seed = string + now
+
+    const code = await generateCode(seed, 1024)
+    const hash = getStringHash(code, 64)
+    return hash
+}
+
+async function getServerKey() {
+
+    const uint = aesjs.utils.utf8.toBytes(serverPassword)
+
+    const uintHash = await getUintHash(uint, 32)
+
+    return uintHash
+
+}
 
 
-const io = require('socket.io')(server, {
+
+const { privateKey, publicKey } = await generateKey({
+    type: 'ecc',
+    curve: 'curve25519',
+    userIDs: [{ name: 'Arcnet', email: 'arcnet@arcturusnetwork.com' }],
+    passphrase: instanceCode,
+    format: 'armored'
+});
+
+
+
+const io = new Server(server, {
     cors: {
         origin: [homeURL, wwwURL, socketURL],
     },
@@ -20,58 +63,6 @@ const io = require('socket.io')(server, {
 
 
 server.listen(54944);
-const nullFile = {
-    fileID: -1,
-    fileName: null,
-    fileType: null,
-    fileHash: null,
-    fileMimeType: null,
-    fileSize: null,
-    fileLastModified: null
-}
-const dice = [
-    { diceID: 1, diceMax: 4 },
-    { diceID: 2, diceMax: 6 },
-    { diceID: 3, diceMax: 8 },
-    { diceID: 4, diceMax: 10 },
-    { diceID: 5, diceMax: 12 },
-    { diceID: 6, diceMax: 20 },
-    { diceID: 7, diceMax: 100 },
-
-]
-
-function xmur3(str) {
-    for (var i = 0, h = 1779033703 ^ str.length; i < str.length; i++) {
-        h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
-        h = h << 13 | h >>> 19;
-    } return function () {
-        h = Math.imul(h ^ (h >>> 16), 2246822507);
-        h = Math.imul(h ^ (h >>> 13), 3266489909);
-        return (h ^= h >>> 16) >>> 0;
-    }
-}
-function sfc32(a, b, c, d) {
-    return function () {
-        a >>>= 0; b >>>= 0; c >>>= 0; d >>>= 0;
-        var t = (a + b) | 0;
-        a = b ^ b >>> 9;
-        b = c + (c << 3) | 0;
-        c = (c << 21 | c >>> 11);
-        d = d + 1 | 0;
-        t = t + d | 0;
-        c = c + t | 0;
-        return (t >>> 0) / 4294967296;
-    }
-}
-
-function getRandomInt(min, max, seed) {
-    min = Math.ceil(min);
-    max = Math.floor(max);
-    const rand = sfc32(seed(), seed(), seed(), seed())();
-
-    return Math.floor(rand * (max - min + 1)) + min;
-}
-
 
 
 let transporter = nodemailer.createTransport({
@@ -86,21 +77,12 @@ let transporter = nodemailer.createTransport({
 
 
 
-
-
-
-let sqlCredentials = sqlCred;
-
-var mySession = mysqlx.getSession(sqlCredentials);
-
-mySession.catch((reason) => {
-    console.log(reason)
-})
+var mySession = mysqlx.getSession(sqlCred);
 
 
 const pingAlive = () => {
     if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
+        mySession = mysqlx.getSession(sqlCred)
     }
 
     mySession.then((session) => {
@@ -130,394 +112,471 @@ pingAlive();
 io.on("connect_error", (err) => {
     console.log(`connect_error due to ${err.message}`);
 });
-const advisory = Object.freeze({
-    none: -1,
-    general: 0,
-    mature: 1,
-    adult: 2
-})
-const status = Object.freeze({
-    valid: 1,
-    invalid: 2,
-    confirming: 3,
-    Offline: 4,
-    Online: 5,
-    rejected: 6,
-    accepted: 7
-})
-const access = Object.freeze({
-    private: 0,
-    contacts: 1,
-    public: 2,
-})
+
 
 io.on('connection', (socket) => {
     const id = socket.id;
+    let checkingUser = false
+    let token = null
+    let clientKey = null
+    io.to(id).emit("serverInit", publicKey)
+  
+    
     if (socket.handshake.auth.token == authToken) {
+        socket.on("getAnonContext", (encryptedContext, anonContextCallback)=>{
 
-        console.log("anonymous")
-        socket.on('createUser', (user, userCreated) => {
-            createUser(user, (results) => {
-                userCreated(results);
-            });
-        });
+            decryptStringfromClient(encryptedContext).then((decryptedString) =>{
+                const decryptedContext = JSON.parse(decryptedString)
+                const { contextKey, contextID } = decryptedContext
+                clientKey = contextKey
 
-
-        socket.on('checkUserName', (userName, check) => {
-            console.log('checkUserName:' + userName);
-            checkUserName(userName, (results) => {
-                check(results)
-            });
-        });
-
-        socket.on('checkEmail', (userEmail, check) => {
-            console.log('checkUserEmail:' + userEmail);
-            checkEmail(userEmail, (results) => {
-                check(results)
-            });
-        });
-
-        socket.on('validateEmail', (userEmail, status, code, check) => {
-            console.log('checkUserEmail:' + userEmail);
-            validateEmail(userEmail, code, (results) => {
-                check(results)
-            });
-        });
-
-        socket.on('checkRefCode', (code, returnID) => {
-            console.log('checkRefCode: ' + code);
-            checkReferral(code, (results) => {
-                returnID(results);
-            })
-        });
-        socket.on("sendRecoveryEmail", (email, callback) => {
-            sendRecoveryEmail(email, (sent) => {
-                callback(sent)
-            })
-        })
-        socket.on("updateUserPassword", (info, callback) => {
-
-            updateUserPasswordAnon(info, (result) => {
-                callback(result)
-            })
-        })
-    } else if (socket.handshake.auth.token == loginToken) {
-        socket.on("login", (params, callback) => {
-
-            checkUser(params, (checkResult) => {
-                console.log(checkResult)
-                if (("success" in checkResult && checkResult.success == false) || ("error" in checkResult)) {
-
-                    callback({ success: false })
-                    socket.disconnect()
-                } else {
-
-
-                    const user = checkResult.user;
-
-
-                    const userSocket = checkResult.userSocket
-
-                    if (userSocket != "") {
-                        io.sockets.sockets.forEach((connectedSocket) => {
-                            console.log(connectedSocket.id)
-                            if (connectedSocket.id == userSocket) {
-                                console.log("disconnecting old socket: " + userSocket)
-                                connectedSocket.disconnect()
-                            }
-                        });
-                    }
-                    getContacts(user, (contacts) => {
-
-                        getUserFiles(user.userID).then((userFiles) => {
-
-                            updateUserStatus(user.userID, status.Online, id, (isRooms, rooms) => {
-                                if (user.accessID != access.private && isRooms) {
-                                    for (let i = 0; i < rooms.length; i++) {
-
-                                        console.log("sending userStatus message to: " + rooms[i][0] + " user: " + user.userID + " is: Online");
-
-                                        io.to(rooms[i][0]).emit("contactsCmd", { cmd: "userStatus", params: { userID: user.userID, statusID: status.Online, userSocket: user.userSocket, accessID: user.accessID } });
-
-                                    }
-                                }
-                                if (user.accessID != access.private && contacts.length > 0) {
-                                    contacts.forEach(contact => {
-                                        if (contact.statusID == status.Online && contact.userSocket != "") {
-                                            io.to(contact.userSocket).emit("contactsCmd", { cmd: "userStatus", params: { userID: user.userID, statusID: status.Online, userSocket: user.userSocket, accessID: user.accessID } });
-                                        }
-                                    });
-                                }
-
-
-                                const result = { success: true, user: user, contacts: contacts, userFiles: userFiles }
-
-                                callback(result)
-                            })
-                        })
-
-                    })
-
-
-
-                    /* //////////////SUCCESS///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
-                    socket.on("getAppList", (params, callback)=>{
-                        console.log("getAppList")
-                        if("admin" in params && params.admin)
-                        {
-                            if(user.userID == 22){ 
-                                getAppList(params).then((result) => {
-                                    result.admin = true
-                                    console.log(result)
-                                    callback(result)
-                                })
-                            }else{
-                               console.log("not admin")
-                                callback({error: new Error("Not admin")})
-                            }
-                        }else[
-                            getAppList(params).then((result) => {
-                                callback(result)
-                            })
-                        ]
-        
-                        
-                    })
+                checkContextID(contextID).then((contextValid) =>{
                     
-                    socket.on("updateUserAccess", (info, callback) => {
+                    if(!contextValid){
+                        anonContextCallback(false)
+                    }else{
+                        anonContextCallback(true)
 
-                        updateUserAccess(user.userID, info).then((result) => {
-                            callback(result)
-                        })
-                    })
+                        socket.on('createUser', (params, callback) => {
+                     
+                            if (!checkingUser && token != null && token == "checked") {
+                                checkingUser = true
+                              
+                                createUser(params).then((result) => {
 
-                    socket.on("updateUserPassword", (info, callback) => {
-
-
-                        updateUserPassword(user.userID, info, (result) => {
-                            callback(result)
-                        })
-                    })
-                    socket.on("sendEmailCode", (callback) => {
-
-                        sendEmailCode(user.userID, (sent) => {
-                            callback(sent)
-                        })
-                    })
-                    socket.on("getFilePeers", (fileID, callback) => {
-                        getFilePeers(user.userID, fileID, (result) => {
-                            callback(result)
-                        })
-                    })
-
-
-                    socket.on("enterRealmGateway", (realmID, callback) => {
-
-                        enterRealmGateway(user, realmID, socket, (enteredGateway) => {
-                            callback(enteredGateway)
-                        })
-                    })
-
-                    socket.on("checkRealmName", (name, callback) => {
-                        checkRealmName(name, callback)
-                    })
-
-                    socket.on("createRealm", (realmName, imageFile, page, index, callback) => {
-                        createRealm(user.userID, realmName, imageFile, page, index, (created) => {
-                            callback(created)
-                        })
-                    })
-
-                    socket.on("deleteRealm", (realmID, callback) => {
-                        deleteRealm(user.userID, realmID, (result) => {
-                            if (!("error" in result)) {
-                                if (result.success) {
-                                    result.realmUsers.forEach(user => {
-                                        getUserSocket(user.userID, (userSocket) => {
-                                            if (userSocket != null) io.to(userSocket).emit("realmDelete", realmID)
-                                        })
-                                    });
-                                }
+                                   
+                                    callback(result)
+                                    
+                                });
+                            } else {
+                                socket.disconnect()
                             }
-                            callback(result)
-                        })
-                    })
-
-                    socket.on("getRealms", (callback) => {
-                        getRealms(user.userID, (realms) => {
-                            callback(realms)
-                        })
-                    })
-
-                    socket.on("updateRealmInformation", (information, callback) => {
-                        updateRealmInformation(information, (result) => {
-                            callback(result)
-                        })
-                    })
-
-
-
-                    socket.on("requestContact", (contactID, msg, callback) => {
-                        const userID = user.userID;
-                        requestContact(userID, contactID, msg, (result) => {
-                            const contactSocketID = result.socketID
-                            if (contactSocketID != "") {
-                                io.to(contactSocketID).emit("requestContact", userID, msg)
-                            }
-                            callback(result)
-                        })
-                    })
-
-                    socket.on("acknowledgeContact", (response, contactID, callback) => {
-                        const userID = user.userID;
-
-                        acknowledgeContact(userID, response, contactID, (result) => {
-                            callback(result)
-                        })
-                    })
-
-                    socket.on('createRefCode', (code, callback) => {
-                        createRefCode(user, code, (result) => {
-                            callback(result)
-                        })
-                    })
-
-                    socket.on("getUserReferalCodes", (callback) => {
-                        getUserReferalCodes(user, (result) => {
-                            callback(result)
-                        })
-                    })
-
-                    socket.on("checkStorageHash", (params, callback) => {
-                       checkStorageHash(user.userID, params).then((result)=>{
-                            callback(result)
-                        })
-                    })
-                    socket.on("createStorage", (params, callback) => {
-                        createStorage(user.userID, params).then((result) => {
-                            callback(result)
-                        })
-                    })
-                    socket.on("getStorageKey", (callback) => {
-                        getStorageKey(user.userID).then((result) => {
-                            callback(result)
-                        })
-                    })
-
-                    /* socket.on('getUserInformation', (userInformation) => {
-                         console.log(user)
-                         if (user != null) {
-                             getUserInformation(user, (info) => {
-                                 userInformation(info);
-                             })
-                         }
-                     })*/  /*
-                    socket.on("createStorage", (fileInfo, engineKey, callback) => {
-
-                        createStorage(user.userID, fileInfo, engineKey, (created) => {
-                            callback(created)
-                        })
-                    })
-
-                    socket.on("useConfig", (fileID, callback) => {
-                        useConfig(user.userID, fileID, (success) => {
-                            callback(success)
-                        })
-                    })
-                  
-                    socket.on("checkStorageHash", (hash, callback) => {
-                        checkStorageHash(user.userID, hash, (result) => {
-                            callback(result)
-                        })
-                    })
-
-                    socket.on("loadStorage", (hash, engineKey, callback) => {
-
-                        loadStorage(hash, engineKey, (storage) => {
-                            callback(storage)
-                        })
-
-                    })
-
-                    socket.on("updateStorageConfig", (fileID, fileInfo, callback) => {
-                        updateStorageConfig(fileID, fileInfo, (result) => {
-                            callback(result)
-                        })
-                    })*/
-                    /*
-                    socket.on("checkUserFiles", (hashs, callback) => {
-                        checkUserFiles(user.userID, hashs, (result) => {
-                            callback(result)
-                        })
-                    })*/
-
-
-                    socket.on("updateSocketID", (userID) => {
-                        updateSocketID(userID, id);
-                    })
-
-
-                    socket.on('searchPeople', (text, returnPeople) => {
-
-                        findPeople(text, user.userID, (results) => {
-                            returnPeople(results)
                         });
-                    });
 
-                    socket.on("updateUserPeerID", (peerID, callback) => {
-                        console.log("updatingPeerID: " + peerID)
-                        updateUserPeerID(user.userID, peerID, (result) => {
-                            callback(result)
+
+                        socket.on('checkUserName', (userName, check) => {
+                            
+                            checkUserName(userName).then((results) => {
+                               
+                                check(results);
+                                
+                            });
+                            
+                        });
+
+
+                        socket.on('checkRefCodeEmail', (encryptedString, returnValid) => {
+                            if (!checkingUser) {
+                                checkingUser = true
+                                decryptStringfromClient(encryptedString).then((decryptedString)=>{
+                                    const params = JSON.parse(decryptedString)
+                                    checkRefCodeEmail(params).then((results) => {
+                                   
+                                        console.log(results)
+                                        setTimeout(() => {
+                                            checkingUser = false
+                                            token = "checked"
+                                            console.log(token)
+                                            const jsonString = JSON.stringify(results)
+                                            encryptString(jsonString, clientKey).then((encryptedString)=>{
+                                                returnValid(encryptedString);
+                                            })
+                                        
+                                        }, 200);
+                                    })
+                                })
+                            } else {
+                                token = null
+                                const jsonString = JSON.stringify({error: "Unable to process request"})
+                                encryptString(jsonString, clientKey).then((encryptedString) => {
+                                    returnValid(encryptedString);
+                                })
+                            }
+                        });
+
+                        socket.on("sendRecoveryEmail", (email, callback) => {
+                            if (!checkingUser) {
+                                checkingUser = true
+                                sendRecoveryEmail(email, (sent) => {
+                                    setTimeout(() => {
+                                        checkingUser = false
+                                        if ("success" in sent && sent.success) token = "recovery"
+                                        callback(sent)
+                                    }, 500);
+                                })
+                            } else {
+                                socket.disconnect()
+                            }
                         })
-                    })
-
-                    socket.on("updateUserImage", (imageInfo, callback) => {
-                        updateUserImage(user.userID, imageInfo, (updated) => {
-                            callback(updated)
+                        socket.on("updateUserPassword", (info, callback) => {
+                            if (!checkingUser && token == "recovery") {
+                                checkingUser = true
+                                setTimeout(() => {
+                                    updateUserPasswordAnon(info, (result) => {
+                                        callback(result)
+                                        socket.disconnect()
+                                    })
+                                }, 500);
+                            } else {
+                                socket.disconnect()
+                            }
                         })
-                    })
+                    }
+                })
+            })
 
-                    socket.on("updateRealmImage", (realmID, imageInfo, callback) => {
-                        updateRealmImage(user.userID, realmID, imageInfo, (result) => {
-                            callback(result)
-                        })
-                    })
-
-                    socket.on("peerFileRequest", (params, callback) => {
-                        console.log("peer file request")
-                        console.log(params)
-                        peerFileRequest(user.userID, params).then((response) => {
-                            callback(response)
-                        })
-                    })
-
-                    socket.on("updateUserEmail", (params, callback) => {
-                        updateUserEmail(user.userID, params).then((result) => {
-                            callback(result)
-                        })
-                    })
+            
+        })
 
 
-                    socket.on("getPeerLibrary", (params, callback) => {
-                        getPeerLibrary(user.userID, params).then((result) => {
-                            callback(result)
-                        })
+        
+    } else if (socket.handshake.auth.token == loginToken) {
+        socket.on("login", (encryptedString, callback) => {
+            
+            if (checkingUser) connectedSocket.disconnect()
+            checkingUser = true
+            
+            decryptStringfromClient(encryptedString).then((decryptedString) => {
 
-                    })
+                const clientContext = JSON.parse(decryptedString)
+                const {contextID, contextKey, nameEmail, password} = clientContext
+      
+                clientKey = contextKey
 
-                    socket.on('disconnect', () => {
-                        const userName = user.userName;
-                        const userID = user.userID;
-                        if (userID > 0) {
-                            cleanRooms(userID, (roomCount) => {
-                                console.log("cleaned " + roomCount + " rooms, disconnecting user " + userName);
+                checkUser({nameEmail: nameEmail, password: password}, clientKey).then((checkResult) => {
+            
+                    if ("success" in checkResult && checkResult.success) {
+                    
+
+                
+
+
+                        const user = checkResult.user;
+                        const userCode = checkResult.userCode
+
+                        const userSocket = checkResult.userSocket
+
+                        if (userSocket != "") {
+                            io.sockets.sockets.forEach((connectedSocket) => {
+                                console.log(connectedSocket.id)
+                                if (connectedSocket.id == userSocket) {
+                                    console.log("disconnecting old socket: " + userSocket)
+                                    connectedSocket.disconnect()
+                                
+                                }
                             });
                         }
-                    });
+                        getContacts(user, (contacts) => {
+
+                            getUserFiles(user.userID).then((userFiles) => {
+
+                                updateUserStatus(user.userID, status.Online, id, (isRooms, rooms) => {
+                                    if (user.accessID != access.private && isRooms) {
+                                        for (let i = 0; i < rooms.length; i++) {
+
+                                            console.log("sending userStatus message to: " + rooms[i][0] + " user: " + user.userID + " is: Online");
+
+                                            io.to(rooms[i][0]).emit("contactsCmd", { cmd: "userStatus", params: { userID: user.userID, statusID: status.Online, userSocket: user.userSocket, accessID: user.accessID } });
+
+                                        }
+                                    }
+                                    if (user.accessID != access.private && contacts.length > 0) {
+                                        contacts.forEach(contact => {
+                                            if (contact.statusID == status.Online && contact.userSocket != "") {
+                                                io.to(contact.userSocket).emit("contactsCmd", { cmd: "userStatus", params: { userID: user.userID, statusID: status.Online, userSocket: user.userSocket, accessID: user.accessID } });
+                                            }
+                                        });
+                                    }
+                                    const jsonString = JSON.parse({ success: true, user: user, contacts: contacts, userFiles: userFiles, userCode: userCode })
+
+                                    encryptString(jsonString, clientKey).then((encryptedString)=>{
+                                        checkingUser = false;
+                                        callback(encryptedString)
+                                    })
+                                    
+                                    
+                                })
+                            })
+
+                        })
 
 
-                }
-            });
+
+                        /* //////////////SUCCESS///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+                        socket.on("getAppList", (params, callback)=>{
+                            console.log("getAppList")
+                            if("admin" in params && params.admin)
+                            {
+                                if(user.userID == 22){ 
+                                    getAppList(params).then((result) => {
+                                        result.admin = true
+                                        console.log(result)
+                                        callback(result)
+                                    })
+                                }else{
+                                console.log("not admin")
+                                    callback({error: new Error("Not admin")})
+                                }
+                            }else[
+                                getAppList(params).then((result) => {
+                                    callback(result)
+                                })
+                            ]
+            
+                            
+                        })
+                        
+                        socket.on("updateUserAccess", (info, callback) => {
+
+                            updateUserAccess(user.userID, info).then((result) => {
+                                callback(result)
+                            })
+                        })
+
+                        socket.on("updateUserPassword", (info, callback) => {
+
+
+                            updateUserPassword(user.userID, info, (result) => {
+                                callback(result)
+                            })
+                        })
+                        socket.on("sendEmailCode", (callback) => {
+
+                            sendEmailCode(user.userID, (sent) => {
+                                callback(sent)
+                            })
+                        })
+                        socket.on("getFilePeers", (fileID, callback) => {
+                            getFilePeers(user.userID, fileID, (result) => {
+                                callback(result)
+                            })
+                        })
+
+
+                        socket.on("enterRealmGateway", (realmID, callback) => {
+
+                            enterRealmGateway(user, realmID, socket, (enteredGateway) => {
+                                callback(enteredGateway)
+                            })
+                        })
+
+                        socket.on("checkRealmName", (name, callback) => {
+                            checkRealmName(name, callback)
+                        })
+
+                        socket.on("createRealm", (realmName, imageFile, page, index, callback) => {
+                            createRealm(user.userID, realmName, imageFile, page, index, (created) => {
+                                callback(created)
+                            })
+                        })
+
+                        socket.on("deleteRealm", (realmID, callback) => {
+                            deleteRealm(user.userID, realmID, (result) => {
+                                if (!("error" in result)) {
+                                    if (result.success) {
+                                        result.realmUsers.forEach(user => {
+                                            getUserSocket(user.userID, (userSocket) => {
+                                                if (userSocket != null) io.to(userSocket).emit("realmDelete", realmID)
+                                            })
+                                        });
+                                    }
+                                }
+                                callback(result)
+                            })
+                        })
+
+                        socket.on("getRealms", (callback) => {
+                            getRealms(user.userID, (realms) => {
+                                callback(realms)
+                            })
+                        })
+
+                        socket.on("updateRealmInformation", (information, callback) => {
+                            updateRealmInformation(information, (result) => {
+                                callback(result)
+                            })
+                        })
+
+
+
+                        socket.on("requestContact", (contactID, msg, callback) => {
+                            const userID = user.userID;
+                            requestContact(userID, contactID, msg, (result) => {
+                                const contactSocketID = result.socketID
+                                if (contactSocketID != "") {
+                                    io.to(contactSocketID).emit("requestContact", userID, msg)
+                                }
+                                callback(result)
+                            })
+                        })
+
+                        socket.on("acknowledgeContact", (response, contactID, callback) => {
+                            const userID = user.userID;
+
+                            acknowledgeContact(userID, response, contactID, (result) => {
+                                callback(result)
+                            })
+                        })
+
+                        socket.on('createRefCode', (code, callback) => {
+                            createRefCode(user, code, (result) => {
+                                callback(result)
+                            })
+                        })
+
+                        socket.on("getUserReferalCodes", (callback) => {
+                            getUserReferalCodes(user, (result) => {
+                                callback(result)
+                            })
+                        })
+
+                        socket.on("checkStorageHash", (params, callback) => {
+                        checkStorageHash(user.userID, params).then((result)=>{
+                                callback(result)
+                            })
+                        })
+                        socket.on("createStorage", (params, callback) => {
+                            createStorage(user.userID, params).then((result) => {
+                                callback(result)
+                            })
+                        })
+                        socket.on("getStorageKey", (callback) => {
+                            getStorageKey(user.userID).then((result) => {
+                                callback(result)
+                            })
+                        })
+                        socket.on("checkPassword", (params, callback)=>{
+                            checkPassword(user.userID, params).then((result)=>{
+                                callback(result)
+                            })
+                        })
+
+                        /* socket.on('getUserInformation', (userInformation) => {
+                            console.log(user)
+                            if (user != null) {
+                                getUserInformation(user, (info) => {
+                                    userInformation(info);
+                                })
+                            }
+                        })*/  /*
+                        socket.on("createStorage", (fileInfo, engineKey, callback) => {
+
+                            createStorage(user.userID, fileInfo, engineKey, (created) => {
+                                callback(created)
+                            })
+                        })
+
+                        socket.on("useConfig", (fileID, callback) => {
+                            useConfig(user.userID, fileID, (success) => {
+                                callback(success)
+                            })
+                        })
+                    
+                        socket.on("checkStorageHash", (hash, callback) => {
+                            checkStorageHash(user.userID, hash, (result) => {
+                                callback(result)
+                            })
+                        })
+
+                        socket.on("loadStorage", (hash, engineKey, callback) => {
+
+                            loadStorage(hash, engineKey, (storage) => {
+                                callback(storage)
+                            })
+
+                        })
+
+                        socket.on("updateStorageConfig", (fileID, fileInfo, callback) => {
+                            updateStorageConfig(fileID, fileInfo, (result) => {
+                                callback(result)
+                            })
+                        })*/
+                        /*
+                        socket.on("checkUserFiles", (hashs, callback) => {
+                            checkUserFiles(user.userID, hashs, (result) => {
+                                callback(result)
+                            })
+                        })*/
+
+
+                        socket.on("updateSocketID", (userID) => {
+                            updateSocketID(userID, id);
+                        })
+
+
+                        socket.on('searchPeople', (text, returnPeople) => {
+
+                            findPeople(text, user.userID, (results) => {
+                                returnPeople(results)
+                            });
+                        });
+
+                        socket.on("updateUserPeerID", (peerID, callback) => {
+                            console.log("updatingPeerID: " + peerID)
+                            updateUserPeerID(user.userID, peerID, (result) => {
+                                callback(result)
+                            })
+                        })
+
+                        socket.on("updateUserImage", (imageInfo, callback) => {
+                            updateUserImage(user.userID, imageInfo, (updated) => {
+                                callback(updated)
+                            })
+                        })
+
+                        socket.on("updateRealmImage", (realmID, imageInfo, callback) => {
+                            updateRealmImage(user.userID, realmID, imageInfo, (result) => {
+                                callback(result)
+                            })
+                        })
+
+                        socket.on("peerFileRequest", (params, callback) => {
+                            console.log("peer file request")
+                            console.log(params)
+                            peerFileRequest(user.userID, params).then((response) => {
+                                callback(response)
+                            })
+                        })
+
+                        socket.on("updateUserEmail", (params, callback) => {
+                            updateUserEmail(user.userID, params).then((result) => {
+                                callback(result)
+                            })
+                        })
+
+
+                        socket.on("getPeerLibrary", (params, callback) => {
+                            getPeerLibrary(user.userID, params).then((result) => {
+                                callback(result)
+                            })
+
+                        })
+
+                        socket.on('disconnect', () => {
+                            const userName = user.userName;
+                            const userID = user.userID;
+                            if (userID > 0) {
+                                cleanRooms(userID, (roomCount) => {
+                                    console.log("cleaned " + roomCount + " rooms, disconnecting user " + userName);
+                                });
+                            }
+                        });
+
+
+                    }else{
+                        const jsonString = JSON.stringify(checkResult)
+
+                        encryptString(jsonString, clientKey).then((encryptedString) => {
+                            checkingUser = false;
+                        //   setTimeout(() => {
+                                callback(encryptedString)
+                        // }, 500);
+                            
+                        })
+
+                    }
+                });
+            })
         })
 
 
@@ -583,7 +642,7 @@ const updateUserStatus = (userID = -1, statusID = 5, socketID = "", callback) =>
 
     mySession.then((session) => {
 
-        const query = `UPDATE arcturus.user SET userSocket = ${mysql.escape(socketID)}, statusID = ${statusID}, userLastOnline = UTC_TIMESTAMP() WHERE userID = ${userID}`
+        const query = `UPDATE arcturus.user SET userSocket = ${mysql.escape(socketID)}, statusID = ${statusID}, userLastOnline = NOW() WHERE userID = ${userID}`
     
         session.sql(query).execute().then((updated) => {
             const affected = updated.getAffectedItemsCount();
@@ -646,7 +705,7 @@ const cleanRooms = (userID = 0, callback) => {
                 console.log(callback)
             })
 
-            const query = `UPDATE arcturus.user SET userSocket = '', statusID = ${status.Offline}, userLastOnline = UTC_TIMESTAMP() WHERE userID = ${userID}`
+            const query = `UPDATE arcturus.user SET userSocket = '', statusID = ${status.Offline}, userLastOnline = NOW() WHERE userID = ${userID}`
 
             session.sql(query).execute().then((updatedUserSocket) => {
                 userRoomTable.select(["roomID"]).where("userID = :userID and statusID <> " + status.Offline).bind("userID", userID).execute().then((userRoomSelect) => {
@@ -808,62 +867,6 @@ const getStoredMessages = (messageTable, roomID) => {
     })
 }
 
-const checkReferral = (code = "", callback) => {
-    code = mysql.escape(code);
-
-    let query = "SELECT refID from arcturus.ref WHERE refCode = " + code;
-
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-
-
-    mySession.then((mySession) => {
-
-        mySession.sql(query).execute().then((result) => {
-            console.log(result.hasData())
-            if (typeof result === undefined) {
-                console.log("result undefined")
-                callback(-1);
-            } else if (result.hasData()) {
-                console.log(result);
-                const refID = result.fetchOne()[0];
-                console.log("refID valid refID: " + refID);
-                query = "SELECT refID from arcturus.user WHERE refID = " + refID;
-
-
-                mySession.sql(query).execute().then((results2) => {
-                    console.log(results2.hasData());
-                    if (results2.hasData()) {
-                        console.log("refID used. No longer valid.")
-                        callback(-1);
-
-                    } else {
-                        if (typeof results2 === undefined) {
-                            callback(-1);
-                        } else {
-                            console.log("refID not used sending to callback.")
-                            callback(refID);
-                        }
-                    }
-                }).catch((reason) => {
-                    console.log(reason);
-                    callback(-1);
-                })
-            } else {
-                console.log("Refferal code not valid.")
-                callback(-1);
-            }
-        })
-    }, (reason) => {
-        console.log(reason);
-        callback(-1);
-    }).catch((reason) => {
-        console.log(reason);
-        callback(-1);
-    })
-}
 
 const acknowledgeContact = (userID, acknowledgement, contactID, callback) => {
     if (!util.types.isPromise(mySession)) {
@@ -1175,208 +1178,220 @@ function validateEmail(email = "", code = "", callback) {
 
 }
 
-const checkEmail = (email = "", callback) => {
-    email = mysql.escape(email);
 
-    let query = "SELECT userEmail from arcturus.user WHERE userEmail = " + email;
+const checkUserName = (name = "") => {
 
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
+    return new Promise(resolve =>{
+        mySession.then((session) => {
+            const arcDB = session.getSchema("arcturus")
+            const userTable = arcDB.getTable("user")
 
+            userTable.select(["userName"]).where("userName = :userName").bind("userName", name).execute().then((result) => {
+                
+                const one = result.fetchOne()
 
-    mySession.then((mySession) => {
-
-        mySession.sql(query).execute().then((result) => {
-            console.log("has data? " + result.hasData())
-            if (typeof result === undefined) {
-                console.log("result undefined.");
-                callback(false);
-            } else if (result.hasData()) {
-                console.log("email exists.");
-                callback(false);
-            } else {
-                console.log("Email not used.")
-                callback(true);
-            }
-        })
-    }).catch((reason) => {
-        console.log(reason);
-        callback(false);
-    })
-}
-
-
-const checkUserName = (name = "", callback) => {
-    name = mysql.escape(name);
-
-    let query = "SELECT userName from arcturus.user WHERE userName = " + name;
-
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-
-
-    mySession.then((mySession) => {
-
-        mySession.sql(query).execute().then((result) => {
-            console.log("has data? " + result.hasData())
-            if (typeof result === undefined) {
-                console.log("result undefined.");
-                callback(false);
-            } else if (result.hasData()) {
-                console.log("username exists.");
-                callback(false);
-            } else {
-                console.log("username not used.")
-                callback(true);
-            }
-        })
-    }).catch((reason) => {
-        console.log(reason);
-        callback(false);
-    })
-}
-
-
-function createUserOld(user, socketID, callback) {
-    var date = new Date().toString();
-    var veriCode = cryptojs.SHA256(user.userEmail + date).toString();
-
-    var userName = mysql.escape(user.userName);
-    var userPass = mysql.escape(user.userPass);
-    var userEmail = mysql.escape(user.userEmail);
-    var userRefID = user.userRefID;
-    socketID = mysql.escape(socketID);
-
-
-
-
-    var query = "INSERT INTO arcturus.user (userName, userPassword, userEmail, refID, statusID) ";
-    query += "values (" + userName + ", " + userPass + ", " + userEmail + " , " + userRefID + " , 3 )";
-
-
-    let userID = -1;
-
-    console.log("inserting..")
-
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
-    }
-
-    mySession.then((mySession) => {
-
-        mySession.sql(query).execute().then((results) => {
-
-            userID = results.getAutoIncrementValue();
-            console.log("new user ID: " + userID.toString());
-
-            query = "INSERT INTO arcturus.userStatus (userID, statusID, userStatusCode, userStatusValidated) values ('" + userID + "', 3," + mysql.escape(veriCode) + ",'false')";
-            console.log("inserting into userStatus " + query);
-
-            mySession.sql(query).execute().then((results) => {
-                let affected = results.getAffectedItemsCount();
-                if (affected > 0) {
-                    console.log("userStatus Insert succeeded")
-                    /*   emailValidateCode(user.userName,user.userEmail,veriCode,(err,info) => {
-                            console.log(err);
-                            console.log(info);
-                        });*/
-                } else {
-                    console.log("userStatus Insert 0 affected rows");
-                }
-
-            }).catch((rejected) => {
-                console.log("Could not create userStatus for: " + userName);
-                console.log(rejected);
+                if (one == undefined) {
+                    resolve(true)
+                } else{
+                    resolve(false)
+                } 
             })
+        }).catch((reason) => {
+            console.log(reason);
+            resolve({error: new Error("db error")});
+        })
+    })
+}
 
-            console.log("callback:")
+function generateUserCode()
+{
+    return new Promise(resolve =>{
 
-            callback({ create: true, msg: userName + "created" })
+        generateCodeBytes(fingerPrintHex, 128).then((userCodeBytes)=>{
+           
+            
+            encryptBytesToHex(userCodeBytes).then((userCodeHex)=>{
+                resolve(userCodeHex)
+            })
+        })
+        
+    })
+}
 
+function encryptBytesToHex(bytes){
+    return new Promise(resolve =>{ 
 
-        }).catch((error) => {
-            console.log(error)
-            let message = "Cannot confirm. ";
-            let msg = "";
-            let i = 0;
-            if ('info' in error) {
-                if (error.info.code == 1062) {
-                    if ('msg' in error.info) {
-                        msg = error.info.msg;
-                        i = msg.indexOf("'", 17);
-                        msg = msg.substring(17, i);
-                        message += msg + " already exists.";
-                    }
-                } else {
-                    message += " We are experiencing technical issues.";
-                }
-            }
-            console.log(message);
-            callback({ create: false, msg: message })
-        });
+        const aesCtr = new aesjs.ModeOfOperation.ctr(serverKey);
+        const encryptedBytes = aesCtr.encrypt(bytes);
+
+        const hexCode = aesjs.utils.hex.fromBytes(encryptedBytes)
+
+        resolve(hexCode)
+    })
+}
+
+function encryptHex(string){
+    return new Promise(resolve =>{
+
+        const input = aesjs.utils.hex.toBytes(string)
+        const aesCtr = new aesjs.ModeOfOperation.ctr(serverKey);
+
+        const encryptedString = aesCtr.encrypt(input);
+        const hexString = aesjs.utils.hex.fromBytes(encryptedString)
+
+        resolve(hexString)
+    })
+}
+async function decryptStringfromClient(encryptedString){
+    
+    const decryptedKey = await decryptKey({
+        privateKey: await readPrivateKey({ armoredKey: privateKey }),
+        passphrase: instanceCode
     });
-    //});
 
+    const decryptedMessage = await readMessage({
+        armoredMessage: encryptedString 
+    });
+  
 
+    const decrypted = await decrypt({
+        message:decryptedMessage,
+        decryptionKeys: decryptedKey
 
-}
+    });
 
-function createUser(user, callback) {
-    var date = new Date().toString();
-
-
-
-    console.log(user)
-
-
-    console.log("inserting..")
-
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCredentials)
+    const chunks = [];
+    for await (const chunk of decrypted.data) {
+        chunks.push(chunk);
     }
-
-    mySession.then((session) => {
-
-        var arcDB = session.getSchema('arcturus');
-        var userTable = arcDB.getTable("user");
-
-
-        session.startTransaction();
-        try {
-            var res = userTable.insert(
-                ['userName', 'userPassword', "userEmail", 'refID', 'statusID', "accessID", "userEmailLastChanged"]
-            ).values(
-                [user.userName, user.userPass, user.userEmail, user.userRefID, 3, access.contacts, formatedNow()]
-            ).execute();
-            res.then((value) => {
-                var id = value.getAutoIncrementValue();
-
-
-                callback({ create: true, msg: id + "created" })
-            }).catch((error) => {
-                console.log(error)
-            })
-
-            session.commit();
-
-
-
-
-        } catch (error) {
-            console.log(error)
-            session.rollback();
-            callback({ create: false, msg: "Rolled back" });
-        }
-    })
-
-
-
+    
+    const decryptedString = chunks.join('');
+  
+    return decryptedString
+  
 }
 
 
+
+
+function createUser(encryptedUser) {
+   // var date = new Date().toString();
+    return new Promise(resolve =>{
+        console.log("creating user")
+        mySession.then((session) => {
+            try {
+
+                decryptStringfromClient(encryptedUser).then((decryptedJSON)=>{
+
+                    const user = JSON.parse(decryptedJSON)
+                    session.startTransaction();
+
+                    var arcDB = session.getSchema('arcturus');
+                    var userTable = arcDB.getTable("user");
+                    const refTable = arcDB.getTable("ref")
+                
+              
+                    const refCode = user.refCode
+                    console.log(refCode)
+
+                    refTable.select(["refID"]).where("refCode = :refCode").bind("refCode", refCode).execute().then((refSelect)=>{
+                        const oneRef = refSelect.fetchOne()
+                        if(oneRef != undefined){
+                            const refID = oneRef[0]
+                            console.log(user.userName,
+                                "email:", user.userEmail,
+                                "refCode:", refCode,
+                                "refID:", refID,
+                                "status:", status.Offline,
+                                "access:", access.contacts)
+                            generateUserCode(user.userPassword + user.userEmail).then((userCode) =>{ 
+                                
+                            bcrypt.hash(user.userPassword + "", 15).then((bcryptedPass) =>{
+                        
+                            
+                                
+                                userTable.insert([
+                                        'userName', 
+                                        'userPassword', 
+                                        "userEmail", 
+                                        'refID', 
+                                        'statusID', 
+                                        "accessID",  
+                                        "userCode"
+                                    ]).values([
+                                        user.userName, 
+                                        bcryptedPass, 
+                                        user.userEmail, 
+                                        refID, 
+                                        status.Offline, 
+                                        access.contacts, 
+                                        userCode
+                                    ]).execute().then((insertedResult) => {
+
+                                        const userID = insertedResult.getAutoIncrementValue()
+
+                                        if(userID > 0){
+                                          
+                                          
+                                                resolve({ success: true })
+                                            
+                                        }else{
+
+                                            session.rollback();
+                                            resolve({success:false})
+                                        }
+                                
+                                })
+
+                                session.commit();
+                            })
+                        })
+                    }else{
+                            session.rollback();
+                            resolve({ success: false })
+                    }
+                    })
+                    
+
+                })
+            } catch (error) {
+                console.log(error)
+                session.rollback();
+                resolve({error: new Error("Rolled back") });
+            }
+        })
+
+    })
+   
+}
+
+const createUserContext = (userID, contextID) =>{
+    return new Promise(resolve =>{
+        mySession.then((session) => {
+            try {
+
+                decryptStringfromClient(encryptedUser).then((decryptedJSON) => {
+
+                    const user = JSON.parse(decryptedJSON)
+                    session.startTransaction();
+
+                    var arcDB = session.getSchema('arcturus');
+                    var userTable = arcDB.getTable("user");
+
+                    const userContextTable = arcDB.getTable("userContext")
+                    console.log("inserted:", userID, user.userName, user.userEmail)
+
+                    userContextTable.insert(['contextID', 'userID']).values([contextID, userID]).execute().then((inserted) => {
+
+                    })
+                })
+            } catch (err) {
+
+            }
+
+        })
+    })
+}
 
 
 const createRefCode = (user, code, callback) => {
@@ -1772,98 +1787,260 @@ WHERE
     })
 }
 
-const checkUser = (user, callback) => {
+function decryptHexUint(encryptedHex){
+    return new Promise(resolve =>{
+   
+        const encryptedBytes = aesjs.utils.hex.toBytes(encryptedHex);
+
+        const aesCtr = new aesjs.ModeOfOperation.ctr(serverKey);
+        
+        const decryptedBytes = aesCtr.decrypt(encryptedBytes);
+
+        resolve(decryptedBytes)
+    
+    })
+}
+/*
+function decryptHexString(encryptedHex){
+    return new Promise(resolve => {
+
+        const encryptedBytes = aesjs.utils.hex.toBytes(encryptedHex);
+
+        const aesCtr = new aesjs.ModeOfOperation.ctr(serverKey);
+
+        const decryptedBytes = aesCtr.decrypt(encryptedBytes);
+
+        const hexString = aesjs.utils.hex.fromBytes(decryptedBytes)
+
+        resolve(hexString)
+
+    })
+}*/
+async function encryptString(string, publicKeyArmored) {
+
+    const publicKey = await readKey({ armoredKey: publicKeyArmored });
+
+    const encrypted = await encrypt({
+        message: await createMessage({ text: string }), 
+        encryptionKeys: publicKey,
+    });
+
+    return encrypted
+}
 
 
 
-    mySession.then((session) => {
-
-        const arctDB = session.getSchema("arcturus")
-        const userTable = arctDB.getTable("user")
+const checkUser = (user) => {
+    return new Promise(resolve =>{
 
 
-        userTable.select(["userID", "userName", "userEmail", "userHandle", "userFileID", "userSocket", "accessID"]).where(
-            "( LOWER(userName) = LOWER(:nameEmail) OR LOWER(userEmail) = LOWER(:nameEmail)) AND userPassword = :password"
-        ).bind("nameEmail", user.nameEmail + "").bind("password", user.password + "").execute().then((results) => {
-            const userArr = results.fetchOne()
+        try{  
+           
+                
+            
+                mySession.then((session) => {
 
-            if (userArr == undefined) {
-
-                console.log("login try failed for: " + user.nameEmail)
-
-                callback({ success: false })
-            } else {
+                    const arctDB = session.getSchema("arcturus")
+                    const userTable = arctDB.getTable("user")
 
 
-                const userID = userArr[0];
-                const userFileID = userArr[4];
-                const userSocket = userArr[5];
+                    userTable.select(["userID", "userName", "userEmail", "userHandle", "userFileID", "userSocket", "accessID", "userCode", "userPassword"]).where(
+                        "( LOWER(userName) = LOWER(:nameEmail) OR LOWER(userEmail) = LOWER(:nameEmail)) AND (userPasswordCheckCount < 30 OR HOUR(TIMEDIFF(NOW(), userPasswordLastChecked))>24)"
+                    ).bind("nameEmail", user.nameEmail + "").execute().then((results) => {
+                        const userArr = results.fetchOne()
 
-                let loginUser = {
-                    userID: userID,
-                    userName: userArr[1],
-                    userEmail: userArr[2],
-                    userHandle: userArr[3],
-                    accessID: userArr[6],
-                    image: {
-                        fileID: -1,
-                        name: null,
-                        hash: null,
-                        mimeType: null,
-                        type: null,
-                        size: null,
-                        lastModified: null,
-                    },
-                    admin: userID == 22 
-                }
-       
+                        if (userArr == undefined) {
+                            setTimeout(() => {
+                                resolve({ success: false })
+                            }, 500);
+                                
+                         
+  
+                        } else {
+                            const passwordHash = userArr[8]
+                            
+                          /*  setInterval(() => {
+                                
+                            }, 10);*/
+                            bcrypt.compare(user.password, passwordHash, function (err, result) {
+                                
+                                if(!result){
+                                    userTable.select(["userPasswordCheckCount", "userID"]).where(
+                                        "( LOWER(userName) = LOWER(:nameEmail) OR LOWER(userEmail) = LOWER(:nameEmail))").bind("nameEmail", user.nameEmail + "").execute()
+                                        .then((results) => {
+                                            const one = results.fetchOne()
 
-                if (userFileID == null) {
-                    callback({ success: true, user: loginUser, userSocket: userSocket  });
-                } else {
-                    getOwnUserFile(userFileID, session).then((imageFile) => {
-                        loginUser.image = imageFile
+                                            if (one != undefined) {
+                                                console.log("updated")
+                                                const count = one[0]
+                                                const userID = one[1]
+                                                session.sql(`UPDATE arcturus.user SET userPasswordCheckCount = ${count + 1}, userPasswordLastChecked = NOW() WHERE userID = ${userID}`).execute().then((updated) => {
+                                                    resolve({ success: false })
+                                                })
 
-                        callback({ success: true, user: loginUser, userSocket: userSocket });
+                                            } else {
+                                                console.log("didn't update")
+                                                resolve({ success: false })
+
+                                            }
+                                        })
+                                
+                                }else{
+                                    const encryptedCodeHex = userArr[7]
+
+                                
+                                    decryptHexUint(encryptedCodeHex).then((codeUint) => {
+                                    
+                                        const codeHex = aesjs.utils.hex.fromBytes(codeUint)
+                                        const userID = userArr[0];
+                                        const userFileID = userArr[4];
+                                        const userSocket = userArr[5];
+
+                                        let loginUser = {
+                                            userID: userID,
+                                            userName: userArr[1],
+                                            userEmail: userArr[2],
+                                            userHandle: userArr[3],
+                                            accessID: userArr[6],
+                                            image: {
+                                                fileID: -1,
+                                                name: null,
+                                                hash: null,
+                                                mimeType: null,
+                                                type: null,
+                                                size: null,
+                                                lastModified: null,
+                                            },
+                                            admin: userID == 23 
+                                        }
+
+                                    
+
+                                        session.sql(`UPDATE arcturus.user SET userPasswordCheckCount = 0, userPasswordLastChecked = NOW() WHERE userID = ${loginUser.userID}`).execute().then((updated) => {
+                                            if (userFileID == null) {
+                                              
+                                                resolve({ success: true, user: loginUser, userSocket: userSocket, userCode: codeHex })
+                                         
+
+                                            } else {
+                                                getOwnUserFile(userFileID, session).then((imageFile) => {
+                                                    loginUser.image = imageFile
+                                
+                                                    
+                                                    resolve({ success: true, user: loginUser, userSocket: userSocket, userCode: codeHex })
+                                                   
+                                                })
+                                            }
+                                            
+                                        })
+                                    })
+                                }
+                            });
+                        }
+                        
                     })
-                }
+                
+               
+            })
+        } catch (reason) {
+            console.log(reason);
+            resolve({ error: new Error("DB error") })
 
-
-            }
-        })
-    }).catch((reason) => {
-        console.log(reason);
-        callback({ error: new Error("DB error") })
+        }
     })
 }
 const sendEmailCode = (userID, callback) => {
     console.log("sending email code")
     var date = formatedNow();
+    const keyString = aesjs.utils.hex.fromBytes(serverKey)
+    
+    generateCode(userID + keyString, 6).then((veriCode) => {
 
-    var veriCode = cryptojs.SHA256(date).toString().slice(0, 6);
+        mySession.then((session) => {
 
-
-    mySession.then((session) => {
-
-        var arcDB = session.getSchema('arcturus');
-        var userTable = arcDB.getTable("user");
-
-
-        session.startTransaction();
-        try {
-
-            userTable.select(['userName', "userEmail"]).where("user.userID = :userID AND HOUR(TIMEDIFF(UTC_TIMESTAMP(), userEmailLastChanged))>24").bind("userID", userID).execute().then((value) => {
-                const one = value.fetchOne();
+            var arcDB = session.getSchema('arcturus');
+            var userTable = arcDB.getTable("user");
 
 
-                if (one !== undefined) {
-                    const userName = one[0];
-                    const userEmail = one[1];
+            session.startTransaction();
+            try {
+
+                userTable.select(['userName', "userEmail"]).where("user.userID = :userID AND HOUR(TIMEDIFF(now(), userEmailLastChanged))>24").bind("userID", userID).execute().then((value) => {
+                    const one = value.fetchOne();
+
+
+                    if (one !== undefined) {
+                        const userName = one[0];
+                        const userEmail = one[1];
 
 
 
 
-                    const modifiedString = date;
+                        const modifiedString = date;
+
+                        userTable.update().set(
+                            'userRecoveryCode', veriCode
+                        ).set(
+                            'userModified', modifiedString
+                        ).where(
+                            "userID = :userID"
+                        ).bind("userID", userID).execute().then((res) => {
+                            if (res.getAffectedItemsCount() > 0) {
+                                emailPassReset(userName, userEmail, veriCode, (err, info) => {
+                                    if (err) {
+                                        throw ("unable to send email")
+                                    } else {
+                                        callback({ success: true })
+                                    }
+                                })
+                            } else {
+
+                                session.rollback();
+                                callback({ error: new Error("Cannot update user") });
+
+                            }
+                        })
+
+                        session.commit();
+                    } else {
+
+                        session.rollback();
+                        callback({ error: new Error("Cannot update user") });
+                    }
+                })
+            } catch (error) {
+                console.log(error)
+                session.rollback();
+                callback({ error: error });
+            }
+        })
+    })
+
+
+}
+
+const sendRecoveryEmail = (email, callback) => {
+    var date = new Date().toString();
+    
+    generateCode(email, 6 ).then((veriCode) =>{
+
+        mySession.then((session) => {
+
+            var arcDB = session.getSchema('arcturus');
+            var userTable = arcDB.getTable("user");
+
+
+            session.startTransaction();
+            try {
+
+                var res = userTable.select(['userName', 'userID']).where("userEmail = :userEmail").bind("userEmail", email).execute();
+                res.then((value) => {
+                    const row = value.fetchOne();
+                    console.log(row)
+                    const userName = row[0];
+                    const userID = row[1];
+
+                    const modifiedString = formatedNow();
 
                     userTable.update().set(
                         'userRecoveryCode', veriCode
@@ -1873,7 +2050,7 @@ const sendEmailCode = (userID, callback) => {
                         "userID = :userID"
                     ).bind("userID", userID).execute().then((res) => {
                         if (res.getAffectedItemsCount() > 0) {
-                            emailPassReset(userName, userEmail, veriCode, (err, info) => {
+                            emailPassReset(userName, email, veriCode, (err, info) => {
                                 if (err) {
                                     throw ("unable to send email")
                                 } else {
@@ -1881,163 +2058,117 @@ const sendEmailCode = (userID, callback) => {
                                 }
                             })
                         } else {
-
-                            session.rollback();
-                            callback({ error: new Error("Cannot update user") });
-
+                            throw ("unable to update user")
                         }
                     })
 
                     session.commit();
-                } else {
 
-                    session.rollback();
-                    callback({ error: new Error("Cannot update user") });
-                }
-            })
-        } catch (error) {
-            console.log(error)
-            session.rollback();
-            callback({ error: error });
-        }
-    })
-}
-
-const sendRecoveryEmail = (email, callback) => {
-    var date = new Date().toString();
-    var veriCode = cryptojs.SHA256(date).toString().slice(0, 6);
-
-    mySession.then((session) => {
-
-        var arcDB = session.getSchema('arcturus');
-        var userTable = arcDB.getTable("user");
-
-
-        session.startTransaction();
-        try {
-
-            var res = userTable.select(['userName', 'userID']).where("userEmail = :userEmail").bind("userEmail", email).execute();
-            res.then((value) => {
-                const row = value.fetchOne();
-                console.log(row)
-                const userName = row[0];
-                const userID = row[1];
-
-                const modifiedString = formatedNow();
-
-                userTable.update().set(
-                    'userRecoveryCode', veriCode
-                ).set(
-                    'userModified', modifiedString
-                ).where(
-                    "userID = :userID"
-                ).bind("userID", userID).execute().then((res) => {
-                    if (res.getAffectedItemsCount() > 0) {
-                        emailPassReset(userName, email, veriCode, (err, info) => {
-                            if (err) {
-                                throw ("unable to send email")
-                            } else {
-                                callback({ success: true })
-                            }
-                        })
-                    } else {
-                        throw ("unable to update user")
-                    }
                 })
-
-                session.commit();
-
-            })
-        } catch (error) {
-            console.log(error)
-            session.rollback();
-            callback({ success: false, msg: error });
-        }
+            } catch (error) {
+                console.log(error)
+                session.rollback();
+                callback({ success: false, msg: error });
+            }
+        })
     })
 }
 
 const updateUserPassword = (userID, info, callback) => {
-    console.log("update password")
-    console.log(info)
-    mySession.then((session) => {
+    console.log("update password", userID)
+   
+    const password = info.password
 
-        var arcDB = session.getSchema('arcturus');
-        var userTable = arcDB.getTable("user");
-        const modifiedString = formatedNow();
+    bcryptPass(password).then((bcryptedPass)=>{
 
-        const password = info.password;
-        const userEmail = info.email;
-        const code = info.code;
+        mySession.then((session) => {
 
-        session.startTransaction();
-        try {
-            userTable.update().set(
-                'userPassword', password
-            ).set(
-                'userModified', modifiedString
-            ).where(
-                "userID = :userID AND userEmail = :userEmail AND userRecoveryCode = :code AND user.userEmailLastChanged < NOW() - INTERVAL 24 HOUR "
-            ).bind(
-                "userID", userID
-            ).bind(
-                "userEmail", userEmail
-            ).bind(
-                "code", code
-            ).execute().then((result) => {
-                const affected = result.getAffectedItemsCount()
-                if (affected > 0) {
-                    callback({ success: true })
-                } else {
-                    callback({ success: false })
-                }
-            })
-        } catch (error) {
-            console.log(error)
-            session.rollback();
-            callback({ success: false, msg: error });
-        }
+            var arcDB = session.getSchema('arcturus');
+            var userTable = arcDB.getTable("user");
+            const modifiedString = formatedNow();
+
+        
+            const userEmail = info.email;
+            const code = info.code;
+
+            session.startTransaction();
+            try {
+                userTable.update().set(
+                    "userPasswordCheckCount", 0
+                )
+                .set(
+                    'userPassword', bcryptedPass
+                ).set(
+                    'userModified', modifiedString
+                ).where(
+                    "userID = :userID AND userEmail = :userEmail AND userRecoveryCode = :code AND user.userEmailLastChanged < NOW() - INTERVAL 24 HOUR "
+                ).bind(
+                    "userID", userID
+                ).bind(
+                    "userEmail", userEmail
+                ).bind(
+                    "code", code
+                ).execute().then((result) => {
+                    const affected = result.getAffectedItemsCount()
+                    if (affected > 0) {
+                        callback({ success: true })
+                    } else {
+                        callback({ success: false })
+                    }
+                })
+            } catch (error) {
+                console.log(error)
+                session.rollback();
+                callback({ success: false, msg: error });
+            }
+        })
     })
 }
 
 const updateUserPasswordAnon = (info, callback) => {
 
-    mySession.then((session) => {
+    const password = info.password;
 
-        var arcDB = session.getSchema('arcturus');
-        var userTable = arcDB.getTable("user");
-        const modifiedString = formatedNow();
+    encryptHex(password).then((encryptedPass) =>{
 
-        const password = info.password;
-        const userEmail = info.email;
-        const code = info.code;
+        mySession.then((session) => {
 
-        session.startTransaction();
-        try {
-            userTable.update().set(
-                'userPassword', password
-            ).set(
-                'userModified', modifiedString
-            ).where(
-                "userEmail = :userEmail AND userRecoveryCode = :code AND user.userEmailLastChanged < NOW() - INTERVAL 24 HOUR "
-            ).bind(
-                "userID", userID
-            ).bind(
-                "userEmail", userEmail
-            ).bind(
-                "code", code
-            ).execute().then((result) => {
-                const affected = result.getAffectedItemsCount()
-                if (affected > 0) {
-                    callback({ success: true })
-                } else {
-                    callback({ success: false })
-                }
-            })
-        } catch (error) {
-            console.log(error)
-            session.rollback();
-            callback({ success: false, msg: error });
-        }
+            var arcDB = session.getSchema('arcturus');
+            var userTable = arcDB.getTable("user");
+            const modifiedString = formatedNow();
+
+        
+            const userEmail = info.email;
+            const code = info.code;
+
+            session.startTransaction();
+            try {
+                userTable.update().set(
+                    'userPassword', encryptedPass
+                ).set(
+                    'userModified', modifiedString
+                ).where(
+                    "userEmail = :userEmail AND userRecoveryCode = :code AND user.userEmailLastChanged < NOW() - INTERVAL 24 HOUR "
+                ).bind(
+                    "userID", userID
+                ).bind(
+                    "userEmail", userEmail
+                ).bind(
+                    "code", code
+                ).execute().then((result) => {
+                    const affected = result.getAffectedItemsCount()
+                    if (affected > 0) {
+                        callback({ success: true })
+                    } else {
+                        callback({ success: false })
+                    }
+                })
+            } catch (error) {
+                console.log(error)
+                session.rollback();
+                callback({ success: false, msg: error });
+            }
+        })
     })
 }
 /*
@@ -2191,7 +2322,7 @@ AND storage.storageKey = " + engineKey;
 
 
 
-function formatedNow(n) {
+function formatedNow() {
     
     return moment().format('DD-MM-YYYY HH:mm:ss')
 
@@ -3243,9 +3374,11 @@ const updateUserEmail = (userID, params) => {
             const arcDB = session.getSchema('arcturus');
             const userTable = arcDB.getTable("user")
 
-            userTable.update().set("userEmail", email).set("userModified", now).set("userEmailLastChanged", now).where("userID = :userID").bind("userID", userID).execute().then((userEmailUpdate) => {
+            userTable.update().set("userEmail", email).where("userID = :userID").bind("userID", userID).execute().then((userEmailUpdate) => {
+
                 const affected = userEmailUpdate.getAffectedItemsCount() > 0
 
+                session.sql(`update arcturus.user SET userModified = now(), userEmailLastChanged = now())`)
                 resolve({ success: affected })
 
             })
@@ -3651,7 +3784,43 @@ const checkStorageHash = (userID, params) => {
         })
     })
 }
+const checkPassword = (userID, params) =>{
+   
+    return new Promise(resolve => {
 
+        const passHex = params.passwordHash
+
+        encryptHex(passHex).then((encryptedPass) => {
+
+            mySession.then((session) => {
+
+                const arcDB = session.getSchema('arcturus');
+                const userTable = arcDB.getTable("user")
+
+                userTable.select(["userPasswordCheckCount"]).where("userID = :userID AND userPassword = :password AND (userPasswordCheckCount < 30 OR HOUR(TIMEDIFF(NOW(), userPasswordLastChecked))>24)").bind("userID", userID).bind("password", encryptedPass).execute().then((result)=>{
+                    const one = result.fetchOne()
+
+                    if(one == undefined)
+                    {
+                        const count = one[0]
+                    
+                        session.sql(`UPDATE user SET userPasswordCheckCount = ${count + 1}, userPasswordLastChecked = NOW() WHERE userID = ${userID}`).execute().then((updated)=>{
+                            
+                            resolve(false)
+                        })
+                    
+                    }else{
+                        session.sql(`UPDATE user SET userPasswordCheckCount = 0, userPasswordLastChecked = NOW() WHERE userID = ${userID}`).execute().then((updated) => {
+
+                            resolve(false)
+                        })
+                        resolve(true)
+                    }
+                })
+            })
+        })
+    })
+}
 
 
 const createStorage = (userID, params) => {
@@ -3693,6 +3862,86 @@ const createStorage = (userID, params) => {
             })
 
             
+        })
+    })
+}
+
+function checkRefCodeEmail(params){
+    return new Promise(resolve => {
+    mySession.then((session) => {
+
+        const arcDB = session.getSchema("arcturus")
+        const refTable = arcDB.getTable("ref")
+        const userTable = arcDB.getTable("user")
+
+        const code = params.refCode
+        const userEmail = params.userEmail 
+    
+
+        refTable.select(["refID"]).where("refCode = :refCode").bind("refCode", code).execute().then((result) => {
+            const one = result.fetchOne()
+            if (one == undefined) {
+                console.log("refID not found", code)
+                resolve({success:false});
+            } else {
+         
+                const refID = one[0];
+
+
+               userTable.select(["refID"]).where("refID = :refID").bind("refID", refID).execute().then((userRefSelect) => {
+                    const userRefOne = userRefSelect.fetchOne()
+                    if (userRefOne == undefined) {
+                       
+
+                        userTable.select(["userEmail"]).where("userEmail = :userEmail").bind("userEmail", userEmail).execute().then((emailSelect) => {
+                            const emailSelectOne = emailSelect.fetchOne()
+                            if (emailSelectOne == undefined) {
+                          
+                                resolve({ success: true });
+                            } else {
+                           
+                                resolve({ success: false });
+                            }
+                        })
+                      
+                    }else{
+                       console.log("refID used. No longer valid.")
+                       resolve({ success: false });
+
+                    }
+                }).catch((reason) => {
+                    console.log(reason);
+                    resolve({ success: false });
+                })
+            } 
+        })
+    }, (reason) => {
+        console.log(reason);
+        resolve({ success: false });
+    }).catch((reason) => {
+        console.log(reason);
+        resolve({ success: false });
+    })
+    })
+}
+
+const checkContextID = (contextID) =>{
+    return new Promise(resolve =>{
+        mySession.then((session) => {
+
+            const arcDB = session.getSchema("arcturus")
+            const contextTable = arcDB.getTable("context")
+
+            contextTable.select(["contextBanned"]).where("contextID = :contextID AND contextBanned = 1").bind("contextID", contextID).execute().then((contextResult)=>{
+                const one = contextResult.fetchOne()
+
+                if(one == undefined)
+                {
+                    resolve(true)
+                }else{
+                    resolve(false)
+                }
+            })
         })
     })
 }
