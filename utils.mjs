@@ -1,8 +1,11 @@
 import blake2b from 'blake2b';
+import { getRandomValues, randomInt } from 'crypto';
 import CryptoJS from 'crypto-js'
-
+import moment from 'moment';
+import aesjs from 'aes-js';
 
 export function xmur3(str) {
+
     for (var i = 0, h = 1779033703 ^ str.length; i < str.length; i++) {
         h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
         h = h << 13 | h >>> 19;
@@ -28,11 +31,36 @@ export function sfc32(a, b, c, d) {
     }
 }
 
-export function getRandomIntSync(min, max, seedStr) {
-    var seed = xmur3(seedStr + CryptoJS.lib.WordArray.random(16).toString())
+export function getRandomIntSync(min, max) {
+    const now = moment.now.toString(16)
+
+    const nowSliced = now.slice(now.length - randomInt(6) + 4, now.length)
+
+    
+
+    const array = new Uint8Array(randomInt(64) + 64);
+    getRandomValues(array)
+
+    const arrayHash = getUintHash(array, 64)
+
+    const arrayString = aesjs.utils.hex.fromBytes(arrayHash)
+
+    var seed = xmur3(nowSliced + getCryptoWordHex(randomInt(32) + 16))
+    var seed1 = xmur3(arrayString)
+
+    var seed2 = xmur3(arrayString + fingerprintHex)
+
+    var seed3 = xmur3(fingerprintHex + CryptoJS.lib.WordArray.random(16).toString())
+
     min = Math.ceil(min);
     max = Math.floor(max);
-    const rand = sfc32(seed(), seed(), seed(), seed())();
+    const sfc = sfc32(seed(), seed1(), seed2(), seed3());
+
+    for(let i = 0; i< 20;i++)
+    {
+        sfc()
+    }
+    const rand = sfc()
 
     return Math.floor(rand * (max - min + 1)) + min;
 }
@@ -49,17 +77,48 @@ export function getRandomIntSFC(min, max, sfc) {
 
     return Math.floor(randResult * (max - min + 1)) + min;
 }
+export function getCryptoWord(size = 32) {
+    const array = new Uint8Array(size);
+    getRandomValues(array)
 
-export function generateCode(word = "", length = 45) {
-    return new Promise(resolve => {
-       
-        var seed = xmur3(word + CryptoJS.lib.WordArray.random(16).toString())
+    return array
+}
 
-        const SFC = sfc32(seed(), seed(), seed(), seed());
+export function getCryptoWordHex(size = 32) {
+    return aesjs.utils.hex.fromBytes(getCryptoWord(size))
+}
+
+
+export async function generateCode(fingerprintHex = "", length = 45) {
+          
+        const now = moment.now.toString(16)
+
+        const nowSliced = now.slice(now.length-randomInt(6)+4, now.length)
+
+        const nowHash = await getStringHash(nowSliced, 64)
+
+        const array = new Uint8Array(randomInt(64) + 64);
+        getRandomValues(array)
+
+        const arrayHash = getUintHash(array, 64)
+
+        const arrayString = aesjs.utils.hex.fromBytes(arrayHash)
+
+        const wordArrayStr = CryptoJS.lib.WordArray.random(randomInt(32) + 16).toString()
+            
+        var seed = xmur3(nowHash + getCryptoWordHex(randomInt(32) + 16) )
+         var seed1 = xmur3(wordArrayStr + arrayString)
+
+        var seed2 = xmur3(arrayString + fingerprintHex)
+
+        var seed3 = xmur3(fingerprintHex + CryptoJS.lib.WordArray.random(16).toString())
+
+
+        const SFC = sfc32(seed(), seed1(), seed2(), seed3());
 
 
 
-        for (let i = 0; i < 50; i++) {
+        for (let i = 0; i < 20; i++) {
             SFC()
         }
         let code = ""
@@ -72,8 +131,8 @@ export function generateCode(word = "", length = 45) {
         //0
 
 
-        resolve(code)
-    })
+        return code
+  
 }
 
 

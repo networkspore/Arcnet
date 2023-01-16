@@ -15,7 +15,7 @@ const serverKey = await getServerKey()
 
 const fingerPrintHex = await getFingerPrintHex()
 
-const instanceCode = await getInstanceCode(fingerPrintHex)
+const instanceCode = await getInstanceCode()
 
 async function getFingerPrintHex() {
     const fp = getFingerprint()
@@ -23,13 +23,12 @@ async function getFingerPrintHex() {
     return fpHex
 }
 
-async function getInstanceCode(string) {
-    const now = moment.now.toString(16)
-    const seed = string + now
+async function getInstanceCode() {
+   
 
-    const code = await generateCode(seed, 1024)
-    const hash = getStringHash(code, 64)
-    return hash
+    const code = await generateCode(fingerPrintHex, 1024)
+   // const hash = getStringHash(code, 64)
+    return code
 }
 
 async function getServerKey() {
@@ -155,13 +154,15 @@ io.on('connection', (socket) => {
 
 
                         socket.on('checkUserName', (userName, check) => {
-                            
+                            if (token == "checked"){
                             checkUserName(userName).then((results) => {
                                
                                 check(results);
                                 
                             });
-                            
+                            }else{
+                                socket.disconnect()
+                            }
                         });
 
 
@@ -172,11 +173,11 @@ io.on('connection', (socket) => {
                                     const params = JSON.parse(decryptedString)
                                     checkRefCodeEmail(params).then((results) => {
                                    
-                                        console.log(results)
+                                       
                                         setTimeout(() => {
                                             checkingUser = false
                                             token = "checked"
-                                            console.log(token)
+                                         
                                             const jsonString = JSON.stringify(results)
                                             encryptString(jsonString, clientKey).then((encryptedString)=>{
                                                 returnValid(encryptedString);
@@ -240,7 +241,7 @@ io.on('connection', (socket) => {
 
                 const clientContext = JSON.parse(decryptedString)
                 const {contextID, contextKey, nameEmail, password} = clientContext
-      
+            
                 clientKey = contextKey
 
                 checkUser({nameEmail: nameEmail, password: password}, clientKey).then((checkResult) => {
@@ -258,7 +259,7 @@ io.on('connection', (socket) => {
 
                         if (userSocket != "") {
                             io.sockets.sockets.forEach((connectedSocket) => {
-                                console.log(connectedSocket.id)
+                       
                                 if (connectedSocket.id == userSocket) {
                                     console.log("disconnecting old socket: " + userSocket)
                                     connectedSocket.disconnect()
@@ -287,8 +288,8 @@ io.on('connection', (socket) => {
                                             }
                                         });
                                     }
-                                    const jsonString = JSON.parse({ success: true, user: user, contacts: contacts, userFiles: userFiles, userCode: userCode })
-
+                                    const jsonString = JSON.stringify({ success: true, user: user, contacts: contacts, userFiles: userFiles, userCode: userCode })
+                                   
                                     encryptString(jsonString, clientKey).then((encryptedString)=>{
                                         checkingUser = false;
                                         callback(encryptedString)
@@ -440,11 +441,11 @@ io.on('connection', (socket) => {
                                 callback(result)
                             })
                         })
-                        socket.on("getStorageKey", (callback) => {
+                        /*socket.on("getStorageKey", (callback) => {
                             getStorageKey(user.userID).then((result) => {
                                 callback(result)
                             })
-                        })
+                        })*/
                         socket.on("checkPassword", (params, callback)=>{
                             checkPassword(user.userID, params).then((result)=>{
                                 callback(result)
@@ -3741,7 +3742,7 @@ const getAppList = (params) =>{
         })
     })
 }
-
+/*
 const getStorageKey = (userID, params) =>{
     return new Promise(resolve => {
         mySession.then((session) => {
@@ -3761,7 +3762,7 @@ const getStorageKey = (userID, params) =>{
             })
         })
     })
-}
+}*/
 const checkStorageHash = (userID, params) => {
     console.log("checking storage hash")
     return new Promise(resolve => {
@@ -3836,8 +3837,8 @@ const createStorage = (userID, params) => {
             
             console.log(userID)
             console.log(params)
-            const storageKey =  params.storageKey
-            const storageHash = params.storageHash
+        //    const storageKey =  params.storageKey
+            const storageHash = params.storageHash + ""
             
 
             storageTable.select(["userID"]).where("userID = :userID AND storageHash = :storageHash").bind("userID", userID).bind("storageHash", storageHash).execute().then((selectResult)=>{
@@ -3846,7 +3847,7 @@ const createStorage = (userID, params) => {
                 if(one == undefined)
                 {
                     console.log("inserting")
-                    storageTable.insert(["storageKey", "storageHash", "userID"]).values(storageKey, storageHash, userID).execute().then((result) => {
+                    storageTable.insert(["storageHash", "userID"]).values(storageHash, userID).execute().then((result) => {
                         const storageID = result.getAutoIncrementValue()
                         if(storageID != undefined && storageID > 0){
                             resolve({ success: true })
