@@ -79,33 +79,24 @@ let transporter = nodemailer.createTransport({
 var mySession = mysqlx.getSession(sqlCred);
 
 
-const pingAlive = () => {
-    if (!util.types.isPromise(mySession)) {
-        mySession = mysqlx.getSession(sqlCred)
-    }
+const pingAlive = async () => {
 
-    mySession.then((session) => {
+    const session = await mySession
 
-        const arcDB = session.getSchema("arcturus");
-        const keepAliveTable = arcDB.getTable("keepAlive");
+    const arcDB = session.getSchema("arcturus");
+    const keepAliveTable = arcDB.getTable("keepAlive");
 
-        keepAliveTable.select(["keepAliveValue"]).where("keepAliveID = 1").execute().then((res) => {
-            const keepAliveValue = res.fetchOne();
-            if (keepAliveValue != undefined) {
-                console.log(keepAliveValue[0]);
-            } else {
-                console.log(0)
-            }
-        }).catch((err) => {
-            console.log("KeepAlive error: ")
-            console.log(err)
-        })
-
-    })
-    setTimeout(pingAlive, 100000);
+    const res = await keepAliveTable.select(["keepAliveValue"]).where("keepAliveID = 1").execute()
+    const keepAliveValue = res.fetchOne();
+   
+   
+    console.log("ping", moment.now());
+    
+        
+   
 }
 
-pingAlive();
+setInterval(pingAlive, 10000);
 
 
 io.on("connect_error", (err) => {
@@ -267,10 +258,11 @@ io.on('connection', (socket) => {
                                 }
                             });
                         }
+
                         getContacts(user, (contacts) => {
 
                             getUserFiles(user.userID).then((userFiles) => {
-
+                               
                                 updateUserStatus(user.userID, status.Online, id, (isRooms, rooms) => {
                                     if (user.accessID != access.private && isRooms) {
                                         for (let i = 0; i < rooms.length; i++) {
@@ -296,33 +288,52 @@ io.on('connection', (socket) => {
                                     })
                                     
                                     
-                                })
-                            })
+                                    })
+                                
 
+                            })
                         })
 
 
-
                         /* //////////////SUCCESS///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////*/
-                        socket.on("getAppList", (params, callback)=>{
-                            console.log("getAppList")
-                            if("admin" in params && params.admin)
-                            {
-                                if(user.userID == 22){ 
-                                    getAppList(params).then((result) => {
-                                        result.admin = true
-                                        console.log(result)
-                                        callback(result)
-                                    })
-                                }else{
-                                console.log("not admin")
-                                    callback({error: new Error("Not admin")})
-                                }
-                            }else[
-                                getAppList(params).then((result) => {
-                                    callback(result)
+                        socket.on("ping", async (callback)=>{
+                            console.log("ping")
+                            callback(await pingAlive())
+                        })
+
+                        if(user.userID == 27){
+                            socket.on("createApp", (encryptedParams, callback)=>{
+                                console.log(user.userID, "createApp")
+                              
+                                decryptJSONfromClient(encryptedParams).then((params) => {
+                                  
+                                    if(params != undefined){
+                                        createApp(user.userID, params).then((result) => {
+
+                                            const resultJSON = JSON.stringify(result)
+                                            encryptString(resultJSON, clientKey).then((encryptedResult) => {
+                                                callback(encryptedResult)
+                                            })
+
+                                        })
+                                    }else{
+                                        callback({error: new Error("Parameters undefined.")})
+                                    }
                                 })
-                            ]
+                              
+                            })
+                        }
+
+     
+                        socket.on("getAppList", (params, callback)=>{
+                          
+                            
+                            getAppList(params).then((result) => {
+                               
+                              console.log(result)
+                                callback(result)
+                            })
+                         
             
                             
                         })
@@ -1272,6 +1283,17 @@ async function decryptStringfromClient(encryptedString){
   
 }
 
+async function decryptJSONfromClient(encryptedString){
+    const decryptedString = await decryptStringfromClient(encryptedString)
+
+    try{
+        const params = JSON.parse(decryptedString)
+        return params
+    }catch(e){
+        return undefined
+    }
+    
+}
 
 
 
@@ -1692,7 +1714,7 @@ FROM arcturus.userFile, arcturus.file WHERE userFile.userFileID = " + userFileID
 
             if (userFileSelect.hasData()) {
                 const value = userFileSelect.fetchOne()
-                file = {
+               let file = {
                     fileID: value[0],
                     name: value[1],
                     hash: value[2],
@@ -1912,7 +1934,7 @@ const checkUser = (user) => {
                                                 size: null,
                                                 lastModified: null,
                                             },
-                                            admin: userID == 23 
+                                            admin: userID == 27 
                                         }
 
                                     
@@ -3722,26 +3744,226 @@ WHERE
 }
 
 const getAppList = (params) =>{
-    return new Promise(resolve =>{
+    return new Promise(async (resolve) =>{
         
 
 
-        mySession.then((session) => {
+        const session = await mySession
 
-            
-
-
-
-
-            const arcDB = session.getSchema("arcturus")
+      //  const arcDB = session.getSchema("arcturus")
      
-            const appsTable = arcDB.getTable("apps")
+      //  const appsTable = arcDB.getTable("apps")
+        const appsSql = `
+SELECT DISTINCT 
+ app.appID, 
+ app.appDescription, 
+ app.appName, 
+ app.appExtensions,
+ app.appKeyWords, 
+ app.appFileUrl,
+ app.fileID,
+ f1.fileName,
+ f1.fileType,
+ f1.fileHash,
+ f1.fileMimeType,
+ f1.fileSize,
+ f1.fileLastModified, 
+ app.imageID, 
+ img.fileName,
+ img.fileType,
+ img.fileHash,
+ img.fileMimeType,
+ img.fileSize,
+ img.fileLastModified,
+ app.appImageurl
+FROM 
+ arcturus.app, 
+ arcturus.file img,
+ arcturus.file f1  
+WHERE 
+ app.fileID = f1.fileID AND 
+ app.imageID = img.fileID`
 
+        if (params.mimeType != undefined && params.mimeType != null && params.mimeType != ""){
             
-            resolve({success:true, apps:[]})
-        })
+        }
+
+        const appsResult = await session.sql(appsSql).execute()
+
+        const hasData = appsResult.hasData()
+        if(hasData){
+            const allAppsResults = appsResult.fetchAll()
+                
+            let apps = []
+
+            allAppsResults.forEach(app => {
+                const appInfo = {
+                    app: {
+                        appID: app[0],
+                        description: app[1],
+                        name: app[2],
+                        extensions: app[3] != null ? JSON.parse(app[3]) :null,
+                        keyWords: app[4],
+                        url: app[5],
+                    },
+                    fileID: app[6],
+                    name: app[7],
+                    type: app[8],
+                    hash: app[9],
+                    mimeType: app[10],
+                    size: app[11],
+                    lastModified: app[12],
+                    image: {
+                        fileID: app[13],
+                        name: app[14],
+                        type: app[15],
+                        hash: app[16],
+                        mimeType: app[17],
+                        size: app[18],
+                        lastModified: app[19],
+                        url: app[20],
+                    }
+                }
+                apps.push(appInfo)
+            });
+        
+            resolve({ success: true, apps: apps })
+       
+        }
+        resolve({ success: true, apps: [] })
     })
 }
+
+
+function asyncFindIds(array, findFunction) {
+    return new Promise(resolve => {
+        let i = 0;
+        const results = new Array(array.length)
+        array.forEach(async (item, index) => {
+            const functionResults = await findFunction(await item)
+            const one = functionResults.fetchOne()
+            if (one != undefined) {
+                results[index] = {hash: array[index], id: one[0]}
+            }else{
+                results[index] = { hash: array[index], id: null }
+            } 
+            i++;
+            if (array.length == i) {
+                resolve(results);
+            }
+        });
+    });
+}
+const checkStorageHash = async (userID, params) => {
+    console.log("checking storage hash")
+ 
+    const session = await mySession
+    const storageHash = params.storageHash
+
+    const arcDB = session.getSchema('arcturus');
+    const storageTable = arcDB.getTable("storage")
+
+    const result = await storageTable.select(["storageID"]).where("userID = :userID AND storageHash = :storageHash").bind("userID", userID).bind("storageHash", storageHash).execute()
+    const one = result.fetchOne()
+
+    if (one != undefined) {
+        const storageID = one[0]
+        return { success: true, storageID: storageID, }
+    } else {
+        return { error: new Error("Incorrect Hash") }
+    }
+        
+       
+
+}
+
+
+/*
+const getStorageApps = async ( storageID, openSession = null) =>{
+    const session = openSession == null ? await mySession : openSession
+
+    const appsSql = `
+SELECT DISTINCT 
+ app.appID, 
+ app.appDescription, 
+ app.appName, 
+ app.appExtensions,
+ app.appKeyWords, 
+ app.appFileUrl,
+ app.fileID,
+ f1.fileName,
+ f1.fileType,
+ f1.fileHash,
+ f1.fileMimeType,
+ f1.fileSize,
+ f1.fileLastModified, 
+ app.imageID, 
+ img.fileName,
+ img.fileType,
+ img.fileHash,
+ img.fileMimeType,
+ img.fileSize,
+ img.fileLastModified,
+ app.appImageurl
+FROM 
+ arcturus.app, 
+ arcturus.file img,
+ arcturus.file f1, 
+ arcturus.storageApp 
+WHERE 
+ storageApp.storageID = ${storageID} AND 
+ storageApp.appID = app.appID AND 
+ app.fileID = f1.fileID AND 
+ app.imageID = img.fileID`
+
+    const appsResult = await session.sql(appsSql).execute()
+
+    const hasData = appsResult.hasData()
+
+    if (hasData) {
+        const allAppsResults = appsResult.fetchAll()
+
+        let apps = []
+
+        allAppsResults.forEach(app => {
+            const appInfo = {
+                app: {
+                    appID: app[0],
+                    description: app[1],
+                    name: app[2],
+                    extensions: app[3] != null ? JSON.parse(app[3]) : null,
+                    keyWords: app[4],
+                    url: app[5],
+                },
+                fileID: app[6],
+                name: app[7],
+                type: app[8],
+                hash: app[9],
+                mimeType: app[10],
+                size: app[11],
+                lastModified: app[12],
+                image: {
+                    fileID: app[13],
+                    name: app[14],
+                    type: app[15],
+                    hash: app[16],
+                    mimeType: app[17],
+                    size: app[18],
+                    lastModified: app[19],
+                    url: app[20],
+                }
+            }
+            apps.push(appInfo)
+        });
+
+        return apps 
+
+    } else {
+        return []
+    }
+
+}*/
+
 /*
 const getStorageKey = (userID, params) =>{
     return new Promise(resolve => {
@@ -3763,28 +3985,7 @@ const getStorageKey = (userID, params) =>{
         })
     })
 }*/
-const checkStorageHash = (userID, params) => {
-    console.log("checking storage hash")
-    return new Promise(resolve => {
-        mySession.then((session) => {
-            const storageHash = params.storageHash
-            
-            const arcDB = session.getSchema('arcturus');
-            const storageTable = arcDB.getTable("storage")
 
-            storageTable.select(["storageID"]).where("userID = :userID AND storageHash = :storageHash").bind("userID", userID).bind("storageHash", storageHash).execute().then((result) => {
-                const one = result.fetchOne()
-
-                if (one != undefined) {
-                    const storageID = one[0]
-                    resolve({ success: true, storageID: storageID })
-                } else {
-                    resolve({ error: new Error("Incorrect Hash")})
-                }
-            })
-        })
-    })
-}
 const checkPassword = (userID, params) =>{
    
     return new Promise(resolve => {
@@ -3945,4 +4146,115 @@ const checkContextID = (contextID) =>{
             })
         })
     })
+}
+
+const getFileByHash = async (fileTable, fileHash) => {
+    const fileTableSelect = await fileTable.select([
+        "fileID", 
+        "fileName", 
+        "fileType", 
+        "fileHash", 
+        "fileMimeType",
+        "fileSize"
+    ]).where("fileHash = :fileHash").bind("fileHash", fileHash).execute()
+
+    const one = fileTableSelect.fetchOne()
+
+    if(one == undefined){
+        return undefined
+    }else{
+        return {
+            fileID: one[0],
+            name: one[1],
+            type: one[2],
+            hash: one[3],
+            mimeType: one[4],
+            size: one[5]       
+        }
+    }
+}
+
+
+const createApp = async (userID, params) => {
+    if(userID != 27) return {error: new Error("Not admin")}
+        const session = await mySession
+
+        session.startTransaction()
+    try{
+        const arcDB = session.getSchema("arcturus")
+        const appTable = arcDB.getTable("app")
+        const fileTable = arcDB.getTable("file")
+
+       
+
+        const fileHash = params.file.hash
+        const imageHash = params.image.hash
+        const appName = params.name
+        const appDescription = params.description
+        const appExtensions = params.extensions
+        const appKeyWords = params.keyWords
+        const appFileUrl = params.fileUrl
+        const appImageUrl = params.imageUrl
+        
+        const fileIDSelect = await fileTable.select(["fileID"]).where("fileHash = :fileHash").bind("fileHash", fileHash).execute()
+        
+        const isFileID = fileIDSelect.fetchOne()
+        
+        if(isFileID != undefined) return {error: new Error("File exists")}
+
+        const file = await insertFile(fileTable, params.file)
+        
+
+        const imageFile = await getFileByHash(fileTable, imageHash)
+      
+        const image = imageFile == undefined ? await insertFile(fileTable, params.image) : imageFile
+        
+        console.log(image, file)
+
+        const appInsertResult = await appTable.insert([
+            "appName", 
+            "appDescription", 
+            "appExtensions",
+            "appKeyWords", 
+            "imageID", 
+            "appImageUrl", 
+            "fileID",
+            "appFileUrl"
+        ]).values(
+            appName,
+            appDescription,
+            appExtensions,
+            appKeyWords,
+            image.fileID,
+            appImageUrl,
+            file.fileID,
+            appFileUrl
+        ).execute()
+         
+        const appID = appInsertResult.getAutoIncrementValue()
+        
+        file.image = image
+        file.app = {
+            appID: appID,
+            description: appDescription,
+            name: appName,
+            extensions: appExtensions,
+            fileUrl: appFileUrl,
+            imageUrl: appImageUrl,
+            keyWords: appKeyWords
+        }
+
+        session.commit()
+        const result = { success: true, file: file}
+        console.log(result)
+        
+        return result
+
+    } catch (err){
+        session.rollback()
+        console.log(err)
+        return {error: err}
+    }
+       
+
 }
